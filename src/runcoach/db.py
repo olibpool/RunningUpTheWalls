@@ -384,7 +384,7 @@ def save_plan(
                 (
                     plan_id,
                     session.date.isoformat(),
-                    None,
+                    session.start_time,
                     session.sport,
                     session.kind,
                     session.title,

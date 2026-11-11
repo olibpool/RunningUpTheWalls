@@ -21,6 +21,7 @@ class Step(BaseModel):
 
 class PlannedSession(BaseModel):
     date: date
+    start_time: str | None = None
     sport: Sport
     kind: str
     title: str

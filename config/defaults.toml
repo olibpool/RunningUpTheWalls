@@ -68,6 +68,16 @@ relaxed_hours_between_hard_leg = 24
 min_hours_between_limit_climbs = 48
 min_hours_same_day_gap = 6
 max_run_volume_reduction = 0.40
+quality_gap_target_hours = 72
+long_run_weekday_cost = 5
+limit_climb_before_long_cost = 3
+hard_run_climb_same_day_cost = 4
+same_day_climb_cost = 2
+climbing_spacing_days = 2
+drop_cost_easy = 100
+drop_cost_climb = 200
+drop_cost_quality = 300
+drop_cost_other = 400
 
 [calendar_keywords]
 fixed = ["football"]

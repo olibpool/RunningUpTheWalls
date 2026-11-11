@@ -65,6 +65,16 @@ class SchedulerConfig(BaseModel):
     min_hours_between_limit_climbs: int
     min_hours_same_day_gap: int
     max_run_volume_reduction: float
+    quality_gap_target_hours: int
+    long_run_weekday_cost: int
+    limit_climb_before_long_cost: int
+    hard_run_climb_same_day_cost: int
+    same_day_climb_cost: int
+    climbing_spacing_days: int
+    drop_cost_easy: int
+    drop_cost_climb: int
+    drop_cost_quality: int
+    drop_cost_other: int
 
 
 class CalendarKeywordsConfig(BaseModel):
