@@ -43,3 +43,33 @@ marathon = [0.85, 0.7, 0.5]
 10k = 55
 half = 70
 marathon = 90
+
+[load_factors]
+run_leg = 1.0
+football_leg = 1.1
+climb_leg = 0.1
+climb_finger_power = 1.0
+climb_finger_volume = 0.6
+climb_finger_technique = 0.3
+
+[climbing_defaults]
+power = [7.0, 75]
+volume = [5.5, 75]
+technique = [4.0, 60]
+
+[availability]
+weekday = [["06:30", "08:00"], ["17:30", "21:00"]]
+weekend = [["07:00", "13:00"]]
+buffer_minutes = 30
+
+[scheduler]
+min_hours_between_hard_leg = 48
+relaxed_hours_between_hard_leg = 24
+min_hours_between_limit_climbs = 48
+min_hours_same_day_gap = 6
+max_run_volume_reduction = 0.40
+
+[calendar_keywords]
+fixed = ["football"]
+penalty = ["drinks", "party"]
+block = ["holiday", "annual leave", "ooo"]
