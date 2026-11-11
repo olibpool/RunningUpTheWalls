@@ -1,0 +1,45 @@
+[zones]
+easy = [0.62, 0.72]
+marathon = 0.80
+threshold = 0.86
+interval = 0.97
+repetition = 1.05
+
+[rpe]
+recovery = 2.0
+easy = 3.0
+strides = 3.5
+long = 4.0
+tempo = 6.0
+intervals = 8.0
+
+[progression]
+max_weekly_increase = 0.10
+cutback_every_n_weeks = 4
+cutback_factor = 0.80
+max_long_run_share = 0.35
+max_long_run_minutes = 195
+min_rest_days_per_week = 1
+
+[blocks]
+base = 0.40
+build = 0.40
+peak = 0.20
+
+[race_min_weeks]
+5k = 6
+10k = 8
+half = 10
+marathon = 12
+
+[taper_factors]
+5k = [0.7]
+10k = [0.7]
+half = [0.8, 0.6]
+marathon = [0.85, 0.7, 0.5]
+
+[peak_weekly_km]
+5k = 40
+10k = 55
+half = 70
+marathon = 90
