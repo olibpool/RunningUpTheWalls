@@ -7,7 +7,8 @@ import httpx
 import recurring_ical_events  # type: ignore[import-untyped]
 from icalendar import Calendar
 
-from runcoach.domain.models import CalendarEvent
+from runcoach.config import CalendarKeywordsConfig
+from runcoach.domain.models import CalendarEvent, Commitment
 
 
 def _window_datetime(value: date | datetime, tz: ZoneInfo, *, end: bool) -> datetime:
@@ -148,3 +149,74 @@ def busy_slots(
         if event_start < window_end and event_end > window_start:
             slots.append((event_start, event_end))
     return sorted(slots)
+
+
+def detect_commitments(
+    events: list[CalendarEvent],
+    cfg: CalendarKeywordsConfig,
+    *,
+    timezone_name: str = "Europe/London",
+) -> list[Commitment]:
+    """Create inactive proposals from configured keywords and long all-day events."""
+    proposals: list[Commitment] = []
+    local_timezone = ZoneInfo(timezone_name)
+    keyword_groups = (
+        ("block", cfg.block),
+        ("penalty", cfg.penalty),
+        ("fixed", cfg.fixed),
+    )
+    for event in events:
+        title = event.title or ""
+        normalized_title = title.casefold()
+        matched_kind = next(
+            (
+                kind
+                for kind, keywords in keyword_groups
+                if any(keyword and keyword.casefold() in normalized_title for keyword in keywords)
+            ),
+            None,
+        )
+
+        start_date: date | None = None
+        end_date: date | None = None
+        local_start: datetime | None = None
+        if event.all_day:
+            start_date = date.fromisoformat(event.starts_at)
+            exclusive_end = date.fromisoformat(event.ends_at)
+            end_date = exclusive_end - timedelta(days=1)
+            if matched_kind is None and (exclusive_end - start_date).days >= 3:
+                matched_kind = "block"
+        starts_at = datetime.fromisoformat(event.starts_at) if not event.all_day else None
+        ends_at = datetime.fromisoformat(event.ends_at) if not event.all_day else None
+        if starts_at is not None and ends_at is not None:
+            local_start = starts_at.astimezone(local_timezone)
+            local_end = ends_at.astimezone(local_timezone)
+            start_date = local_start.date()
+            end_date = local_end.date()
+        if matched_kind is None:
+            continue
+
+        duration_min = (
+            int((ends_at - starts_at).total_seconds() // 60)
+            if starts_at is not None and ends_at is not None
+            else None
+        )
+        proposals.append(
+            Commitment(
+                kind=matched_kind,
+                sport="football"
+                if matched_kind == "fixed" and "football" in normalized_title
+                else None,
+                title=title or "Calendar event",
+                start_date=start_date.isoformat() if start_date is not None else None,
+                end_date=end_date.isoformat() if end_date is not None else None,
+                start_time=local_start.time().isoformat(timespec="minutes")
+                if local_start is not None
+                else None,
+                duration_min=duration_min,
+                source="gcal",
+                external_id=event.external_id,
+                active=False,
+            )
+        )
+    return proposals

@@ -5,8 +5,14 @@ from datetime import date, datetime, timezone
 import httpx
 
 from runcoach import db
+from runcoach.config import load_config, load_scheduling_config
 from runcoach.domain.models import CalendarEvent
-from runcoach.ingest.calendar import busy_slots, fetch_ical_events, parse_ical_events
+from runcoach.ingest.calendar import (
+    busy_slots,
+    detect_commitments,
+    fetch_ical_events,
+    parse_ical_events,
+)
 
 
 def test_recurring_event_preserves_local_time_across_daylight_saving() -> None:
@@ -156,3 +162,48 @@ def test_calendar_cache_upserts_and_removes_stale_window_rows(tmp_path) -> None:
     rows = conn.execute("SELECT external_id, title FROM calendar_event").fetchall()
     conn.close()
     assert [(row["external_id"], row["title"]) for row in rows] == [(new_event.external_id, "New")]
+
+
+def test_detect_commitments_creates_inactive_proposals(tmp_path) -> None:
+    config = load_scheduling_config(load_config(local_path=tmp_path / "local.toml", env={}))
+    events = [
+        CalendarEvent(
+            external_id="football@1",
+            title="Football training",
+            starts_at="2026-11-17T19:00:00+00:00",
+            ends_at="2026-11-17T20:30:00+00:00",
+        ),
+        CalendarEvent(
+            external_id="drinks@1",
+            title="Drinks with friends",
+            starts_at="2026-11-18T18:00:00+00:00",
+            ends_at="2026-11-18T20:00:00+00:00",
+        ),
+        CalendarEvent(
+            external_id="holiday@1",
+            title="Trip",
+            starts_at="2026-12-20",
+            ends_at="2026-12-23",
+            all_day=True,
+        ),
+        CalendarEvent(
+            external_id="meeting@1",
+            title="Work meeting",
+            starts_at="2026-11-19T10:00:00+00:00",
+            ends_at="2026-11-19T11:00:00+00:00",
+        ),
+    ]
+
+    proposals = detect_commitments(events, config.calendar_keywords)
+
+    assert [(proposal.kind, proposal.title) for proposal in proposals] == [
+        ("fixed", "Football training"),
+        ("penalty", "Drinks with friends"),
+        ("block", "Trip"),
+    ]
+    assert all(proposal.source == "gcal" and not proposal.active for proposal in proposals)
+    assert proposals[0].sport == "football"
+    assert proposals[0].start_time == "19:00"
+    assert proposals[0].duration_min == 90
+    assert proposals[2].start_date == "2026-12-20"
+    assert proposals[2].end_date == "2026-12-22"
