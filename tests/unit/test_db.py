@@ -156,7 +156,7 @@ def test_expand_commitments_and_commitment_roundtrip(tmp_path) -> None:
             kind="fixed",
             title="Football",
             sport="football",
-            weekday=1,
+            weekday=0,
             start_time="19:00",
             duration_min=90,
             rpe=6.0,
@@ -172,8 +172,12 @@ def test_expand_commitments_and_commitment_roundtrip(tmp_path) -> None:
     ]
     occurrences = expand_commitments(commitments, date(2026, 11, 9), date(2026, 11, 25))
 
-    assert any(item.title == "Football" and item.date.isoformat() == "2026-11-16" for item in occurrences)
-    assert any(item.title == "Holiday" and item.date.isoformat() == "2026-11-15" for item in occurrences)
+    assert any(
+        item.title == "Football" and item.date.isoformat() == "2026-11-09" for item in occurrences
+    )
+    assert any(
+        item.title == "Holiday" and item.date.isoformat() == "2026-11-15" for item in occurrences
+    )
 
     conn = db.connect(tmp_path / "commitments.db")
     commitment_id = db.save_commitment(

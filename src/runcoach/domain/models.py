@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 Sport = Literal["run", "climb", "football", "rest", "other"]
 
@@ -95,6 +95,17 @@ class Commitment(BaseModel):
     source: str = "manual"
     external_id: str | None = None
     active: bool = True
+
+
+class CalendarEvent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    external_id: str
+    title: str | None = None
+    starts_at: str
+    ends_at: str
+    all_day: bool = False
+    fetched_at: str | None = None
 
 
 class Adjustment(BaseModel):

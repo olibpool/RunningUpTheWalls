@@ -8,7 +8,7 @@ from pathlib import Path
 from alembic.config import Config
 
 from alembic import command
-from runcoach.domain.models import Activity, PlannedSession
+from runcoach.domain.models import Activity, CalendarEvent, PlannedSession
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_DIR = ROOT / "alembic"
@@ -272,6 +272,62 @@ def delete_commitment(conn: sqlite3.Connection, commitment_id: int) -> None:
     conn.execute("DELETE FROM commitment WHERE id = ?", (commitment_id,))
 
 
+def cache_calendar_events(
+    conn: sqlite3.Connection,
+    events: list[CalendarEvent],
+    *,
+    window_start: date,
+    window_end: date,
+) -> None:
+    """Upsert fetched calendar occurrences and remove stale rows from their date window."""
+    if window_end < window_start:
+        raise ValueError("window_end must not precede window_start")
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    with conn:
+        for event in events:
+            conn.execute(
+                """
+                INSERT INTO calendar_event (
+                    external_id, title, starts_at, ends_at, all_day, fetched_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(external_id) DO UPDATE SET
+                    title = excluded.title,
+                    starts_at = excluded.starts_at,
+                    ends_at = excluded.ends_at,
+                    all_day = excluded.all_day,
+                    fetched_at = excluded.fetched_at
+                """,
+                (
+                    event.external_id,
+                    event.title,
+                    event.starts_at,
+                    event.ends_at,
+                    int(event.all_day),
+                    event.fetched_at or fetched_at,
+                ),
+            )
+
+        external_ids = [event.external_id for event in events]
+        if external_ids:
+            placeholders = ", ".join("?" for _ in external_ids)
+            conn.execute(
+                f"""
+                DELETE FROM calendar_event
+                WHERE substr(starts_at, 1, 10) BETWEEN ? AND ?
+                  AND external_id NOT IN ({placeholders})
+                """,
+                (window_start.isoformat(), window_end.isoformat(), *external_ids),
+            )
+        else:
+            conn.execute(
+                """
+                DELETE FROM calendar_event
+                WHERE substr(starts_at, 1, 10) BETWEEN ? AND ?
+                """,
+                (window_start.isoformat(), window_end.isoformat()),
+            )
+
+
 def save_plan(
     conn: sqlite3.Connection,
     sessions: list[PlannedSession],
@@ -358,4 +414,5 @@ __all__ = [
     "save_commitment",
     "list_commitments",
     "delete_commitment",
+    "cache_calendar_events",
 ]
