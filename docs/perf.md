@@ -5,6 +5,7 @@
 - Phase 2 ingestion note: added a GPX upload route and parser that keeps the request path in-process and memory-light; no long-running worker or scheduler was introduced.
 - Idle app memory target: keep the process under 30 MB resident growth.
 - Current baseline: not yet measured in a running Pi/uvicorn process; the route layer remains intentionally minimal and the parser stays in the Python standard library.
+- Phase 2c local check (2026-11-11): Uvicorn `/healthz` returned 200; the idle Windows worker used 56.58 MiB working set after startup. This is not a Pi measurement and does not establish resident growth against a pre-start baseline.
 
 Use the following command on the Pi after deployment:
 

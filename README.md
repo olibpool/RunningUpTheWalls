@@ -82,6 +82,14 @@ List commitments:
 uv run python -m runcoach.cli commitment list
 ```
 
+Add a penalty or a travel block:
+
+```bash
+uv run python -m runcoach.cli event add --kind penalty --date 2026-11-14 --severity 2
+uv run python -m runcoach.cli event add --kind block --start 2026-12-20 --end 2026-12-27 --minimal-plan
+uv run python -m runcoach.cli event list
+```
+
 ## Run the test suite
 
 ```bash

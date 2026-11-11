@@ -4,9 +4,9 @@ import os
 import tomllib
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ConfigNode(SimpleNamespace):
@@ -85,6 +85,116 @@ class CalendarKeywordsConfig(BaseModel):
     block: list[str]
 
 
+class ProgressionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    max_weekly_increase: float
+    cutback_every_n_weeks: int
+    cutback_factor: float
+    max_long_run_share: float
+    max_long_run_minutes: int
+    min_rest_days_per_week: int
+
+
+class ContinuousConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    weekly_increase: float = Field(ge=0)
+    weeks_ahead: int = Field(gt=0)
+    replan_interval_days: int = Field(gt=0)
+    chronic_load_weeks: int = Field(gt=0)
+    block_cycle: list[Literal["aerobic", "threshold", "speed"]]
+    weeks_per_block: int = Field(gt=0)
+    retest_every_weeks: int = Field(gt=0)
+    retest_distance_m: int = Field(gt=0)
+    acr_low: float = Field(gt=0)
+    acr_high: float = Field(gt=0)
+    acr_hold: float = Field(gt=0)
+    quality_load_share: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_acr_thresholds(self) -> ContinuousConfig:
+        if not self.block_cycle:
+            raise ValueError("continuous.block_cycle must not be empty")
+        if self.acr_low >= self.acr_high:
+            raise ValueError("continuous.acr_low must be below acr_high")
+        if self.acr_hold < self.acr_high:
+            raise ValueError("continuous.acr_hold must be at least acr_high")
+        return self
+
+
+class PenaltyConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    day_of_max_rpe: float = Field(gt=0, le=10)
+    days_after: dict[str, int]
+    rhr_delta_bpm: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_days_after(self) -> PenaltyConfig:
+        if any(value < 0 for value in self.days_after.values()):
+            raise ValueError("penalty.days_after values must not be negative")
+        return self
+
+
+class ReturnRampConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    short_days: int = Field(gt=0)
+    short: list[float]
+    medium_days: int = Field(gt=0)
+    medium: list[float]
+    long: list[float]
+    no_quality_weeks_after_long: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_profiles(self) -> ReturnRampConfig:
+        if self.short_days >= self.medium_days:
+            raise ValueError("return_ramp.short_days must be below medium_days")
+        for profile in (self.short, self.medium, self.long):
+            if not profile or any(not 0 < factor <= 1 for factor in profile):
+                raise ValueError("return ramp profiles must contain factors in (0, 1]")
+        return self
+
+
+class MinimalPlanConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    runs: int = Field(gt=0, le=7)
+    duration_share: float = Field(gt=0, le=1)
+    credit_leg_factor: float = Field(ge=0)
+    credit_easy_rpe: float = Field(gt=0, le=10)
+    easy_rpe: float = Field(gt=0, le=10)
+    strides_rpe: float = Field(gt=0, le=10)
+    strides_repeats: int = Field(gt=0)
+    stride_duration_s: int = Field(gt=0)
+    stride_recovery_s: int = Field(gt=0)
+
+
+class TimeTrialConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    warmup_min: int = Field(gt=0)
+    cooldown_min: int = Field(gt=0)
+    warmup_rpe: float = Field(gt=0, le=10)
+    cooldown_rpe: float = Field(gt=0, le=10)
+    work_rpe: float = Field(gt=0, le=10)
+    estimated_5k_duration_min: int = Field(gt=0)
+
+
+class ReadinessConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rhr_window_days: int = Field(gt=0)
+    rhr_min_samples: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_sample_count(self) -> ReadinessConfig:
+        if self.rhr_min_samples > self.rhr_window_days:
+            raise ValueError("readiness.rhr_min_samples cannot exceed rhr_window_days")
+        return self
+
+
 class SchedulingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -93,6 +203,13 @@ class SchedulingConfig(BaseModel):
     availability: AvailabilityConfig
     scheduler: SchedulerConfig
     calendar_keywords: CalendarKeywordsConfig
+    progression: ProgressionConfig
+    continuous: ContinuousConfig
+    penalty: PenaltyConfig
+    return_ramp: ReturnRampConfig
+    minimal_plan: MinimalPlanConfig
+    time_trial: TimeTrialConfig
+    readiness: ReadinessConfig
 
 
 def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -185,6 +302,13 @@ def load_scheduling_config(config: ConfigNode) -> SchedulingConfig:
             "availability": data.get("availability"),
             "scheduler": data.get("scheduler"),
             "calendar_keywords": data.get("calendar_keywords"),
+            "progression": data.get("progression"),
+            "continuous": data.get("continuous"),
+            "penalty": data.get("penalty"),
+            "return_ramp": data.get("return_ramp"),
+            "minimal_plan": data.get("minimal_plan"),
+            "time_trial": data.get("time_trial"),
+            "readiness": data.get("readiness"),
         }
     )
 

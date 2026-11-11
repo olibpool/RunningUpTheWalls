@@ -3,8 +3,10 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
 from runcoach.config import load_config, load_scheduling_config
-from runcoach.domain.models import PlannedSession
-from runcoach.engine.scheduler import Busy, FixedInstance, schedule_week
+from runcoach.domain.models import PlannedSession, Step
+from runcoach.engine.events import DayConstraint
+from runcoach.engine.safety import check_plan
+from runcoach.engine.scheduler import Busy, FixedInstance, compose_week, schedule_week
 
 
 def _session(day: date, kind: str, minutes: int) -> PlannedSession:
@@ -191,3 +193,152 @@ def test_fixed_commitment_conflict_is_reported_without_moving_it(tmp_path) -> No
 
     assert result.placed[0].date == date(2026, 11, 10)
     assert any("conflicts with busy event Work event" in warning for warning in result.warnings)
+
+
+def test_compose_week_reduces_runs_to_combined_leg_load_cap(tmp_path) -> None:
+    config = _config(tmp_path)
+    run = PlannedSession(
+        date=date(2026, 11, 9),
+        sport="run",
+        kind="easy",
+        title="Easy run",
+        steps=[Step(kind="steady", duration_s=6000, distance_m=15000)],
+        duration_min=200,
+        distance_m=20000,
+        rpe=4.0,
+        leg_load=800.0,
+        reason="Easy",
+    )
+    football = FixedInstance(
+        date=date(2026, 11, 10),
+        title="Football",
+        sport="football",
+        start_time="19:00",
+        duration_min=90,
+        rpe=6.0,
+    )
+
+    result = compose_week(date(2026, 11, 9), [run], [football], 1000.0, 0, False, config)
+
+    scaled = result.sessions[0]
+    assert result.allowed_leg_load == 1100.0
+    assert result.actual_leg_load == 1098.0
+    assert scaled.duration_min == 126
+    assert scaled.distance_m == 12650
+    assert scaled.steps[0].duration_s == 3795
+    assert scaled.leg_load == 504.0
+    assert "reduced to 63%" in scaled.reason
+    assert not result.warnings
+
+
+def test_compose_week_respects_reduction_floor_and_warns_on_cutback_overage(tmp_path) -> None:
+    config = _config(tmp_path)
+    run = _session(date(2026, 11, 9), "easy", 100)
+    run = run.model_copy(update={"leg_load": 400.0, "distance_m": 10000})
+    football = FixedInstance(
+        date=date(2026, 11, 10),
+        title="Football",
+        sport="football",
+        start_time="19:00",
+        duration_min=90,
+        rpe=6.0,
+    )
+
+    result = compose_week(date(2026, 11, 9), [run], [football], 1000.0, 0, True, config)
+
+    assert result.allowed_leg_load == 800.0
+    assert result.sessions[0].leg_load == 240.0
+    assert result.actual_leg_load > result.allowed_leg_load
+    assert result.warnings
+
+
+def test_safety_check_finds_hard_spacing_rest_and_busy_violations(tmp_path) -> None:
+    config = _config(tmp_path)
+    sessions = [
+        PlannedSession(
+            date=date(2026, 11, 9) + timedelta(days=offset),
+            start_time="07:00",
+            sport="run",
+            kind="tempo" if offset == 0 else "long" if offset == 1 else "easy",
+            title=f"Session {offset}",
+            duration_min=30,
+        )
+        for offset in range(7)
+    ]
+    busy = Busy(
+        start=datetime(2026, 11, 13, 7, 0, tzinfo=timezone.utc),
+        end=datetime(2026, 11, 13, 8, 0, tzinfo=timezone.utc),
+        title="Work event",
+    )
+
+    violations = check_plan(sessions, config, busy=[busy], timezone_name="UTC")
+
+    kinds = {violation.kind for violation in violations}
+    assert {"no-rest-day", "hard-leg-spacing", "busy-overlap"} <= kinds
+
+
+def test_blocked_week_has_no_placed_training_sessions(tmp_path) -> None:
+    config = _config(tmp_path)
+    week_start = date(2026, 11, 9)
+    constraints = {
+        week_start + timedelta(days=offset): DayConstraint(
+            date=week_start + timedelta(days=offset),
+            max_intensity="blocked",
+            reason="Holiday",
+            sources=frozenset({"block"}),
+        )
+        for offset in range(7)
+    }
+
+    result = schedule_week(
+        week_start,
+        _example_sessions(),
+        2,
+        [],
+        [],
+        [],
+        config,
+        day_constraints=constraints,
+    )
+
+    assert not result.placed
+    assert result.dropped
+    assert any("Long run could not be placed" in warning for warning in result.warnings)
+
+
+def test_easy_day_moves_quality_and_warns_for_fixed_after_penalty(tmp_path) -> None:
+    config = _config(tmp_path)
+    week_start = date(2026, 11, 9)
+    fixed = _football()
+    constraints = {
+        week_start: DayConstraint(
+            date=week_start,
+            max_intensity="easy",
+            reason="Penalty event",
+            max_rpe=4.0,
+            sources=frozenset({"penalty"}),
+        )
+    }
+
+    result = schedule_week(
+        week_start,
+        [_session(week_start, "tempo", 45)],
+        0,
+        fixed,
+        [],
+        [],
+        config,
+        day_constraints=constraints,
+    )
+
+    tempo = next(item for item in result.placed if item.session is not None)
+    assert tempo.date != week_start
+    assert tempo.session is not None
+    assert tempo.session.kind == "tempo"
+    assert any("day after a penalty event" in warning for warning in result.warnings)
+    assert not check_plan(
+        [tempo.session],
+        config,
+        fixed=fixed,
+        day_constraints=constraints,
+    )

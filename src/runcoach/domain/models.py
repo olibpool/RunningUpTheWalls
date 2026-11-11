@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Sport = Literal["run", "climb", "football", "rest", "other"]
+EventKind = Literal["fixed", "penalty", "block", "credit"]
 
 
 class Step(BaseModel):
@@ -51,6 +52,7 @@ class PlanInput(BaseModel):
     goal_date: date
     vdot: float
     runs_per_week: int = 4
+    climbing_target_per_week: int = Field(default=2, ge=0, le=3)
     current_weekly_km: float = 0.0
     race_name: str = "race"
 
@@ -83,7 +85,7 @@ class Activity(BaseModel):
 
 class Commitment(BaseModel):
     id: int | None = None
-    kind: str
+    kind: EventKind
     sport: str | None = None
     title: str
     weekday: int | None = None
@@ -92,10 +94,17 @@ class Commitment(BaseModel):
     start_time: str | None = None
     duration_min: int | None = None
     rpe: float | None = None
-    severity: int | None = None
+    severity: int | None = Field(default=None, ge=1, le=3)
     source: str = "manual"
     external_id: str | None = None
     active: bool = True
+    minimal_plan: bool = False
+
+    @model_validator(mode="after")
+    def validate_minimal_plan(self) -> Commitment:
+        if self.minimal_plan and self.kind != "block":
+            raise ValueError("minimal_plan is only valid for block events")
+        return self
 
 
 class CalendarEvent(BaseModel):

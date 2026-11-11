@@ -83,3 +83,53 @@ drop_cost_other = 400
 fixed = ["football"]
 penalty = ["drinks", "party"]
 block = ["holiday", "annual leave", "ooo"]
+
+[continuous]
+weekly_increase = 0.05
+weeks_ahead = 4
+replan_interval_days = 7
+chronic_load_weeks = 4
+block_cycle = ["aerobic", "threshold", "speed"]
+weeks_per_block = 4
+retest_every_weeks = 10
+retest_distance_m = 5000
+acr_low = 0.8
+acr_high = 1.3
+acr_hold = 1.5
+quality_load_share = 0.2
+
+[penalty]
+day_of_max_rpe = 4.0
+days_after = { "1" = 1, "2" = 1, "3" = 2 }
+rhr_delta_bpm = 5
+
+[return_ramp]
+short_days = 10
+short = [0.8]
+medium_days = 28
+medium = [0.6, 0.8, 1.0]
+long = [0.5, 0.65, 0.8, 0.9, 1.0]
+no_quality_weeks_after_long = 2
+
+[minimal_plan]
+runs = 3
+duration_share = 0.33
+credit_leg_factor = 0.8
+credit_easy_rpe = 6.0
+easy_rpe = 3.0
+strides_rpe = 8.0
+strides_repeats = 4
+stride_duration_s = 20
+stride_recovery_s = 60
+
+[time_trial]
+warmup_min = 15
+cooldown_min = 10
+warmup_rpe = 3.0
+cooldown_rpe = 3.0
+work_rpe = 8.5
+estimated_5k_duration_min = 25
+
+[readiness]
+rhr_window_days = 28
+rhr_min_samples = 7

@@ -42,9 +42,83 @@ def test_db_save_plan_persists_sessions(tmp_path) -> None:
     conn.close()
 
 
+def test_replace_continuous_sessions_preserves_done_and_logs_replan(tmp_path) -> None:
+    conn = db.connect(tmp_path / "replan.db")
+    today = date(2026, 11, 9)
+    plan_id = db.save_plan(
+        conn,
+        [
+            PlannedSession(
+                date=today,
+                sport="run",
+                kind="easy",
+                title="Completed easy",
+                duration_min=30,
+            ),
+            PlannedSession(
+                date=date(2026, 11, 10),
+                sport="run",
+                kind="long",
+                title="Old long",
+                duration_min=60,
+            ),
+        ],
+        mode="continuous",
+    )
+    done_id = conn.execute(
+        "SELECT id FROM session WHERE plan_id = ? AND title = 'Completed easy'",
+        (plan_id,),
+    ).fetchone()["id"]
+    conn.execute("UPDATE session SET status = 'done' WHERE id = ?", (done_id,))
+    conn.commit()
+    generated = [
+        PlannedSession(
+            date=today,
+            sport="run",
+            kind="easy",
+            title="Duplicate completed session",
+            duration_min=30,
+        ),
+        PlannedSession(
+            date=date(2026, 11, 11),
+            sport="run",
+            kind="tempo",
+            title="New tempo",
+            duration_min=40,
+        ),
+    ]
+
+    inserted = db.replace_continuous_sessions(
+        conn,
+        plan_id,
+        generated,
+        today=today,
+        replanned_at="2026-11-09T12:00:00Z",
+    )
+
+    assert inserted == 1
+    rows = conn.execute(
+        "SELECT id, status, title FROM session WHERE plan_id = ? ORDER BY date, id",
+        (plan_id,),
+    ).fetchall()
+    assert [(row["status"], row["title"]) for row in rows] == [
+        ("done", "Completed easy"),
+        ("planned", "New tempo"),
+    ]
+    assert db.get_kv(conn, "last_replanned_at") == "2026-11-09T12:00:00+00:00"
+    adjustment = conn.execute(
+        "SELECT rule FROM adjustment WHERE session_id IS NULL ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert adjustment is not None
+    assert adjustment["rule"] == "weekly_replan"
+    conn.close()
+
+
 def test_db_migration_and_fk_error(tmp_path) -> None:
     db_path = tmp_path / "coach.db"
     conn = db.connect(db_path)
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(commitment)").fetchall()}
+    assert "minimal_plan" in columns
     assert (
         conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'"
@@ -192,11 +266,26 @@ def test_expand_commitments_and_commitment_roundtrip(tmp_path) -> None:
             active=True,
         ),
     )
+    travel_block_id = db.save_commitment(
+        conn,
+        Commitment(
+            kind="block",
+            title="Travel",
+            start_date="2026-12-20",
+            end_date="2026-12-27",
+            minimal_plan=True,
+        ),
+    )
     assert commitment_id > 0
+    assert travel_block_id > 0
     rows = db.list_commitments(conn)
     assert any(row["title"] == "Football" for row in rows)
+    assert next(row for row in rows if row["id"] == travel_block_id)["minimal_plan"] == 1
     db.delete_commitment(conn, commitment_id)
-    assert not any(row["id"] == commitment_id for row in db.list_commitments(conn))
+    db.delete_commitment(conn, travel_block_id)
+    assert not any(
+        row["id"] in {commitment_id, travel_block_id} for row in db.list_commitments(conn)
+    )
     conn.close()
 
 

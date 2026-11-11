@@ -8,7 +8,7 @@ import recurring_ical_events  # type: ignore[import-untyped]
 from icalendar import Calendar
 
 from runcoach.config import CalendarKeywordsConfig
-from runcoach.domain.models import CalendarEvent, Commitment
+from runcoach.domain.models import CalendarEvent, Commitment, EventKind
 
 
 def _window_datetime(value: date | datetime, tz: ZoneInfo, *, end: bool) -> datetime:
@@ -160,7 +160,7 @@ def detect_commitments(
     """Create inactive proposals from configured keywords and long all-day events."""
     proposals: list[Commitment] = []
     local_timezone = ZoneInfo(timezone_name)
-    keyword_groups = (
+    keyword_groups: tuple[tuple[EventKind, list[str]], ...] = (
         ("block", cfg.block),
         ("penalty", cfg.penalty),
         ("fixed", cfg.fixed),
@@ -168,7 +168,7 @@ def detect_commitments(
     for event in events:
         title = event.title or ""
         normalized_title = title.casefold()
-        matched_kind = next(
+        matched_kind: EventKind | None = next(
             (
                 kind
                 for kind, keywords in keyword_groups

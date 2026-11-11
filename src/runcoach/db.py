@@ -229,8 +229,8 @@ def save_commitment(conn: sqlite3.Connection, commitment: object) -> int:
             INSERT INTO commitment (
                 kind, sport, title, weekday, start_date, end_date,
                 start_time, duration_min, rpe, severity, source,
-                external_id, active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                external_id, active, minimal_plan
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 getattr(commitment, "kind", "fixed"),
@@ -246,6 +246,7 @@ def save_commitment(conn: sqlite3.Connection, commitment: object) -> int:
                 getattr(commitment, "source", "manual"),
                 getattr(commitment, "external_id", None),
                 1 if getattr(commitment, "active", True) else 0,
+                1 if getattr(commitment, "minimal_plan", False) else 0,
             ),
         )
         last_id = cursor.lastrowid
@@ -259,7 +260,7 @@ def list_commitments(conn: sqlite3.Connection) -> list[dict[str, object]]:
     rows = conn.execute(
         """
         SELECT id, kind, sport, title, weekday, start_date, end_date, start_time,
-               duration_min, rpe, severity, source, external_id, active
+               duration_min, rpe, severity, source, external_id, active, minimal_plan
         FROM commitment
         ORDER BY id
         """
@@ -328,6 +329,151 @@ def cache_calendar_events(
             )
 
 
+def get_kv(conn: sqlite3.Connection, key: str) -> str | None:
+    row = conn.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()
+    return str(row["value"]) if row is not None else None
+
+
+def _insert_planned_session(
+    conn: sqlite3.Connection,
+    plan_id: int,
+    session: PlannedSession,
+) -> int:
+    cursor = conn.execute(
+        """
+        INSERT INTO session (
+            plan_id, date, start_time, sport, kind, title, steps_json,
+            planned_duration_min, planned_distance_m, planned_rpe,
+            leg_load, finger_load, status, reason,
+            garmin_workout_id, garmin_schedule_id, gcal_event_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, NULL, NULL, NULL)
+        """,
+        (
+            plan_id,
+            session.date.isoformat(),
+            session.start_time,
+            session.sport,
+            session.kind,
+            session.title,
+            json.dumps(
+                [step.model_dump(mode="json") for step in session.steps],
+                separators=(",", ":"),
+            ),
+            session.duration_min,
+            session.distance_m,
+            session.rpe,
+            session.leg_load,
+            session.finger_load,
+            session.reason,
+        ),
+    )
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to insert planned session")
+    return int(cursor.lastrowid)
+
+
+def replace_continuous_sessions(
+    conn: sqlite3.Connection,
+    plan_id: int,
+    sessions: list[PlannedSession],
+    *,
+    today: date,
+    replanned_at: str,
+) -> int:
+    """Replace upcoming planned sessions atomically while retaining completed work."""
+    try:
+        timestamp = datetime.fromisoformat(replanned_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("replanned_at must be an ISO 8601 UTC timestamp") from exc
+    if timestamp.tzinfo is None or timestamp.utcoffset() != timezone.utc.utcoffset(timestamp):
+        raise ValueError("replanned_at must be an ISO 8601 UTC timestamp")
+    if any(session.date < today for session in sessions):
+        raise ValueError("replanned sessions must not be dated before today")
+
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        plan = conn.execute(
+            "SELECT mode, status FROM plan WHERE id = ?",
+            (plan_id,),
+        ).fetchone()
+        if plan is None or plan["mode"] != "continuous" or plan["status"] != "active":
+            raise ValueError(f"Plan {plan_id} is not an active continuous plan")
+        before_rows = conn.execute(
+            """
+            SELECT id, date, sport, kind, title
+            FROM session
+            WHERE plan_id = ? AND date >= ? AND status IN ('planned', 'moved')
+            ORDER BY date, id
+            """,
+            (plan_id, today.isoformat()),
+        ).fetchall()
+        before = [dict(row) for row in before_rows]
+        done_rows = conn.execute(
+            """
+            SELECT id, date, sport, kind, title
+            FROM session
+            WHERE plan_id = ? AND date >= ? AND status = 'done'
+            ORDER BY date, id
+            """,
+            (plan_id, today.isoformat()),
+        ).fetchall()
+        completed = {(row["date"], row["sport"], row["kind"]) for row in done_rows}
+        new_sessions = [
+            session
+            for session in sessions
+            if (session.date.isoformat(), session.sport, session.kind) not in completed
+        ]
+        conn.execute(
+            """
+            DELETE FROM session
+            WHERE plan_id = ? AND date >= ? AND status IN ('planned', 'moved')
+            """,
+            (plan_id, today.isoformat()),
+        )
+        inserted_ids = [_insert_planned_session(conn, plan_id, session) for session in new_sessions]
+        after = [
+            {
+                "id": row["id"],
+                "date": row["date"],
+                "sport": row["sport"],
+                "kind": row["kind"],
+                "title": row["title"],
+                "status": "done",
+            }
+            for row in done_rows
+        ] + [
+            {
+                "date": session.date.isoformat(),
+                "sport": session.sport,
+                "kind": session.kind,
+                "title": session.title,
+                "status": "planned",
+            }
+            for session in new_sessions
+        ]
+        conn.execute(
+            """
+            INSERT INTO adjustment (created_at, session_id, rule, before_json, after_json, reason)
+            VALUES (?, NULL, 'weekly_replan', ?, ?, ?)
+            """,
+            (
+                timestamp.astimezone(timezone.utc).isoformat(),
+                json.dumps(before, separators=(",", ":")),
+                json.dumps(after, separators=(",", ":")),
+                "Regenerated the upcoming continuous plan; completed sessions were retained.",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO kv (key, value) VALUES ('last_replanned_at', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            (timestamp.astimezone(timezone.utc).isoformat(),),
+        )
+    return len(inserted_ids)
+
+
 def save_plan(
     conn: sqlite3.Connection,
     sessions: list[PlannedSession],
@@ -371,35 +517,7 @@ def save_plan(
         plan_id = int(last_row_id)
 
         for session in sessions:
-            conn.execute(
-                """
-                INSERT INTO session (
-                    plan_id, date, start_time, sport, kind, title, steps_json,
-                    planned_duration_min, planned_distance_m, planned_rpe,
-                    leg_load, finger_load, status, reason,
-                    garmin_workout_id, garmin_schedule_id, gcal_event_id
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, NULL, NULL, NULL)
-                """,
-                (
-                    plan_id,
-                    session.date.isoformat(),
-                    session.start_time,
-                    session.sport,
-                    session.kind,
-                    session.title,
-                    json.dumps(
-                        [step.model_dump(mode="json") for step in session.steps],
-                        separators=(",", ":"),
-                    ),
-                    session.duration_min,
-                    session.distance_m,
-                    session.rpe,
-                    session.leg_load,
-                    session.finger_load,
-                    session.reason,
-                ),
-            )
+            _insert_planned_session(conn, plan_id, session)
     return plan_id
 
 
@@ -415,4 +533,6 @@ __all__ = [
     "list_commitments",
     "delete_commitment",
     "cache_calendar_events",
+    "get_kv",
+    "replace_continuous_sessions",
 ]

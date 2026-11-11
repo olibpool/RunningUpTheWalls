@@ -4,9 +4,14 @@ from datetime import date
 
 import pytest
 
-from runcoach.domain.models import PlanInput, PlannedSession
+from runcoach.config import load_config
+from runcoach.domain.models import Commitment, PlanInput, PlannedSession
 from runcoach.engine.load import duration_from_distance_and_pace, session_rpe_load
-from runcoach.engine.plan import InfeasibleGoal, generate_race_plan
+from runcoach.engine.plan import (
+    InfeasibleGoal,
+    generate_race_plan,
+    generate_race_plan_result,
+)
 from runcoach.engine.progression import split_blocks, weekly_targets
 from runcoach.engine.safety import check_plan
 from runcoach.engine.vdot import vdot_from_race, velocity_at_vo2, vo2_at_velocity
@@ -25,12 +30,9 @@ def test_vdot_inverts_vo2() -> None:
 
 def test_zones_are_in_expected_order() -> None:
     zones = zones_from_vdot(50.0, None)
+    assert zones.easy.min_s_per_km > zones.marathon.min_s_per_km > zones.threshold.min_s_per_km
     assert (
-        zones.easy.min_s_per_km > zones.marathon.min_s_per_km > zones.threshold.min_s_per_km
-    )
-    assert (
-        zones.threshold.min_s_per_km > zones.interval.min_s_per_km
-        > zones.repetition.min_s_per_km
+        zones.threshold.min_s_per_km > zones.interval.min_s_per_km > zones.repetition.min_s_per_km
     )
     assert zones.easy.min_s_per_km < zones.easy.max_s_per_km
 
@@ -131,3 +133,35 @@ def test_generate_race_plan_returns_week_sessions() -> None:
     assert plan
     assert all(isinstance(session, PlannedSession) for session in plan)
     assert all(session.sport == "run" for session in plan)
+
+
+def test_scheduled_race_plan_expands_fixed_commitments(tmp_path) -> None:
+    inp = PlanInput(
+        distance_km=5.0,
+        goal_date=date(2026, 12, 28),
+        vdot=49.8,
+        runs_per_week=2,
+        climbing_target_per_week=0,
+        current_weekly_km=20.0,
+    )
+    football = Commitment(
+        kind="fixed",
+        sport="football",
+        title="Football",
+        weekday=1,
+        start_time="19:00",
+        duration_min=90,
+        rpe=6.0,
+    )
+
+    result = generate_race_plan_result(
+        inp,
+        date(2026, 11, 9),
+        load_config(local_path=tmp_path / "local.toml", env={}),
+        commitments=[football],
+    )
+
+    assert not result.dropped
+    assert any("leg-load cap remains exceeded" in warning for warning in result.warnings)
+    assert any("spaced from football" in session.reason for session in result.sessions)
+    assert all(session.start_time is not None for session in result.sessions)
