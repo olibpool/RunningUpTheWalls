@@ -87,6 +87,8 @@ polling) and the PWA (manifest, icons, `/sw.js`; offline falls back to the last 
 Gate ⛔ is on the human's phone. Still to verify there: the origin check behind
 `tailscale serve` (it prefers `X-Forwarded-Host`) and the offline shell.
 
+**Docs and home page** ✅: `/` is a home dashboard (today, plan headline, attention list, first-run checklist), `/guide` is the in-app user guide, and `docs/user-guide.md` covers setup, config and CLI. Update all three when a feature lands.
+
 **Phase 4** 🟡. Done: P4-T2 (`integrations/watch.py`: `WatchExporter`, `NullExporter`,
 `[export] backend`), the library-independent half of P4-T3 (`to_workout_spec`: steps to a
 neutral `WorkoutSpec` with explicit fast/slow pace bounds and repeat groups) and P4-T8

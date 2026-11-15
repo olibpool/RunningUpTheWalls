@@ -23,12 +23,14 @@ TIMEZONE = ZoneInfo(LOCAL_TIMEZONE)
 
 # One entry per top-level page; add new pages here so the navigation stays in one place.
 NAV = [
+    ("home", "Home", "/"),
     ("week", "Week", "/week"),
     ("plan", "Plan", "/plan"),
     ("activities", "Activities", "/activities"),
     ("checkin", "Check-in", "/checkin"),
     ("events", "Events", "/events"),
     ("settings", "Settings", "/settings"),
+    ("guide", "Guide", "/guide"),
 ]
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")

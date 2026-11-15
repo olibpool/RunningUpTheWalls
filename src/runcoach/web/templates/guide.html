@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}User guide{% endblock %}
+{% block content %}
+<h1>User guide</h1>
+<nav aria-label="On this page"><ul>
+  <li><a href="#start">First steps</a></li>
+  <li><a href="#daily">Day to day</a></li>
+  <li><a href="#adapts">How the plan adapts</a></li>
+  <li><a href="#safety">Safety rules</a></li>
+  <li><a href="#data">Getting runs in</a></li>
+  <li><a href="#calendar">Calendar and watch</a></li>
+  <li><a href="#phone">Using it on your phone</a></li>
+  <li><a href="#trouble">Troubleshooting</a></li>
+</ul></nav>
+
+<section id="start"><h2>First steps</h2>
+  <ol>
+    <li><strong>Settings, Athlete</strong>: set your VDOT (a fitness number taken from a recent race), runs per week and climbing sessions per week. When you create a plan you can enter a recent race time instead and the VDOT is worked out for you.</li>
+    <li><strong>Events</strong>: add fixed commitments such as football (weekday, start time, length, effort 1 to 10). Plans are built around them.</li>
+    <li><strong>Plan, Create a plan</strong>: pick a distance (5K, 10K, half, marathon), the race date and your recent weekly distance. Preview it, then save. With no race, choose <em>continuous improvement</em>.</li>
+  </ol>
+  <p>A plan that fails the safety checks cannot be saved. The preview names the rule it broke; the usual fix is a later date or fewer runs per week.</p>
+</section>
+
+<section id="daily"><h2>Day to day</h2>
+  <ul>
+    <li><strong>Home</strong> shows today, the next session and anything that needs attention.</li>
+    <li><strong>Week</strong> lists each day's sessions with paces and the reason each was placed there. Prev and Next browse other weeks.</li>
+    <li>Open a session to see its steps. Mark it <strong>Done</strong> (optionally with effort and minutes) or <strong>Skip</strong>, or <strong>Move</strong> it to another day. A move that would break a safety rule is refused, with the reason.</li>
+    <li><strong>Plan</strong> shows every week with its distance and block (base, build, peak, taper).</li>
+    <li><strong>Check-in</strong>: log how you feel, any niggle, illness and resting heart rate. A raised resting heart rate may suggest an easy day, but nothing changes until you accept it.</li>
+  </ul>
+</section>
+
+<section id="adapts"><h2>How the plan adapts</h2>
+  <p>Every change is logged with its reason on the session's page.</p>
+  <ul>
+    <li><strong>A missed session</strong> is marked skipped. Two or more misses in a week lighten the rest of it.</li>
+    <li><strong>Illness or a niggle</strong> in a check-in downgrades hard sessions, then ramps you back at about 70% and 85%.</li>
+    <li><strong>A drinks night</strong> (Events) eases the next day. <strong>A holiday or trip</strong> clears those days and ramps you back afterwards.</li>
+    <li><strong>Heat</strong> slows pace targets, and hard sessions turn easy on very hot days. This needs your location in the config.</li>
+    <li><strong>Retest</strong>: when your runs suggest your fitness has changed, a banner offers a time trial. Your VDOT only changes when you submit a result in Settings.</li>
+  </ul>
+</section>
+
+<section id="safety"><h2>Safety rules</h2>
+  <p>Plans are checked for weekly load rising too fast, a long run taking too much of the week, hard days too close together, paces out of order, and a taper that exceeds the peak. A plan that breaks a rule is never saved. The limits are in <code>config/defaults.toml</code>.</p>
+</section>
+
+<section id="data"><h2>Getting runs in</h2>
+  <ul>
+    <li><strong>Activities, Upload</strong> a GPX file. It is matched to the closest planned session by day and duration. Anything it cannot match with confidence is listed for you to assign by hand.</li>
+    <li>You can also drop GPX files into the inbox folder; the next sync picks them up. Uploading the same file twice does nothing.</li>
+    <li>FIT files are not supported yet.</li>
+  </ul>
+</section>
+
+<section id="calendar"><h2>Calendar and watch</h2>
+  <ul>
+    <li>With your Google Calendar's private iCal address configured, busy times are respected and a session that a new event clashes with is moved. The address is a secret: keep it in <code>config/local.toml</code> or an environment variable, never in the repository.</li>
+    <li>Calendar events that look like a regular commitment appear on Events as proposals for you to confirm.</li>
+    <li>Subscribe a calendar app to <code>/export/plan.ics</code> to see your plan there.</li>
+    <li>Sending workouts to a Garmin watch is not built yet.</li>
+  </ul>
+</section>
+
+<section id="phone"><h2>Using it on your phone</h2>
+  <p>Open the app in your phone's browser and choose <em>Add to Home Screen</em>. It then opens like an app, and the last week page you viewed still shows without a connection.</p>
+</section>
+
+<section id="trouble"><h2>Troubleshooting</h2>
+  <ul>
+    <li><strong>A plan will not save</strong>: read the rule listed. Try a later race date, fewer runs per week or a lower starting distance.</li>
+    <li><strong>A form is refused behind a proxy or Tailscale</strong>: the proxy must forward the original host header.</li>
+    <li><strong>Nothing seems to sync</strong>: Settings shows the last sync and each step's result. Use <em>Run sync now</em>.</li>
+    <li><strong>Health check</strong>: <code>/healthz</code> shows the app and database versions.</li>
+  </ul>
+</section>
+{% endblock %}

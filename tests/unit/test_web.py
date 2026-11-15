@@ -56,12 +56,27 @@ def test_health_reports_the_migrated_schema(client: TestClient) -> None:
     assert payload["db_version"] == 2
 
 
-def test_home_redirects_to_an_empty_week_that_offers_a_plan(client: TestClient) -> None:
-    response = client.get("/")
-    assert response.url.path == "/week"
+def test_empty_week_offers_a_plan(client: TestClient) -> None:
+    response = client.get("/week")
     assert "No active plan yet." in response.text
     assert 'href="/plan/new"' in response.text
     assert response.text.count('class="day') == 7
+
+
+def test_home_guides_a_new_user_then_summarises_the_plan(client: TestClient) -> None:
+    assert "Get started" in client.get("/").text
+    client.post("/events", data=FOOTBALL)
+    client.post("/plan/save", data=PLAN)
+    page = client.get("/").text
+    assert "Get started" not in page
+    assert "weeks to go" in page
+
+
+def test_guide_is_served_and_linked_from_the_nav(client: TestClient) -> None:
+    page = client.get("/guide")
+    assert page.status_code == 200
+    assert "User guide" in page.text
+    assert 'href="/guide"' in client.get("/week").text
 
 
 def test_events_add_validate_and_delete(client: TestClient, db_path: Path) -> None:

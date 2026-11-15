@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<h1>Coachal</h1>
+<p class="muted">{{ today.strftime("%A %d %B") }}</p>
+{% include "_messages.html" %}
+
+{% if retest %}
+<div class="banner warning" role="status"><p>{{ retest }}</p><p><a href="/settings">Update your paces in Settings</a></p></div>
+{% endif %}
+
+{% if not plan %}
+<section aria-labelledby="start-title">
+  <h2 id="start-title">Get started</h2>
+  <ol>
+    <li{% if has_events %} class="muted"{% endif %}><a href="/events">Add your fixed commitments</a> (football, a standing class) so plans are built around them.</li>
+    <li><a href="/plan/new">Create a plan</a> for a race, or <a href="/plan/continuous">start continuous improvement</a> with no race.</li>
+    <li>Come back here each day, or open <a href="/week">Week</a>, to see what is next.</li>
+  </ol>
+  <p>New to Coachal? Read the <a href="/guide">user guide</a>.</p>
+</section>
+{% else %}
+<section aria-labelledby="plan-title">
+  <h2 id="plan-title">Your plan</h2>
+  <p>
+    {% if plan.mode == "race" and plan.goal_date %}
+      Race on {{ plan.goal_date }}{% if weeks_to_go is not none %} · {{ weeks_to_go }} weeks to go{% endif %}.
+    {% else %}Continuous improvement, no race date.{% endif %}
+    <a href="/plan">Full plan</a>
+  </p>
+</section>
+
+<section aria-labelledby="today-title">
+  <h2 id="today-title">Today</h2>
+  <div class="week">{% include "_day.html" %}</div>
+  {% if next_session %}
+  <p class="muted">Next: <a href="/session/{{ next_session.id }}">{{ next_session.title }}</a>, {{ next_session.date.strftime("%a %d %b") }}.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<section aria-labelledby="attention-title">
+  <h2 id="attention-title">Needs attention</h2>
+  <ul>
+    {% if unmatched %}<li><a href="/activities">{{ unmatched }} activit{{ "y" if unmatched == 1 else "ies" }}</a> not matched to a session.</li>{% endif %}
+    <li><a href="/checkin">Check in</a> if you are tired, ill or sore, and the plan will adjust.</li>
+    {% if last_sync %}<li>Last sync {{ last_sync | local_time }}.</li>{% else %}<li>No sync has run yet (<a href="/settings">Settings</a>).</li>{% endif %}
+  </ul>
+</section>
+{% endblock %}

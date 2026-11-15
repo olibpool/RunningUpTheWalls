@@ -20,6 +20,7 @@ Coachal is a self-hosted training planner for runners and multi-sport athletes. 
 - `src/runcoach/web/` — FastAPI app and routes
 - `src/runcoach/db.py` — SQLite access and persistence
 - `src/runcoach/cli.py` — command-line management for plans and commitments
+- `docs/user-guide.md` — setup, configuration and CLI reference (the in-app guide is at `/guide`)
 - `tests/unit/` — regression tests covering the engine and persistence layer
 
 ## Prerequisites
@@ -45,7 +46,7 @@ Start the server:
 uv run uvicorn runcoach.web.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Then open http://127.0.0.1:8000 and, in this order:
+Then open http://127.0.0.1:8000 (the home page links to a user guide) and, in this order:
 
 1. **Events**: add football (or any weekly fixed commitment) so plans are built around it.
 2. **Plan → Create a plan**: enter a recent race time (or a VDOT), preview, then save.

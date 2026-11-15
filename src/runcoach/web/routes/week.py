@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 
 from runcoach import db
 from runcoach.config import ConfigNode
@@ -48,12 +48,6 @@ def build_week(
     if plan is None:
         warnings.append("No active plan yet.")
     return days, warnings
-
-
-@router.get("/")
-def home() -> RedirectResponse:
-    """The week view is the home page."""
-    return RedirectResponse("/week", status_code=307)
 
 
 @router.get("/week", response_class=HTMLResponse)
