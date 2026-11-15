@@ -364,3 +364,24 @@ def test_football_week_and_time_trial_week_shapes() -> None:
     ]
     assert any(s.kind == "time_trial" for s in trial_week)
     assert sum(s.kind == "easy" for s in trial_week) >= 2  # the trial doesn't empty the week
+
+
+def test_history_counts_climbing_as_the_planner_does(tmp_path) -> None:
+    from runcoach import db
+    from runcoach.domain.models import Activity
+    from runcoach.sync import history_from_activities
+
+    conn = db.connect(tmp_path / "h.db")
+    for sport, load in [("run", 300.0), ("climb", 500.0)]:
+        db.insert_activity(
+            conn,
+            Activity(
+                source="manual", sport=sport, started_at="2026-11-03T08:00:00+00:00",
+                duration_s=3600, distance_m=10000 if sport == "run" else None, load=load,
+            ),
+        )  # fmt: skip
+    typed = load_scheduling_config(_config())
+    history = history_from_activities(conn, typed, date(2026, 11, 12))
+    conn.close()
+    week = next(w for w in history.weekly_loads if w.week_start == date(2026, 11, 2))
+    assert week.leg_load == 300.0 + 500.0 * typed.load_factors.climb_leg

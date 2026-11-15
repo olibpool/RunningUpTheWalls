@@ -817,3 +817,24 @@ def longest_run_km_since(conn: sqlite3.Connection, since: datetime) -> float | N
         (since.astimezone(timezone.utc).isoformat(),),
     ).fetchone()
     return float(row[0]) / 1000 if row[0] else None
+
+
+def set_activity_rpe(conn: sqlite3.Connection, activity_id: int, rpe: float) -> None:
+    """Record how hard an activity felt; its load becomes RPE x minutes."""
+    with conn:
+        updated = conn.execute(
+            "UPDATE activity SET rpe = ?, load = ? * duration_s / 60.0 WHERE id = ?",
+            (rpe, rpe, activity_id),
+        ).rowcount
+    if not updated:
+        raise KeyError(activity_id)
+
+
+def unrated_activities(conn: sqlite3.Connection, since: datetime, limit: int) -> list[Activity]:
+    """Recent synced or uploaded activities nobody has rated yet, newest first."""
+    rows = conn.execute(
+        "SELECT * FROM activity WHERE rpe IS NULL AND source != 'manual' AND started_at >= ? "
+        "ORDER BY started_at DESC LIMIT ?",
+        (since.astimezone(timezone.utc).isoformat(), limit),
+    ).fetchall()
+    return [from_row(row) for row in rows]

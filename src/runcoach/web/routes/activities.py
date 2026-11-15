@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel, Field
 
 from runcoach import db
 from runcoach.config import ConfigNode, load_scheduling_config
@@ -13,10 +14,11 @@ from runcoach.domain.models import Activity, Session
 from runcoach.ingest.inbox import PARSERS, ingest_file
 from runcoach.ingest.matcher import local_day
 from runcoach.sync import adapt_plan, match_activities
-from runcoach.web.deps import get_cfg, get_conn, redirect, render, today
+from runcoach.web.deps import get_cfg, get_conn, is_htmx, parse_form, redirect, render, today
 
 router = APIRouter(prefix="/activities")
 _ASSIGN_WINDOW = timedelta(days=3)  # how far either side of an activity to offer sessions
+_RATE_WINDOW = timedelta(days=7)  # how far back to ask how hard an activity felt
 
 
 def _candidates(activity: Activity, sessions: list[Session]) -> list[Session]:
@@ -45,6 +47,7 @@ def _page(
             "errors": errors,
             "unmatched": [(a, _candidates(a, sessions)) for a in reversed(unmatched)],
             "recent": [a for a in reversed(activities) if a.session_id is not None][:20],
+            "unrated": db.unrated_activities(conn, datetime.now(timezone.utc) - _RATE_WINDOW, 10),
             "accept": ",".join(PARSERS),
         },
         status_code=status_code,
@@ -91,3 +94,30 @@ def assign(
         conn, activity_id, session_id, rule="manual_match", reason="Assigned in the app."
     )
     return redirect(request, "/activities")
+
+
+class RpeForm(BaseModel):
+    rpe: float = Field(ge=1, le=10, multiple_of=0.5)
+
+
+@router.post("/{activity_id}/rpe", response_model=None)
+async def rate(
+    request: Request,
+    activity_id: int,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+) -> Response:
+    """Record how hard an activity felt, then re-run the rules with its real load."""
+    form, errors = parse_form(RpeForm, await request.form())
+    if form is None:
+        raise HTTPException(status_code=400, detail="; ".join(errors))
+    try:
+        db.set_activity_rpe(conn, activity_id, form.rpe)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Activity not found") from None
+    adapt_plan(conn, load_scheduling_config(cfg), today())
+    if not is_htmx(request):
+        return redirect(request, "/")
+    return Response(
+        "", media_type="text/html", headers={"HX-Trigger": '{"toast": "Effort saved."}'}
+    )

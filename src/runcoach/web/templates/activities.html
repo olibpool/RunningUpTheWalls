@@ -23,6 +23,17 @@
   <p class="muted small">Uploads are matched to your planned sessions automatically. The same file twice is ignored.</p>
 </section>
 
+{% if unrated %}
+<section class="panel" aria-labelledby="rate-title">
+  <div class="panel-head">
+    <h2 id="rate-title">How hard was it?</h2>
+    <span class="muted">1 = very easy, 10 = all-out</span>
+  </div>
+  <p class="muted small">Your rating replaces an estimate, so training load and the safety checks use your real effort.</p>
+  <ul class="rate-list">{% for a in unrated %}{% include "_rate.html" %}{% endfor %}</ul>
+</section>
+{% endif %}
+
 <section class="panel" aria-labelledby="unmatched-title">
   <h2 id="unmatched-title">Needs a session</h2>
   {% for a, options in unmatched %}

@@ -30,6 +30,7 @@ from runcoach.engine.continuous import (
     generate_continuous_plan_result,
 )
 from runcoach.engine.events import day_constraints, expand_commitments
+from runcoach.engine.load import leg_factor
 from runcoach.engine.plan import fixed_instances
 from runcoach.engine.replan import should_replan
 from runcoach.ingest.calendar import fetch_ical_events, to_busy
@@ -197,7 +198,10 @@ def history_from_activities(
     for activity in db.activities(conn):
         day = local_day(activity.started_at)
         if monday(day) in loads:
-            loads[monday(day)] += activity.load or 0.0
+            # Climbing barely loads the legs; count each sport as the planner does.
+            loads[monday(day)] += (activity.load or 0.0) * leg_factor(
+                activity.sport, cfg.load_factors
+            )
         if activity.sport == "run" and day >= today - timedelta(days=28):
             run_minutes.append(activity.duration_s / 60)
     blocks = [c for c in db.list_commitments(conn) if c.kind == "block" and c.active]

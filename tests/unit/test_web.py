@@ -519,7 +519,10 @@ def test_app_settings_save_and_reload(
 
     bad = client.post("/settings/app", data={**form, "weekday": "09:00-08:00"})
     assert bad.status_code == 400 and "ends before it starts" in bad.text
-    assert config.read_settings(saved)["availability"]["weekday"] == [["06:30", "08:00"], ["18:00", "20:00"]]
+    assert config.read_settings(saved)["availability"]["weekday"] == [
+        ["06:30", "08:00"],
+        ["18:00", "20:00"],
+    ]
 
     client.post("/settings/app", data={**form, "clear_ics_url": "on"})
     assert config.read_settings(saved)["gcal"]["ics_url"] == ""
@@ -528,3 +531,37 @@ def test_app_settings_save_and_reload(
 def test_settings_reports_garmin_and_watch_status(client: TestClient) -> None:
     page = client.get("/settings").text
     assert "Garmin activities and resting HR" in page and "Watch workouts" in page
+
+
+def test_rating_an_activity_sets_its_load_and_leaves_the_list(
+    client: TestClient, db_path: Path
+) -> None:
+    from datetime import datetime, timezone
+
+    from runcoach.domain.models import Activity
+
+    started = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    conn = db.connect(db_path)
+    rated_id = db.insert_activity(
+        conn, Activity(source="garmin", sport="run", started_at=started, duration_s=3000, load=200)
+    )
+    db.insert_activity(  # Done already records effort, so manual runs are never asked about
+        conn, Activity(source="manual", sport="run", started_at=started, duration_s=1800)
+    )
+    conn.close()
+    assert client.get("/").text.count('class="rate-row') == 1
+
+    assert client.post(f"/activities/{rated_id}/rpe", data={"rpe": "11"}).status_code == 400
+    assert client.post(f"/activities/{rated_id}/rpe", data={"rpe": "0"}).status_code == 400
+    assert client.post("/activities/9999/rpe", data={"rpe": "5"}).status_code == 404
+    done = client.post(
+        f"/activities/{rated_id}/rpe", data={"rpe": "7"}, headers={"HX-Request": "true"}
+    )
+    assert done.status_code == 200 and done.text == ""
+    assert "toast" in done.headers["HX-Trigger"]
+
+    conn = db.connect(db_path)
+    row = conn.execute("SELECT rpe, load FROM activity WHERE id = ?", (rated_id,)).fetchone()
+    conn.close()
+    assert (row["rpe"], row["load"]) == (7.0, 350.0)  # 7 x 50 min
+    assert 'class="rate-row' not in client.get("/").text

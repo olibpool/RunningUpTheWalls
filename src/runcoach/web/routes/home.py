@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
@@ -63,6 +63,9 @@ def home(
             "zones": zones_from_vdot(athlete.vdot, typed.zones) if athlete else None,
             "resting": [(c.date, c.resting_hr) for c in resting],
             "unmatched": sum(a.session_id is None for a in activities),
+            "unrated": db.unrated_activities(
+                conn, datetime.now(timezone.utc) - timedelta(days=7), 5
+            ),
             "retest": db.get_kv(conn, "retest_suggested"),
             "has_events": bool(db.list_commitments(conn)),
             "last_sync": db.get_kv(conn, "sync.last_run"),
