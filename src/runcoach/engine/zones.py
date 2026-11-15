@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from runcoach.config import ZonesConfig
+from runcoach.engine.vdot import velocity_at_vo2
+
 
 @dataclass(frozen=True)
 class ZoneRange:
-    min_s_per_km: float
-    max_s_per_km: float
+    min_s_per_km: float  # fastest acceptable
+    max_s_per_km: float  # slowest acceptable
 
 
 @dataclass(frozen=True)
@@ -18,24 +21,22 @@ class Zones:
     repetition: ZoneRange
 
 
-def _pace_for_fraction(vdot: float, fraction: float) -> float:
-    from runcoach.engine.vdot import velocity_at_vo2
-
+def _pace(vdot: float, fraction: float) -> float:
     return 60000.0 / velocity_at_vo2(fraction * vdot)
 
 
-def zones_from_vdot(vdot: float, cfg: object) -> Zones:
-    easy_fast = _pace_for_fraction(vdot, 0.72)
-    easy_slow = _pace_for_fraction(vdot, 0.62)
-    marathon = _pace_for_fraction(vdot, 0.80)
-    threshold = _pace_for_fraction(vdot, 0.86)
-    interval = _pace_for_fraction(vdot, 0.97)
-    repetition = _pace_for_fraction(vdot, 1.05)
+def _single(vdot: float, fraction: float) -> ZoneRange:
+    pace = _pace(vdot, fraction)
+    return ZoneRange(min_s_per_km=pace, max_s_per_km=pace)
 
+
+def zones_from_vdot(vdot: float, cfg: ZonesConfig) -> Zones:
+    """Return pace ranges in seconds per km for each training zone."""
+    easy_low, easy_high = cfg.easy
     return Zones(
-        easy=ZoneRange(min_s_per_km=easy_fast, max_s_per_km=easy_slow),
-        marathon=ZoneRange(min_s_per_km=marathon, max_s_per_km=marathon),
-        threshold=ZoneRange(min_s_per_km=threshold, max_s_per_km=threshold),
-        interval=ZoneRange(min_s_per_km=interval, max_s_per_km=interval),
-        repetition=ZoneRange(min_s_per_km=repetition, max_s_per_km=repetition),
+        easy=ZoneRange(min_s_per_km=_pace(vdot, easy_high), max_s_per_km=_pace(vdot, easy_low)),
+        marathon=_single(vdot, cfg.marathon),
+        threshold=_single(vdot, cfg.threshold),
+        interval=_single(vdot, cfg.interval),
+        repetition=_single(vdot, cfg.repetition),
     )

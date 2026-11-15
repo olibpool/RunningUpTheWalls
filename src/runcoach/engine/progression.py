@@ -2,47 +2,54 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from runcoach.config import SchedulingConfig
+from runcoach.domain.models import Distance
+
 
 @dataclass(frozen=True)
 class Block:
     index: int
-    label: str
+    label: str  # base | build | peak | taper
     weeks: int
 
 
-def split_blocks(n_weeks: int, distance: str, cfg: object) -> list[Block]:
-    if n_weeks <= 0:
-        return []
-    base_weeks = max(1, int(round(n_weeks * 0.4)))
-    build_weeks = max(1, int(round(n_weeks * 0.4)))
-    peak_weeks = max(1, n_weeks - base_weeks - build_weeks)
-    while base_weeks + build_weeks + peak_weeks > n_weeks:
-        peak_weeks -= 1
-    blocks = [
-        ("base", base_weeks),
-        ("build", build_weeks),
-        ("peak", peak_weeks),
+def split_blocks(n_weeks: int, distance: Distance, cfg: SchedulingConfig) -> list[Block]:
+    """Split the weeks into base, build, peak and taper blocks."""
+    taper = min(len(cfg.taper_factors[distance]), max(0, n_weeks - 1))
+    pre_taper = n_weeks - taper
+    base = round(pre_taper * cfg.blocks.base)
+    build = round(pre_taper * cfg.blocks.build)
+    peak = pre_taper - base - build
+    sizes = [("base", base), ("build", build), ("peak", peak), ("taper", taper)]
+    return [
+        Block(index=index, label=label, weeks=weeks)
+        for index, (label, weeks) in enumerate(sizes)
+        if weeks > 0
     ]
-    out: list[Block] = []
-    for idx, (label, weeks) in enumerate(blocks):
-        if weeks <= 0:
-            continue
-        out.append(Block(index=idx, label=label, weeks=weeks))
-    return out
 
 
-def weekly_targets(start_km: float, n_weeks: int, distance: str, cfg: object) -> list[float]:
-    cfg_dict = getattr(cfg, "progression", None) if cfg is not None else None
-    max_increase = float(getattr(cfg_dict, "max_weekly_increase", 0.10)) if cfg_dict else 0.10
-    cutback_every = int(getattr(cfg_dict, "cutback_every_n_weeks", 4)) if cfg_dict else 4
-    cutback_factor = float(getattr(cfg_dict, "cutback_factor", 0.80)) if cfg_dict else 0.80
+def is_cutback_week(week_index: int, cfg: SchedulingConfig) -> bool:
+    """Return True for every Nth pre-taper week (0-based index)."""
+    return (week_index + 1) % cfg.progression.cutback_every_n_weeks == 0
 
-    target = float(start_km)
-    output: list[float] = []
-    for week in range(1, n_weeks + 1):
-        if week > 1 and week % cutback_every == 0:
-            target *= cutback_factor
-        else:
-            target *= 1.0 + max_increase
-        output.append(round(target, 2))
-    return output
+
+def weekly_targets(
+    start_km: float, n_weeks: int, distance: Distance, cfg: SchedulingConfig
+) -> list[float]:
+    """Weekly km: capped growth, cut-back weeks, the per-distance peak cap, then the taper."""
+    taper_factors = cfg.taper_factors[distance]
+    taper = min(len(taper_factors), max(0, n_weeks - 1))
+    peak_cap = cfg.peak_weekly_km[distance]
+    level = float(start_km)
+    targets: list[float] = []
+    for week in range(n_weeks - taper):
+        if is_cutback_week(week, cfg):
+            targets.append(round(level * cfg.progression.cutback_factor, 2))
+            continue  # a cut-back week does not advance the underlying level
+        level = min(level * (1.0 + cfg.progression.max_weekly_increase), peak_cap)
+        targets.append(round(level, 2))
+    peak = level
+    targets.extend(
+        round(peak * factor, 2) for factor in taper_factors[len(taper_factors) - taper :]
+    )
+    return targets

@@ -42,6 +42,9 @@ def replan_continuous_if_due(
             plan_start_date=date.fromisoformat(plan["start_date"]),
         )
     result = generate_continuous_plan_result(athlete, current_history, today, events, cfg)
+    if result.violations:
+        details = "; ".join(f"{v.kind}: {v.message}" for v in result.violations)
+        raise ValueError(f"Re-plan not saved; it fails the safety checks: {details}")
     db.replace_continuous_sessions(
         conn,
         plan_id,

@@ -3,11 +3,19 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import date
+from datetime import date, timedelta
+from typing import get_args
 
 from runcoach import db
 from runcoach.config import load_config
-from runcoach.domain.models import Commitment, PlanInput
+from runcoach.domain.models import (
+    DISTANCE_METRES,
+    Commitment,
+    Distance,
+    PlanInput,
+    PlannedSession,
+    Step,
+)
 from runcoach.engine.plan import InfeasibleGoal, generate_race_plan_result
 
 
@@ -145,53 +153,95 @@ def _event_remove(args: argparse.Namespace) -> int:
         conn.close()
 
 
-def _plan_generate(args: argparse.Namespace) -> int:
-    try:
-        result = generate_race_plan_result(
-            PlanInput(
-                distance_km=float(args.distance),
-                goal_date=date.fromisoformat(args.date),
-                vdot=float(args.vdot),
-                runs_per_week=int(args.runs),
-                climbing_target_per_week=int(args.climbs),
-                current_weekly_km=float(args.current_km),
-                race_name=args.distance,
-            ),
-            today=date.today(),
-            cfg=load_config(),
-        )
-        for warning in result.warnings:
-            print(f"Warning: {warning}", file=sys.stderr)
-        for item in result.dropped:
-            print(f"Dropped {item.session.title}: {item.reason}", file=sys.stderr)
-        plan = result.sessions
-        print(json.dumps([session.model_dump(mode="json") for session in plan], indent=2))
+def _pace(seconds_per_km: float) -> str:
+    return f"{int(seconds_per_km // 60)}:{int(seconds_per_km % 60):02d}"
 
-        if args.save:
-            conn = db.connect()
-            try:
-                plan_id = db.save_plan(
-                    conn,
-                    plan,
-                    mode="race",
-                    goal_distance_m=int(round(float(args.distance) * 1000)),
-                    goal_date=date.fromisoformat(args.date),
-                    config_snapshot={
-                        "distance_km": float(args.distance),
-                        "goal_date": args.date,
-                        "vdot": float(args.vdot),
-                        "runs_per_week": int(args.runs),
-                        "climbing_target_per_week": int(args.climbs),
-                        "current_weekly_km": float(args.current_km),
-                    },
-                )
-                print(f"Saved plan to database with id={plan_id}")
-            finally:
-                conn.close()
-        return 0
+
+def _main_pace(steps: list[Step]) -> str:
+    """Pace of the first work or steady step, searching inside repeats."""
+    for step in steps:
+        if step.kind == "repeat":
+            found = _main_pace(step.children)
+            if found:
+                return found
+        elif step.kind in {"work", "steady"} and step.pace_min_s_per_km and step.pace_max_s_per_km:
+            low, high = _pace(step.pace_min_s_per_km), _pace(step.pace_max_s_per_km)
+            return f"{low}/km" if low == high else f"{low}-{high}/km"
+    return ""
+
+
+def _structure(steps: list[Step]) -> str:
+    """Describe the main set from the steps, which stay correct after load scaling."""
+    for step in steps:
+        if step.kind == "repeat" and step.children and step.children[0].duration_s:
+            work = step.children[0].duration_s
+            return f"{step.repeats} x {work // 60}:{work % 60:02d}"
+        if step.kind == "work" and step.duration_s:
+            return f"{round(step.duration_s / 60)} min"
+    return ""
+
+
+def _print_weeks(sessions: list[PlannedSession]) -> None:
+    week_start: date | None = None
+    for session in sorted(sessions, key=lambda s: (s.date, s.start_time or "")):
+        monday = session.date - timedelta(days=session.date.weekday())
+        if monday != week_start:
+            week_start = monday
+            week = [s for s in sessions if monday <= s.date < monday + timedelta(days=7)]
+            km = sum(s.distance_m or 0 for s in week if s.sport == "run") / 1000
+            load = sum(s.leg_load for s in week)
+            print(f"\nWeek of {monday.isoformat()}  run {km:.1f} km  leg load {load:.0f}")
+        km_text = f"{(session.distance_m or 0) / 1000:5.1f} km" if session.distance_m else " " * 8
+        print(
+            f"  {session.date.strftime('%a %d %b')} {session.start_time or '':5}  "
+            f"{(session.title + ' ' + _structure(session.steps)).strip():<30} "
+            f"{session.duration_min or 0:4d} min {km_text}  "
+            f"{_main_pace(session.steps)}"
+        )
+
+
+def _plan_generate(args: argparse.Namespace) -> int:
+    inp = PlanInput(
+        distance=args.distance,
+        goal_date=date.fromisoformat(args.date),
+        vdot=float(args.vdot),
+        runs_per_week=int(args.runs),
+        climbing_target_per_week=int(args.climbs),
+        current_weekly_km=float(args.current_km),
+        race_name=args.distance,
+    )
+    try:
+        result = generate_race_plan_result(inp, today=date.today(), cfg=load_config())
     except InfeasibleGoal as exc:
         print(str(exc))
         return 1
+    for warning in result.warnings:
+        print(f"Warning: {warning}", file=sys.stderr)
+    for item in result.dropped:
+        print(f"Dropped {item.session.title}: {item.reason}", file=sys.stderr)
+    for violation in result.violations:
+        print(f"Safety violation ({violation.kind}): {violation.message}", file=sys.stderr)
+    _print_weeks(result.sessions)
+
+    if not args.save:
+        return 0
+    if result.violations:
+        print("Not saved: the plan fails the safety checks above.", file=sys.stderr)
+        return 1
+    conn = db.connect()
+    try:
+        plan_id = db.save_plan(
+            conn,
+            result.sessions,
+            mode="race",
+            goal_distance_m=DISTANCE_METRES[inp.distance],
+            goal_date=inp.goal_date,
+            config_snapshot=inp.model_dump(mode="json"),
+        )
+        print(f"Saved plan to database with id={plan_id}")
+    finally:
+        conn.close()
+    return 0
 
 
 def main() -> None:
@@ -249,7 +299,7 @@ def main() -> None:
     generate_parser = subparsers.add_parser("plan")
     generate_sub = generate_parser.add_subparsers(dest="action", required=True)
     plan_generate = generate_sub.add_parser("generate")
-    plan_generate.add_argument("--distance", required=True)
+    plan_generate.add_argument("--distance", required=True, choices=get_args(Distance))
     plan_generate.add_argument("--date", required=True)
     plan_generate.add_argument("--vdot", required=True)
     plan_generate.add_argument("--runs", required=True)

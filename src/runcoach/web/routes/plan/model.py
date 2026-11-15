@@ -4,11 +4,11 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
-from runcoach.domain.models import PlannedSession
+from runcoach.domain.models import Distance, PlannedSession
 
 
 class PlanCreateRequest(BaseModel):
-    distance_km: float = Field(gt=0.0)
+    distance: Distance
     goal_date: date
     vdot: float = Field(gt=0.0)
     runs_per_week: int = Field(ge=2, le=6)
@@ -26,3 +26,4 @@ class PlanResponse(BaseModel):
     sessions: list[PlannedSession] = Field(default_factory=list)
     dropped: list[DroppedPlanSession] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    violations: list[str] = Field(default_factory=list)

@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Sport = Literal["run", "climb", "football", "rest", "other"]
 EventKind = Literal["fixed", "penalty", "block", "credit"]
+Distance = Literal["5k", "10k", "half", "marathon"]
+DISTANCE_METRES: dict[Distance, int] = {"5k": 5000, "10k": 10000, "half": 21097, "marathon": 42195}
 
 
 class Step(BaseModel):
@@ -48,12 +50,12 @@ class Athlete(BaseModel):
 
 
 class PlanInput(BaseModel):
-    distance_km: float
+    distance: Distance
     goal_date: date
-    vdot: float
-    runs_per_week: int = 4
+    vdot: float = Field(gt=0)
+    runs_per_week: int = Field(default=4, ge=2, le=6)
     climbing_target_per_week: int = Field(default=2, ge=0, le=3)
-    current_weekly_km: float = 0.0
+    current_weekly_km: float = Field(default=0.0, ge=0)
     race_name: str = "race"
 
 

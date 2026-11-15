@@ -14,7 +14,7 @@ def test_generate_plan_route_returns_sessions() -> None:
     response = client.post(
         "/plans/generate",
         json={
-            "distance_km": 10.0,
+            "distance": "10k",
             "goal_date": "2027-03-14",
             "vdot": 49.8,
             "runs_per_week": 4,
@@ -30,6 +30,8 @@ def test_generate_plan_route_returns_sessions() -> None:
     assert payload["sessions"]
     assert isinstance(payload["dropped"], list)
     assert isinstance(payload["warnings"], list)
+    assert payload["violations"] == []
+    assert all(s["steps"] for s in payload["sessions"] if s["sport"] == "run")
     assert payload["sessions"][0]["title"]
     assert all(session["start_time"] for session in payload["sessions"])
     assert all(
@@ -48,7 +50,7 @@ def test_generate_plan_route_preserves_scheduler_drops(monkeypatch) -> None:
     response = client.post(
         "/plans/generate",
         json={
-            "distance_km": 5.0,
+            "distance": "5k",
             "goal_date": (date.today() + timedelta(weeks=8)).isoformat(),
             "vdot": 49.8,
             "runs_per_week": 2,

@@ -17,17 +17,10 @@ from runcoach.web.routes.plan.model import (
 class PlanService:
     @staticmethod
     def generate(request: PlanCreateRequest) -> PlanResponse:
+        """Preview a race plan with its warnings and safety violations; nothing is saved."""
         try:
             result = generate_race_plan_result(
-                PlanInput(
-                    distance_km=request.distance_km,
-                    goal_date=request.goal_date,
-                    vdot=request.vdot,
-                    runs_per_week=request.runs_per_week,
-                    climbing_target_per_week=request.climbing_target_per_week,
-                    current_weekly_km=request.current_weekly_km,
-                    race_name=request.race_name,
-                ),
+                PlanInput(**request.model_dump()),
                 today=date.today(),
                 cfg=load_config(),
             )
@@ -40,4 +33,5 @@ class PlanService:
                 for item in result.dropped
             ],
             warnings=result.warnings,
+            violations=[f"{v.kind}: {v.message}" for v in result.violations],
         )

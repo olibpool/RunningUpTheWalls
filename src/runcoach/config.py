@@ -8,6 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from runcoach.domain.models import Distance
+
 
 class ConfigNode(SimpleNamespace):
     def __getattr__(self, name: str) -> Any:
@@ -70,6 +72,8 @@ class SchedulerConfig(BaseModel):
     limit_climb_before_long_cost: int
     hard_run_climb_same_day_cost: int
     same_day_climb_cost: int
+    same_day_session_cost: int
+    adjacent_run_day_cost: int
     climbing_spacing_days: int
     drop_cost_easy: int
     drop_cost_climb: int
@@ -195,9 +199,78 @@ class ReadinessConfig(BaseModel):
         return self
 
 
-class SchedulingConfig(BaseModel):
+class ZonesConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    easy: tuple[float, float]
+    marathon: float
+    threshold: float
+    interval: float
+    repetition: float
+
+    @model_validator(mode="after")
+    def validate_order(self) -> ZonesConfig:
+        fractions = [*self.easy, self.marathon, self.threshold, self.interval, self.repetition]
+        if any(left >= right for left, right in zip(fractions, fractions[1:])):
+            raise ValueError("zones fractions must strictly increase from easy to repetition")
+        return self
+
+
+class RpeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recovery: float = Field(gt=0, le=10)
+    easy: float = Field(gt=0, le=10)
+    strides: float = Field(gt=0, le=10)
+    long: float = Field(gt=0, le=10)
+    tempo: float = Field(gt=0, le=10)
+    intervals: float = Field(gt=0, le=10)
+
+
+class BlocksConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    base: float = Field(ge=0)
+    build: float = Field(ge=0)
+    peak: float = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_total(self) -> BlocksConfig:
+        if abs(self.base + self.build + self.peak - 1.0) > 1e-9:
+            raise ValueError("blocks shares must sum to 1")
+        return self
+
+
+class TemplatesConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    warmup_min: int = Field(gt=0)
+    cooldown_min: int = Field(gt=0)
+    tempo_work_min: tuple[int, int]
+    interval_repeats: tuple[int, int]
+    interval_rep_min: tuple[int, int]
+    strides_repeats: int = Field(gt=0)
+    stride_s: int = Field(gt=0)
+    stride_recovery_s: int = Field(gt=0)
+    recovery_share_of_easy: float = Field(gt=0, le=1)
+    long_share: tuple[float, float]
+    min_easy_minutes: int = Field(gt=0)
+    max_quality_share: float = Field(gt=0, le=1)
+
+
+class SchedulingConfig(BaseModel):
+    """Typed view of the whole config; unknown sections or keys raise."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    zones: ZonesConfig
+    rpe: RpeConfig
+    blocks: BlocksConfig
+    templates: TemplatesConfig
+    race_min_weeks: dict[Distance, int]
+    min_peak_weekly_km: dict[Distance, float]
+    taper_factors: dict[Distance, list[float]]
+    peak_weekly_km: dict[Distance, float]
     load_factors: LoadFactorsConfig
     climbing_defaults: ClimbingDefaultsConfig
     availability: AvailabilityConfig
@@ -295,22 +368,7 @@ def load_scheduling_config(config: ConfigNode) -> SchedulingConfig:
     data = _to_mapping(config)
     if not isinstance(data, dict):
         raise TypeError("config must be a ConfigNode mapping")
-    return SchedulingConfig.model_validate(
-        {
-            "load_factors": data.get("load_factors"),
-            "climbing_defaults": data.get("climbing_defaults"),
-            "availability": data.get("availability"),
-            "scheduler": data.get("scheduler"),
-            "calendar_keywords": data.get("calendar_keywords"),
-            "progression": data.get("progression"),
-            "continuous": data.get("continuous"),
-            "penalty": data.get("penalty"),
-            "return_ramp": data.get("return_ramp"),
-            "minimal_plan": data.get("minimal_plan"),
-            "time_trial": data.get("time_trial"),
-            "readiness": data.get("readiness"),
-        }
-    )
+    return SchedulingConfig.model_validate(data)
 
 
 def load_config(

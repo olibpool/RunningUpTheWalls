@@ -9,3 +9,4 @@ config/local.toml
 .ruff_cache/
 .data/
 *.egg-info/
+.hypothesis/

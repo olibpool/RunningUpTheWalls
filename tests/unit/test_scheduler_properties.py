@@ -55,7 +55,7 @@ def test_scheduled_sessions_respect_hard_constraints_with_random_events(
             duration_min=duration,
             rpe=4.0,
         )
-        for kind, duration in (("long", 120), ("tempo", 40), ("easy", 30), ("easy", 35))
+        for kind, duration in (("long", 70), ("tempo", 45), ("easy", 50), ("easy", 55))
     ]
 
     result = schedule_week(
@@ -78,4 +78,5 @@ def test_scheduled_sessions_respect_hard_constraints_with_random_events(
         busy=[busy],
         timezone_name="UTC",
         relaxed_weeks={_WEEK_START} if result.relaxed else set(),
+        exempt_load_weeks={_WEEK_START} if result.dropped else set(),
     )

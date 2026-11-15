@@ -44,6 +44,27 @@ marathon = [0.85, 0.7, 0.5]
 half = 70
 marathon = 90
 
+# Smallest peak weekly volume a goal needs; below it the goal is infeasible. Unsourced: review.
+[min_peak_weekly_km]
+5k = 3.0
+10k = 6.0
+half = 12.7
+marathon = 25.3
+
+[templates]
+warmup_min = 10
+cooldown_min = 10
+tempo_work_min = [15, 40]       # threshold block, grows across build and peak
+interval_repeats = [3, 6]
+interval_rep_min = [3, 5]
+strides_repeats = 6
+stride_s = 20
+stride_recovery_s = 40
+recovery_share_of_easy = 0.6
+long_share = [0.28, 0.33]       # long run share of weekly km, grows across build and peak
+min_easy_minutes = 20
+max_quality_share = 0.25       # cap on one quality session's share of weekly run time
+
 [load_factors]
 run_leg = 1.0
 football_leg = 1.1
@@ -73,6 +94,8 @@ long_run_weekday_cost = 5
 limit_climb_before_long_cost = 3
 hard_run_climb_same_day_cost = 4
 same_day_climb_cost = 2
+same_day_session_cost = 3
+adjacent_run_day_cost = 1
 climbing_spacing_days = 2
 drop_cost_easy = 100
 drop_cost_climb = 200

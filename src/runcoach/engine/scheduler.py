@@ -273,6 +273,16 @@ def _soft_cost(
     cost = 0.0
     if candidate.kind == "long" and candidate.start.weekday() < 5:
         cost += cfg.scheduler.long_run_weekday_cost
+    # Prefer separate days, and spread runs through the week rather than bunching them.
+    day = candidate.start.date()
+    for item in placements:
+        if item.is_fixed:
+            continue
+        gap_days = abs((item.start.date() - day).days)
+        if gap_days == 0:
+            cost += cfg.scheduler.same_day_session_cost
+        elif gap_days == 1 and candidate.sport == "run" and item.sport == "run":
+            cost += cfg.scheduler.adjacent_run_day_cost
 
     long_runs = [item for item in placements if item.kind == "long"]
     if candidate.kind == "climb_power" and any(
@@ -804,7 +814,7 @@ def _scale_step(step: Step, factor: float) -> Step:
     return step.model_copy(update=updates)
 
 
-def _fixed_leg_load(instance: FixedInstance, cfg: SchedulingConfig) -> float:
+def fixed_leg_load(instance: FixedInstance, cfg: SchedulingConfig) -> float:
     if instance.sport not in {"run", "football", "climb", "rest"} or instance.rpe is None:
         return 0.0
     return session_load(
@@ -825,7 +835,7 @@ def estimate_combined_leg_load(
 ) -> float:
     combined_sessions = _climbing_sessions(week_start, sessions, climb_target, cfg)
     return sum(session.leg_load for session in combined_sessions) + sum(
-        _fixed_leg_load(instance, cfg) for instance in fixed
+        fixed_leg_load(instance, cfg) for instance in fixed
     )
 
 
@@ -862,7 +872,7 @@ def compose_week(
     allowed_load = previous_week_leg_load * growth * ramp_factor
     non_run_load = (
         sum(session.leg_load for session in combined_sessions if session.sport != "run")
-        + sum(_fixed_leg_load(instance, cfg) for instance in fixed)
+        + sum(fixed_leg_load(instance, cfg) for instance in fixed)
         + credited_leg_load
     )
     run_load = sum(session.leg_load for session in combined_sessions if session.sport == "run")

@@ -6,7 +6,7 @@ Coachal is a self-hosted training planner for runners and multi-sport athletes. 
 
 - Builds training plans from a goal distance, date, and current fitness profile
 - Models session load, progression, and pace/zone calculations
-- Stores plan data in SQLite with migrations via Alembic
+- Stores plan data in SQLite; numbered `.sql` files in `migrations/` are applied at startup
 - Accepts activity ingestion from GPX and other structured sources
 - Supports commitment and calendar-style blocking data
 - Exposes a FastAPI API for local web usage and automation
@@ -51,11 +51,12 @@ The health route confirms the app is live and the Swagger UI exposes the availab
 
 ## Use the CLI
 
-Generate a plan:
+Generate a plan (`--distance` is one of `5k`, `10k`, `half`, `marathon`). It prints a
+week-by-week table with paces, and `--save` refuses to store a plan that fails the safety checks:
 
 ```bash
-uv run python -m runcoach.cli plan generate \
-  --distance 21.1 \
+uv run python -m runcoach plan generate \
+  --distance half \
   --date 2027-03-14 \
   --vdot 50 \
   --runs 4 \
@@ -66,7 +67,7 @@ uv run python -m runcoach.cli plan generate \
 Add a manual commitment:
 
 ```bash
-uv run python -m runcoach.cli commitment add \
+uv run python -m runcoach commitment add \
   --kind fixed \
   --title "Football" \
   --sport football \
@@ -79,21 +80,23 @@ uv run python -m runcoach.cli commitment add \
 List commitments:
 
 ```bash
-uv run python -m runcoach.cli commitment list
+uv run python -m runcoach commitment list
 ```
 
 Add a penalty or a travel block:
 
 ```bash
-uv run python -m runcoach.cli event add --kind penalty --date 2026-11-14 --severity 2
-uv run python -m runcoach.cli event add --kind block --start 2026-12-20 --end 2026-12-27 --minimal-plan
-uv run python -m runcoach.cli event list
+uv run python -m runcoach event add --kind penalty --date 2026-11-14 --severity 2
+uv run python -m runcoach event add --kind block --start 2026-12-20 --end 2026-12-27 --minimal-plan
+uv run python -m runcoach event list
 ```
 
 ## Run the test suite
 
 ```bash
 uv run pytest -q
+uv run pytest --update-golden      # after reviewing an intended change to plan output
+HYPOTHESIS_PROFILE=ci uv run pytest  # 200 property-test examples (pi: 50, default: 25)
 ```
 
 Or use the project validation stack:

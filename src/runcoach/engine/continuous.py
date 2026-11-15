@@ -12,7 +12,7 @@ from runcoach.engine.events import (
     expand_commitments,
 )
 from runcoach.engine.ramp import RampPlan, ramp_for_block
-from runcoach.engine.safety import check_plan
+from runcoach.engine.safety import Violation, check_plan
 from runcoach.engine.scheduler import (
     Busy,
     DroppedSession,
@@ -21,8 +21,10 @@ from runcoach.engine.scheduler import (
     estimate_combined_leg_load,
     schedule_week,
 )
+from runcoach.engine.templates import WeekContext, build_session
 from runcoach.engine.time_trial import time_trial_session
 from runcoach.engine.travel import minimal_travel_plan
+from runcoach.engine.zones import Zones, zones_from_vdot
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,7 @@ class ContinuousPlanResult:
     allowed_loads: list[float]
     dropped: list[DroppedSession]
     warnings: list[str]
+    violations: list[Violation]
 
 
 def chronic_load(weekly_loads: list[WeekLoad], n: int) -> float:
@@ -151,15 +154,18 @@ def _ramp_for_week(
     week_start: date,
     intervals: list[tuple[date, date]],
     cfg: SchedulingConfig,
-) -> tuple[float, bool]:
+) -> tuple[float, bool, bool]:
+    """Return (load factor, quality forbidden, returning from a block)."""
     completed = [(start, end) for start, end in intervals if end < week_start]
     if not completed:
-        return 1.0, False
+        return 1.0, False, False
     block_start, block_end = max(completed, key=lambda interval: interval[1])
     plan: RampPlan = ramp_for_block((block_end - block_start).days + 1, cfg)
     ramp_week = max(0, (week_start - (block_end + timedelta(days=1))).days // 7)
     factor = plan.weekly_multipliers[ramp_week] if ramp_week < len(plan.weekly_multipliers) else 1.0
-    return factor, ramp_week < plan.no_quality_weeks
+    # The ramp climbs back to prior chronic load, so its weeks (and the one after) may rise >cap.
+    returning = ramp_week <= len(plan.weekly_multipliers)
+    return factor, ramp_week < plan.no_quality_weeks, returning
 
 
 def _merge_constraint(left: DayConstraint | None, right: DayConstraint) -> DayConstraint:
@@ -201,24 +207,45 @@ def _quality_kind(profile: str, at_ceiling: bool) -> str | None:
     return None
 
 
+def _easy_runs(
+    week_start: date,
+    run_budget: float,
+    count: int,
+    zones: Zones,
+    typed_cfg: SchedulingConfig,
+) -> list[PlannedSession]:
+    """Split a load budget into equal easy runs (used beside a time trial)."""
+    per_minute_load = typed_cfg.rpe.easy * typed_cfg.load_factors.run_leg
+    minutes = round(run_budget / count / per_minute_load) if count else 0
+    if minutes < typed_cfg.templates.min_easy_minutes:
+        return []
+    return [
+        build_session("easy", WeekContext(week_start, minutes), zones, typed_cfg).model_copy(
+            update={"reason": "Aerobic maintenance."}
+        )
+        for _ in range(count)
+    ]
+
+
 def _sessions_for_week(
     week_start: date,
     run_budget: float,
     runs_per_week: int,
     profile: str,
     at_ceiling: bool,
-    cfg: ConfigNode,
+    zones: Zones,
     typed_cfg: SchedulingConfig,
+    progress: float = 0.0,
 ) -> list[PlannedSession]:
     if runs_per_week < 2 or runs_per_week > 6:
         raise ValueError("runs_per_week must be between 2 and 6")
     if run_budget <= 0:
         return []
     run_factor = typed_cfg.load_factors.run_leg
-    long_rpe = float(cfg.rpe.long)
-    easy_rpe = float(cfg.rpe.easy)
+    long_rpe = typed_cfg.rpe.long
+    easy_rpe = typed_cfg.rpe.easy
     quality_kind = _quality_kind(profile, at_ceiling)
-    quality_rpe = float(cfg.rpe.tempo) if quality_kind == "tempo" else float(cfg.rpe.intervals)
+    quality_rpe = typed_cfg.rpe.tempo if quality_kind == "tempo" else typed_cfg.rpe.intervals
     long_share = typed_cfg.progression.max_long_run_share
     quality_share = typed_cfg.continuous.quality_load_share if quality_kind else 0.0
     if quality_kind is not None and runs_per_week == 2:
@@ -244,24 +271,34 @@ def _sessions_for_week(
         return []
 
     sessions: list[PlannedSession] = []
-    for kind, title, rpe, target_load, reason in specifications:
+    long_minutes = 0
+    long_reason = ""
+    strides = profile == "speed"
+    for kind, _title, rpe, target_load, reason in specifications:
         duration = max(1, round(target_load / (rpe * run_factor)))
         if kind == "long":
-            duration = min(duration, typed_cfg.progression.max_long_run_minutes)
-        load = duration * rpe * run_factor
-        sessions.append(
-            PlannedSession(
-                date=week_start,
-                sport="run",
-                kind=kind,
-                title=title,
-                duration_min=duration,
-                rpe=rpe,
-                leg_load=load,
-                reason=reason,
-            )
+            long_minutes = min(duration, typed_cfg.progression.max_long_run_minutes)
+            long_reason = reason
+            continue
+        with_strides = strides and kind == "easy"
+        strides = strides and not with_strides
+        context = WeekContext(week_start, duration, progress, strides=with_strides)
+        session = build_session(kind, context, zones, typed_cfg)
+        sessions.append(session.model_copy(update={"reason": reason}))
+    share_cap = typed_cfg.progression.max_long_run_share
+    others = sum(session.duration_min or 0 for session in sessions)
+    # Keep the long run within its share of weekly run time (matters most at 2 runs a week).
+    long_minutes = max(1, min(long_minutes, int(share_cap / (1 - share_cap) * others)))
+    long_run = build_session("long", WeekContext(week_start, long_minutes), zones, typed_cfg)
+    result = [long_run.model_copy(update={"reason": long_reason}), *sessions]
+    shrinkable = 1.0 - typed_cfg.scheduler.max_run_volume_reduction
+    if quality_kind is not None and sum(s.leg_load for s in result) * shrinkable > run_budget:
+        # Quality templates have minimum lengths that compose_week cannot shrink to fit a
+        # small budget; fall back to steady running sized from the budget.
+        return _sessions_for_week(
+            week_start, run_budget, runs_per_week, "aerobic", False, zones, typed_cfg
         )
-    return sessions
+    return result
 
 
 def generate_continuous_plan_result(
@@ -272,6 +309,7 @@ def generate_continuous_plan_result(
     cfg: ConfigNode,
 ) -> ContinuousPlanResult:
     typed_cfg = load_scheduling_config(cfg)
+    zones = zones_from_vdot(athlete.vdot, typed_cfg.zones)
     baseline = chronic_load(
         history.weekly_loads,
         n=typed_cfg.continuous.chronic_load_weeks,
@@ -304,6 +342,7 @@ def generate_continuous_plan_result(
     if acr_status.warning is not None:
         warnings.append(acr_status.warning)
     relaxed_weeks: set[date] = set()
+    exempt_weeks: set[date] = set()
     previous_target = baseline
     max_increase = min(
         typed_cfg.continuous.weekly_increase,
@@ -343,7 +382,12 @@ def generate_continuous_plan_result(
             (program_week // typed_cfg.continuous.weeks_per_block)
             % len(typed_cfg.continuous.block_cycle)
         ]
-        ramp_factor, no_quality = _ramp_for_week(week_start, blocks, typed_cfg)
+        ramp_factor, no_quality, returning = _ramp_for_week(week_start, blocks, typed_cfg)
+        if returning:
+            exempt_weeks.add(week_start)
+        progress = (program_week % typed_cfg.continuous.weeks_per_block) / max(
+            1, typed_cfg.continuous.weeks_per_block - 1
+        )
         week_constraints = {
             day: constraint
             for day, constraint in constraints.items()
@@ -409,7 +453,16 @@ def generate_continuous_plan_result(
         elif time_trial_due:
             trial = time_trial_session(week_start, typed_cfg)
             if trial.leg_load <= run_budget:
-                week_sessions = [trial]
+                week_sessions = [
+                    trial,
+                    *_easy_runs(
+                        week_start,
+                        run_budget - trial.leg_load,
+                        athlete.runs_per_week - 1,
+                        zones,
+                        typed_cfg,
+                    ),
+                ]
                 include_time_trial = True
             else:
                 warnings.append(
@@ -422,8 +475,9 @@ def generate_continuous_plan_result(
                     athlete.runs_per_week,
                     profile,
                     at_ceiling,
-                    cfg,
+                    zones,
                     typed_cfg,
+                    progress,
                 )
         else:
             week_sessions = _sessions_for_week(
@@ -432,8 +486,9 @@ def generate_continuous_plan_result(
                 athlete.runs_per_week,
                 profile,
                 at_ceiling,
-                cfg,
+                zones,
                 typed_cfg,
+                progress,
             )
         composition = compose_week(
             week_start,
@@ -467,6 +522,8 @@ def generate_continuous_plan_result(
         warnings.extend(schedule.warnings)
         if schedule.relaxed:
             relaxed_weeks.add(week_start)
+        if schedule.dropped or minimal_week:
+            exempt_weeks.add(week_start)
         prior_tail = [
             placement.session for placement in schedule.placed if placement.session is not None
         ]
@@ -474,17 +531,16 @@ def generate_continuous_plan_result(
             next_retest_date = week_start + timedelta(weeks=typed_cfg.continuous.retest_every_weeks)
         previous_target = target
 
-    warnings.extend(
-        f"Safety check ({violation.kind}): {violation.message}"
-        for violation in check_plan(
-            sessions_out,
-            typed_cfg,
-            fixed=fixed_instances,
-            busy=history.busy,
-            timezone_name=athlete.timezone,
-            relaxed_weeks=relaxed_weeks,
-            day_constraints=all_constraints,
-        )
+    violations = check_plan(
+        sessions_out,
+        typed_cfg,
+        fixed=fixed_instances,
+        busy=history.busy,
+        timezone_name=athlete.timezone,
+        relaxed_weeks=relaxed_weeks,
+        day_constraints=all_constraints,
+        plan_start=today,
+        exempt_load_weeks=exempt_weeks,
     )
     return ContinuousPlanResult(
         sessions=sessions_out,
@@ -492,6 +548,7 @@ def generate_continuous_plan_result(
         allowed_loads=allowed_loads,
         dropped=dropped,
         warnings=warnings,
+        violations=violations,
     )
 
 
