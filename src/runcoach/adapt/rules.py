@@ -123,12 +123,38 @@ def ill_or_niggle(state: PlanState, cfg: SchedulingConfig) -> list[Change]:
     """Illness or a niggle: run by feel and downgrade quality for a window, then ramp back."""
     changes: list[Change] = []
     for checkin in state.checkins:
-        if not (checkin.ill or checkin.niggle):
+        ill = checkin.ill or checkin.fever
+        if not (ill or checkin.niggle):
             continue
-        what = "illness" if checkin.ill else f"a niggle ({checkin.niggle})"
-        days = cfg.illness.ill_days if checkin.ill else cfg.illness.niggle_days
+        what = "illness" if ill else f"a niggle ({checkin.niggle})"
+        days = cfg.illness.ill_days if ill else cfg.illness.niggle_days
         end = checkin.date + timedelta(days=days)
+        # The "neck check": with a fever or chest symptoms, rest rather than run easy.
+        rest_end = checkin.date + timedelta(
+            days=cfg.illness.fever_rest_days if checkin.fever else 0
+        )
         for s in state.sessions:
+            if (
+                checkin.date <= s.date < rest_end
+                and s.status == "planned"
+                and s.sport in {"run", "football", "climb"}
+                and (s.id, "illness_rest") not in state.applied
+            ):
+                changes.append(
+                    Change(
+                        s.id,
+                        "modify",
+                        {"status": "dropped"},
+                        "illness_rest",
+                        f"Check-in on {checkin.date.isoformat()} reported a fever or chest "
+                        f"symptoms: rest for {cfg.illness.fever_rest_days} days, and longer "
+                        "if the fever hasn't gone.",
+                    )
+                )
+                continue
+        for s in state.sessions:
+            if s.date < rest_end:
+                continue
             if not (
                 checkin.date <= s.date < end
                 and s.status == "planned"

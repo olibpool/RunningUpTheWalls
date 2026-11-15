@@ -54,7 +54,7 @@ def _save_plan(client: TestClient) -> str:
 def test_health_reports_the_migrated_schema(client: TestClient) -> None:
     payload = client.get("/healthz").json()
     assert payload["status"] == "ok"
-    assert payload["db_version"] == 3
+    assert payload["db_version"] == 4
 
 
 def test_empty_week_offers_a_plan(client: TestClient) -> None:
@@ -293,6 +293,18 @@ def test_checkin_niggle_changes_the_plan_and_reports_it(client: TestClient, db_p
     (checkin,) = db.checkins(conn)
     conn.close()
     assert checkin.niggle == "left calf" and checkin.resting_hr == 52
+
+
+def test_fever_check_in_clears_the_next_days(client: TestClient, db_path: Path) -> None:
+    _save_plan(client)
+    assert "Fever or chest symptoms" in client.get("/checkin").text
+    assert client.post("/checkin", data={"ill": "true", "fever": "true"}).status_code == 200
+    conn = db.connect(db_path)
+    (checkin,) = db.checkins(conn)
+    rules = {row["rule"] for row in conn.execute("SELECT rule FROM adjustment").fetchall()}
+    conn.close()
+    assert checkin.fever and checkin.ill
+    assert "ill_or_niggle" in rules or "illness_rest" in rules
 
 
 def test_move_is_refused_when_unsafe_and_applied_when_safe(

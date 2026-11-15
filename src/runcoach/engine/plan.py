@@ -17,7 +17,14 @@ from runcoach.engine.scheduler import (
     estimate_combined_leg_load,
     schedule_week,
 )
-from runcoach.engine.templates import WeekContext, build_session, quality_minutes, race_session
+from runcoach.engine.templates import (
+    WeekContext,
+    build_session,
+    longest_in_window,
+    quality_minutes,
+    race_session,
+    within_spike_limit,
+)
 from runcoach.engine.zones import Zones, zones_from_vdot
 
 ROLES: dict[int, list[str]] = {
@@ -81,7 +88,15 @@ def _capped_by_runs(inp: PlanInput, cfg: SchedulingConfig) -> SchedulingConfig:
     """Peak weekly km is also limited by the runs a week, so easy runs stay easy."""
     per_runs = inp.runs_per_week * cfg.progression.max_weekly_km_per_run
     peaks = {**cfg.peak_weekly_km, inp.distance: min(cfg.peak_weekly_km[inp.distance], per_runs)}
-    return cfg.model_copy(update={"peak_weekly_km": peaks})
+    updates: dict[str, object] = {"peak_weekly_km": peaks}
+    if inp.distance == "marathon":  # the long run carries a bigger share of marathon training
+        updates["progression"] = cfg.progression.model_copy(
+            update={"max_long_run_share": cfg.progression.marathon_max_long_run_share}
+        )
+        updates["templates"] = cfg.templates.model_copy(
+            update={"long_share": cfg.templates.marathon_long_share}
+        )
+    return cfg.model_copy(update=updates)
 
 
 def _check_feasible(inp: PlanInput, start: date, n_weeks: int, cfg: SchedulingConfig) -> None:
@@ -390,6 +405,12 @@ def generate_race_plan_result(
     )
     # The load cap compares each week with the last non-cut-back, pre-taper week.
     reference = first_load / growth
+    # Runs from the last 30 days (the athlete's longest, then the plan's own) bound each new run.
+    recent_runs: list[tuple[date, float]] = (
+        [(start - timedelta(days=1), inp.longest_recent_run_km)]
+        if inp.longest_recent_run_km
+        else []
+    )
     for index, week in enumerate(weeks):
         if week.label == "taper":
             ceiling = achieved_peak_km * week.target_km / target_peak
@@ -408,6 +429,8 @@ def generate_race_plan_result(
             roles, fixed_this_week, typed_cfg
         ))  # fmt: skip
         sessions = _week_sessions(week, index, week_roles, zones, typed_cfg, inp.distance)
+        longest = longest_in_window(recent_runs, week.start, typed_cfg)
+        sessions = [within_spike_limit(s, longest, typed_cfg) for s in sessions]
         credited = sum(
             c.credit_leg_load for d, c in constraints.items() if week.start <= d < week_end
         )
@@ -462,6 +485,7 @@ def generate_race_plan_result(
         if schedule.dropped:
             reduced_weeks.add(week.start)
         tail = placed
+        recent_runs += [(s.date, (s.distance_m or 0) / 1000) for s in placed if s.sport == "run"]
         if not week.cutback:  # taper weeks are non-cut-back weeks, so they become the reference
             reference = composition.actual_leg_load
         if not week.cutback and week.label != "taper":

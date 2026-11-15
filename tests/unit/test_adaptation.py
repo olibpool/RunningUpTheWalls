@@ -282,3 +282,20 @@ def test_retest_suggested_from_laps_when_reps_are_all_fast_or_all_missed() -> No
     assert "missed their pace targets" in flag.reason
     mixed = [*fast[:2], slow[2]]
     assert retest_suggested(PlanState(sessions, mixed, []), CFG) == []
+
+
+def test_fever_means_rest_first_then_easy_running_then_the_ramp() -> None:
+    sessions = [
+        _session(1, MONDAY, kind="tempo", load=240),
+        _session(2, MONDAY + timedelta(days=1), sport="football"),
+        _session(3, MONDAY + timedelta(days=2), kind="easy"),
+        _session(4, MONDAY + timedelta(days=3), kind="intervals", load=240),  # after the rest
+    ]
+    state = PlanState(sessions=sessions, activities=[], checkins=[Checkin(date=MONDAY, fever=True)])
+
+    changes = {c.session_id: c for c in ill_or_niggle(state, CFG)}
+
+    assert CFG.illness.fever_rest_days == 3
+    for sid in (1, 2, 3):
+        assert changes[sid].rule == "illness_rest" and changes[sid].updates == {"status": "dropped"}
+    assert changes[4].rule == "ill_or_niggle" and changes[4].updates["kind"] == "easy"

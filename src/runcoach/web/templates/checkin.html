@@ -41,11 +41,12 @@
     <input name="niggle" value="{{ current.niggle if current and current.niggle else '' }}" placeholder="e.g. left calf">
   </label>
   <label class="switch"><input type="checkbox" role="switch" name="ill" value="true"{% if current and current.ill %} checked{% endif %}><span class="track" aria-hidden="true"></span> I'm ill</label>
+  <label class="switch"><input type="checkbox" role="switch" name="fever" value="true"{% if current and current.fever %} checked{% endif %}><span class="track" aria-hidden="true"></span> Fever or chest symptoms</label>
   <label>Resting heart rate (bpm)
     <input type="number" name="resting_hr" min="21" max="149" inputmode="numeric" value="{{ current.resting_hr if current and current.resting_hr else '' }}">
   </label>
   <label>Notes <input name="notes" value="{{ current.notes if current and current.notes else '' }}"></label>
   <div class="actions"><button type="submit">Save check-in</button></div>
 </form>
-<p class="muted small">A niggle removes pace targets and quality for {{ illness.niggle_days }} days; illness for {{ illness.ill_days }}, then the plan ramps back.</p>
+<p class="muted small">A niggle removes pace targets and quality for {{ illness.niggle_days }} days; illness for {{ illness.ill_days }}, then the plan ramps back. With a fever or symptoms below the neck (chest, aching muscles) there is no running for {{ illness.fever_rest_days }} days: rest until the fever has gone.</p>
 {% endblock %}

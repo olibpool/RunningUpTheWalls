@@ -21,7 +21,12 @@ from runcoach.engine.scheduler import (
     estimate_combined_leg_load,
     schedule_week,
 )
-from runcoach.engine.templates import WeekContext, build_session
+from runcoach.engine.templates import (
+    WeekContext,
+    build_session,
+    longest_in_window,
+    within_spike_limit,
+)
 from runcoach.engine.time_trial import time_trial_session
 from runcoach.engine.travel import minimal_travel_plan
 from runcoach.engine.zones import Zones, zones_from_vdot
@@ -42,6 +47,7 @@ class History:
     checkins: list[Checkin] = field(default_factory=list)
     busy: list[Busy] = field(default_factory=list)
     plan_start_date: date | None = None
+    longest_recent_run_km: float | None = None  # longest run in the spike window
 
 
 @dataclass(frozen=True)
@@ -227,6 +233,26 @@ def _easy_runs(
     ]
 
 
+def default_ceiling(
+    athlete: Athlete,
+    zones: Zones,
+    fixed: list[FixedInstance],
+    week_start: date,
+    baseline: float,
+    cfg: SchedulingConfig,
+) -> float:
+    """Weekly load ceiling when the athlete set none: the race plans' km-per-run cap as mostly
+    easy running, plus a usual week's football and climbing; never below current load."""
+    easy_min_per_km = (zones.easy.min_s_per_km + zones.easy.max_s_per_km) / 2 / 60
+    run_km = athlete.runs_per_week * cfg.progression.max_weekly_km_per_run
+    run_load = run_km * easy_min_per_km * cfg.continuous.ceiling_run_rpe * cfg.load_factors.run_leg
+    week_fixed = [i for i in fixed if week_start <= i.date < week_start + timedelta(days=7)]
+    other = estimate_combined_leg_load(
+        week_start, [], week_fixed, athlete.climbing_target_per_week, cfg
+    )
+    return max(run_load + other, baseline)
+
+
 def _sessions_for_week(
     week_start: date,
     run_budget: float,
@@ -359,6 +385,14 @@ def generate_continuous_plan_result(
         weeks=typed_cfg.continuous.retest_every_weeks
     )
 
+    ceiling = athlete.max_weekly_load or default_ceiling(
+        athlete, zones, fixed_instances, first_monday, baseline, typed_cfg
+    )
+    recent_runs: list[tuple[date, float]] = (
+        [(first_monday - timedelta(days=1), history.longest_recent_run_km)]
+        if history.longest_recent_run_km
+        else []
+    )
     for week_index in range(weeks):
         week_start = first_monday + timedelta(weeks=week_index)
         week_end = week_start + timedelta(days=7)
@@ -373,11 +407,10 @@ def generate_continuous_plan_result(
             if week_index == 0 and acr_status.hold_next_week
             else previous_target * growth
         )
-        if athlete.max_weekly_load is not None:
-            target = min(target, athlete.max_weekly_load)
+        target = min(target, ceiling)
         effective_growth = target / previous_target
         targets.append(target)
-        at_ceiling = athlete.max_weekly_load is not None and target >= athlete.max_weekly_load
+        at_ceiling = target >= ceiling
 
         profile = typed_cfg.continuous.block_cycle[
             (program_week // typed_cfg.continuous.weeks_per_block)
@@ -491,6 +524,8 @@ def generate_continuous_plan_result(
                 typed_cfg,
                 progress,
             )
+        longest = longest_in_window(recent_runs, week_start, typed_cfg)
+        week_sessions = [within_spike_limit(s, longest, typed_cfg) for s in week_sessions]
         composition = compose_week(
             week_start,
             week_sessions,
@@ -530,6 +565,9 @@ def generate_continuous_plan_result(
         ]
         if include_time_trial and any(session.kind == "time_trial" for session in prior_tail):
             next_retest_date = week_start + timedelta(weeks=typed_cfg.continuous.retest_every_weeks)
+        recent_runs += [
+            (s.date, (s.distance_m or 0) / 1000) for s in prior_tail if s.sport == "run"
+        ]
         previous_target = target
 
     violations = check_plan(

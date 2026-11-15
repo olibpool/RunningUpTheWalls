@@ -436,7 +436,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3840,
+    "duration_s": 3780,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -445,12 +445,12 @@
     "children": []
    }
   ],
-  "duration_min": 64,
-  "distance_m": 11993,
+  "duration_min": 63,
+  "distance_m": 11805,
   "rpe": 4.0,
-  "leg_load": 256.0,
+  "leg_load": 252.0,
   "finger_load": 0.0,
-  "reason": "Base block; Sunday availability; weekend long-run slot"
+  "reason": "Base block; kept within 10% of your longest run in 30 days (10.9 km); Sunday availability; weekend long-run slot"
  },
  {
   "date": "2026-12-07",
@@ -738,7 +738,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 4200,
+    "duration_s": 4140,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -747,12 +747,12 @@
     "children": []
    }
   ],
-  "duration_min": 70,
-  "distance_m": 13117,
+  "duration_min": 69,
+  "distance_m": 12929,
   "rpe": 4.0,
-  "leg_load": 280.0,
+  "leg_load": 276.0,
   "finger_load": 0.0,
-  "reason": "Base block; Sunday availability; weekend long-run slot"
+  "reason": "Base block; kept within 10% of your longest run in 30 days (11.8 km); Sunday availability; weekend long-run slot"
  },
  {
   "date": "2026-12-21",
@@ -889,7 +889,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 4620,
+    "duration_s": 4500,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -898,12 +898,12 @@
     "children": []
    }
   ],
-  "duration_min": 77,
-  "distance_m": 14429,
+  "duration_min": 75,
+  "distance_m": 14054,
   "rpe": 4.0,
-  "leg_load": 308.0,
+  "leg_load": 300.0,
   "finger_load": 0.0,
-  "reason": "Base block; Sunday availability; weekend long-run slot"
+  "reason": "Base block; kept within 10% of your longest run in 30 days (12.9 km); Sunday availability; weekend long-run slot"
  },
  {
   "date": "2026-12-28",
@@ -1040,7 +1040,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 4980,
+    "duration_s": 4920,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -1049,12 +1049,12 @@
     "children": []
    }
   ],
-  "duration_min": 83,
-  "distance_m": 15553,
+  "duration_min": 82,
+  "distance_m": 15365,
   "rpe": 4.0,
-  "leg_load": 332.0,
+  "leg_load": 328.0,
   "finger_load": 0.0,
-  "reason": "Build block; Sunday availability; weekend long-run slot"
+  "reason": "Build block; kept within 10% of your longest run in 30 days (14.1 km); Sunday availability; weekend long-run slot"
  },
  {
   "date": "2027-01-04",
@@ -1079,7 +1079,7 @@
   "rpe": 3.0,
   "leg_load": 120.0,
   "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 83% to respect the combined leg-load ceiling.; Monday availability"
+  "reason": "Build block, cut-back week; run volume reduced to 82% to respect the combined leg-load ceiling.; Monday availability"
  },
  {
   "date": "2027-01-06",
@@ -1145,7 +1145,7 @@
   "rpe": 8.0,
   "leg_load": 304.0,
   "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 83% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
+  "reason": "Build block, cut-back week; run volume reduced to 82% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
  },
  {
   "date": "2027-01-08",
@@ -1171,7 +1171,7 @@
     "pace_min_s_per_km": null,
     "pace_max_s_per_km": null,
     "rpe": null,
-    "repeats": 5,
+    "repeats": 4,
     "children": [
      {
       "kind": "work",
@@ -1196,12 +1196,12 @@
     ]
    }
   ],
-  "duration_min": 45,
-  "distance_m": 7946,
+  "duration_min": 44,
+  "distance_m": 7856,
   "rpe": 3.0,
-  "leg_load": 135.0,
+  "leg_load": 132.0,
   "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 83% to respect the combined leg-load ceiling.; Friday availability"
+  "reason": "Build block, cut-back week; run volume reduced to 82% to respect the combined leg-load ceiling.; Friday availability"
  },
  {
   "date": "2027-01-10",
@@ -1212,7 +1212,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3060,
+    "duration_s": 3000,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -1221,12 +1221,12 @@
     "children": []
    }
   ],
-  "duration_min": 51,
-  "distance_m": 9557,
+  "duration_min": 50,
+  "distance_m": 9369,
   "rpe": 4.0,
-  "leg_load": 204.0,
+  "leg_load": 200.0,
   "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 83% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
+  "reason": "Build block, cut-back week; run volume reduced to 82% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
  },
  {
   "date": "2027-01-11",

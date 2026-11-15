@@ -9,7 +9,7 @@ import logging
 import sqlite3
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from statistics import median
 from zoneinfo import ZoneInfo
 
@@ -216,6 +216,12 @@ def history_from_activities(
         typical_easy_duration_min=round(median(run_minutes)),
         checkins=db.checkins(conn, today - timedelta(days=28)),
         busy=to_busy(db.calendar_events(conn)),
+        longest_recent_run_km=db.longest_run_km_since(
+            conn,
+            datetime.combine(
+                today - timedelta(days=cfg.progression.spike_window_days), time(), tzinfo=TZ
+            ),
+        ),
     )
 
 

@@ -99,6 +99,9 @@ class ProgressionConfig(BaseModel):
     max_long_run_share: float
     max_long_run_minutes: int
     max_weekly_km_per_run: float = Field(gt=0)
+    marathon_max_long_run_share: float = Field(gt=0, lt=1)
+    max_single_run_increase: float = Field(ge=0)
+    spike_window_days: int = Field(gt=0)
     min_rest_days_per_week: int
 
 
@@ -106,6 +109,7 @@ class ContinuousConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     weekly_increase: float = Field(ge=0)
+    ceiling_run_rpe: float = Field(gt=0, le=10)
     weeks_ahead: int = Field(gt=0)
     replan_interval_days: int = Field(gt=0)
     chronic_load_weeks: int = Field(gt=0)
@@ -276,6 +280,7 @@ class TemplatesConfig(BaseModel):
     recovery_share_of_easy: float = Field(gt=0, le=1)
     long_share: tuple[float, float]
     easy_max_share_of_long: float = Field(gt=0, le=1)
+    marathon_long_share: tuple[float, float]
     min_easy_minutes: int = Field(gt=0)
     max_quality_share: float = Field(gt=0, le=1)
 
@@ -291,6 +296,7 @@ class IllnessConfig(BaseModel):
 
     niggle_days: int = Field(gt=0)
     ill_days: int = Field(gt=0)
+    fever_rest_days: int = Field(ge=0)
     return_ramp: list[float]
 
 

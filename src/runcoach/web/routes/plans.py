@@ -101,6 +101,9 @@ def by_week(sessions: list[PlannedSession]) -> list[WeekSummary]:
 def _generate(
     conn: sqlite3.Connection, cfg: ConfigNode, inp: PlanInput
 ) -> tuple[PlanGenerationResult | None, str | None]:
+    window = load_scheduling_config(cfg).progression.spike_window_days
+    since = datetime.now(timezone.utc) - timedelta(days=window)
+    inp = inp.model_copy(update={"longest_recent_run_km": db.longest_run_km_since(conn, since)})
     try:
         return generate_race_plan_result(
             inp, today(), cfg, commitments=db.list_commitments(conn)

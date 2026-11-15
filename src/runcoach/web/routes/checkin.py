@@ -23,6 +23,7 @@ class CheckinForm(BaseModel):
     feel: int | None = Field(default=None, ge=1, le=5)
     niggle: str | None = None
     ill: bool = False
+    fever: bool = False
     resting_hr: int | None = Field(default=None, gt=20, lt=150)
     notes: str | None = None
 

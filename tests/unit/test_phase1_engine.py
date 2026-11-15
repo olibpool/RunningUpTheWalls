@@ -357,3 +357,44 @@ def test_football_counts_as_a_hard_day_and_volume_follows_runs_per_week() -> Non
         assert len(quality) <= 1  # long run + quality + football = 3 hard days
     peak_km = max(sum(s.distance_m or 0 for s in w if s.kind != "race") for w in weeks.values())
     assert peak_km / 1000 <= 5 * TYPED.progression.max_weekly_km_per_run + 1
+
+
+def test_marathon_long_runs_take_a_bigger_share() -> None:
+    inp = PlanInput(
+        distance="marathon", goal_date=date(2027, 4, 25), vdot=48, runs_per_week=5,
+        climbing_target_per_week=0, current_weekly_km=40,
+    )  # fmt: skip
+    result = generate_race_plan_result(inp, MONDAY, CFG)
+    assert not result.violations
+    weeks: dict[date, list[PlannedSession]] = {}
+    for s in result.sessions:
+        weeks.setdefault(s.date - timedelta(days=s.date.weekday()), []).append(s)
+    shares = [
+        max((s.duration_min or 0) for s in w if s.kind == "long")
+        / sum(s.duration_min or 0 for s in w)
+        for w in weeks.values()
+        if any(s.kind == "long" for s in w)
+    ]
+    assert max(shares) > TYPED.progression.max_long_run_share  # above the 35% used elsewhere
+
+
+def test_no_run_jumps_more_than_10_percent_over_the_last_30_days() -> None:
+    inp = PlanInput(
+        distance="half", goal_date=date(2027, 3, 14), vdot=48, runs_per_week=4,
+        climbing_target_per_week=0, current_weekly_km=35, longest_recent_run_km=8.0,
+    )  # fmt: skip
+    result = generate_race_plan_result(inp, MONDAY, CFG)
+    assert not result.violations
+    runs = sorted((s for s in result.sessions if s.kind != "race"), key=lambda s: s.date)
+    limit = 1 + TYPED.progression.max_single_run_increase
+    first = max((s.distance_m or 0) for s in runs if s.date < MONDAY + timedelta(days=7))
+    assert first / 1000 <= 8.0 * limit + 0.05  # the athlete's own 8 km run bounds week one
+    for s in runs:
+        week = s.date - timedelta(days=s.date.weekday())
+        earlier = [
+            (r.distance_m or 0) / 1000
+            for r in runs
+            if r.date < week and (week - r.date).days <= TYPED.progression.spike_window_days
+        ]
+        if earlier:
+            assert (s.distance_m or 0) / 1000 <= max(earlier) * limit + 0.05, s

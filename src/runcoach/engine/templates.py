@@ -153,6 +153,37 @@ def build_session(
     )
 
 
+def within_spike_limit[S: PlannedSession](
+    session: S, longest_recent_km: float | None, cfg: SchedulingConfig
+) -> S:
+    """Shorten a run that would be more than the allowed step above the longest run of the
+    last few weeks; a single long spike predicts injury better than weekly volume."""
+    if (
+        longest_recent_km is None
+        or session.sport != "run"
+        or session.kind in {"race", "time_trial"}
+        or not session.distance_m
+    ):
+        return session
+    limit_m = longest_recent_km * 1000 * (1 + cfg.progression.max_single_run_increase)
+    if session.distance_m <= limit_m:
+        return session
+    capped = scale_session(session, limit_m / session.distance_m)
+    note = (
+        f"kept within {cfg.progression.max_single_run_increase:.0%} of your longest run "
+        f"in {cfg.progression.spike_window_days} days ({longest_recent_km:.1f} km)"
+    )
+    return capped.model_copy(update={"reason": f"{session.reason}; {note}".strip("; ")})
+
+
+def longest_in_window(
+    runs: list[tuple[date, float]], day: date, cfg: SchedulingConfig
+) -> float | None:
+    """Longest run (km) in the spike window before `day`, from (date, km) pairs."""
+    window = [km for d, km in runs if 0 < (day - d).days <= cfg.progression.spike_window_days]
+    return max(window, default=None)
+
+
 def race_session(
     day: date, distance_m: int, label: str, vdot: float, cfg: SchedulingConfig
 ) -> PlannedSession:

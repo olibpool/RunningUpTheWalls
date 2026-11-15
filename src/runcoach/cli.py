@@ -5,7 +5,7 @@ import getpass
 import logging
 import sys
 from collections.abc import Callable
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import get_args
 
@@ -132,14 +132,18 @@ def _plan_generate(args: argparse.Namespace) -> int:
         current_weekly_km=float(args.current_km),
         race_name=args.distance,
     )
+    cfg = load_config()
+    window = load_scheduling_config(cfg).progression.spike_window_days
     conn = db.connect()
     try:
         commitments = db.list_commitments(conn)
+        longest = db.longest_run_km_since(conn, datetime.now(timezone.utc) - timedelta(days=window))
     finally:
         conn.close()
+    inp = inp.model_copy(update={"longest_recent_run_km": longest})
     try:
         result = generate_race_plan_result(
-            inp, today=date.today(), cfg=load_config(), commitments=commitments
+            inp, today=date.today(), cfg=cfg, commitments=commitments
         )
     except InfeasibleGoal as exc:
         print(str(exc))

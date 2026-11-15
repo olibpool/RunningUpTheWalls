@@ -514,16 +514,18 @@ def save_checkin(conn: sqlite3.Connection, checkin: Checkin) -> None:
     with conn:
         conn.execute(
             """
-            INSERT INTO checkin (date, feel, niggle, ill, resting_hr, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO checkin (date, feel, niggle, ill, fever, resting_hr, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(date) DO UPDATE SET feel = excluded.feel, niggle = excluded.niggle,
-                ill = excluded.ill, resting_hr = excluded.resting_hr, notes = excluded.notes
+                ill = excluded.ill, fever = excluded.fever, resting_hr = excluded.resting_hr,
+                notes = excluded.notes
             """,
             (
                 checkin.date.isoformat(),
                 checkin.feel,
                 checkin.niggle,
                 int(checkin.ill),
+                int(checkin.fever),
                 checkin.resting_hr,
                 checkin.notes,
             ),
@@ -805,3 +807,12 @@ def run_km_since(conn: sqlite3.Connection, since: datetime) -> float:
         (since.astimezone(timezone.utc).isoformat(),),
     ).fetchone()
     return float(row[0]) / 1000
+
+
+def longest_run_km_since(conn: sqlite3.Connection, since: datetime) -> float | None:
+    """The longest stored run since a moment, in km, or None when there is none."""
+    row = conn.execute(
+        "SELECT MAX(distance_m) FROM activity WHERE sport = 'run' AND started_at >= ?",
+        (since.astimezone(timezone.utc).isoformat(),),
+    ).fetchone()
+    return float(row[0]) / 1000 if row[0] else None

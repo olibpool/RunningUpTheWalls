@@ -287,3 +287,23 @@ def test_acr_soft_warning_thresholds_do_not_raise_the_hold_threshold() -> None:
     assert low.warning is not None and not low.hold_next_week
     assert at_hold_boundary.warning is not None and not at_hold_boundary.hold_next_week
     assert inside.warning is None and not inside.hold_next_week
+
+
+def test_without_a_ceiling_growth_stops_at_the_default_and_never_cuts_current_load() -> None:
+    from runcoach.engine.continuous import WeekLoad, default_ceiling
+    from runcoach.engine.zones import zones_from_vdot
+
+    cfg = _config(weeks_ahead=8)
+    typed = load_scheduling_config(cfg)
+    athlete = _athlete()  # no max_weekly_load
+    zones = zones_from_vdot(athlete.vdot, typed.zones)
+    ceiling = default_ceiling(athlete, zones, [], date(2026, 11, 9), 0.0, typed)
+    assert ceiling > 0
+
+    near = History(
+        weekly_loads=[WeekLoad(date(2026, 10, 12) + timedelta(weeks=n), ceiling) for n in range(4)],
+        typical_easy_duration_min=45,
+    )
+    result = generate_continuous_plan_result(athlete, near, date(2026, 11, 9), [], cfg)
+    assert max(result.targets) <= ceiling + 1e-6  # holds at the ceiling instead of growing
+    assert default_ceiling(athlete, zones, [], date(2026, 11, 9), 5 * ceiling, typed) == 5 * ceiling

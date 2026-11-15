@@ -69,6 +69,7 @@ class PlanInput(BaseModel):
     runs_per_week: int = Field(default=4, ge=2, le=6)
     climbing_target_per_week: int = Field(default=2, ge=0, le=3)
     current_weekly_km: float = Field(default=0.0, ge=0)
+    longest_recent_run_km: float | None = Field(default=None, ge=0)  # last 30 days, if known
     race_name: str = "race"
 
 
@@ -186,6 +187,7 @@ class Checkin(BaseModel):
     feel: int | None = None
     niggle: str | None = None
     ill: bool = False
+    fever: bool = False  # fever or chest symptoms: rest, not easy running
     resting_hr: int | None = None
     notes: str | None = None
 
