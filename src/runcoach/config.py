@@ -334,6 +334,23 @@ class ExportConfig(BaseModel):
     push_horizon_days: int = Field(gt=0)
 
 
+class GarminConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    token_dir: str
+    pull_days_back: int = Field(gt=0)
+    health_days_back: int = Field(ge=0)
+    workout_name_max: int = Field(gt=0)
+
+
+class ComplianceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pace_tolerance_s_per_km: float = Field(ge=0)
+    on_target_share: float = Field(gt=0, le=1)
+
+
 class SchedulingConfig(BaseModel):
     """Typed view of the whole config; unknown sections or keys raise."""
 
@@ -369,6 +386,8 @@ class SchedulingConfig(BaseModel):
     gcal: GcalConfig
     storage: StorageConfig
     export: ExportConfig
+    garmin: GarminConfig
+    compliance: ComplianceConfig
 
 
 def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

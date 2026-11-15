@@ -14,6 +14,7 @@ from runcoach.domain.models import (
     CalendarEvent,
     Checkin,
     Commitment,
+    GarminPush,
     Plan,
     PlannedSession,
     Session,
@@ -40,6 +41,7 @@ def to_row(model: Activity) -> dict[str, object]:
         "load": model.load,
         "session_id": model.session_id,
         "raw_path": model.raw_path,
+        "laps_json": json.dumps([lap.model_dump() for lap in model.laps]),
     }
     if payload["load"] is None and rpe_value is not None:
         payload["load"] = float(rpe_value) * (float(model.duration_s) / 60.0)
@@ -61,6 +63,7 @@ def from_row(row: sqlite3.Row) -> Activity:
         load=row["load"],
         session_id=row["session_id"],
         raw_path=row["raw_path"],
+        laps=json.loads(row["laps_json"]),
     )
 
 
@@ -136,25 +139,8 @@ def insert_activity(conn: sqlite3.Connection, activity: Activity) -> int:
 
     with conn:
         cursor = conn.execute(
-            """
-            INSERT INTO activity (
-                source, external_id, sport, started_at, duration_s,
-                distance_m, avg_hr, rpe, load, session_id, raw_path
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                payload["source"],
-                payload["external_id"],
-                payload["sport"],
-                payload["started_at"],
-                payload["duration_s"],
-                payload["distance_m"],
-                payload["avg_hr"],
-                payload["rpe"],
-                payload["load"],
-                payload["session_id"],
-                payload["raw_path"],
-            ),
+            f"INSERT INTO activity ({', '.join(payload)}) VALUES ({', '.join('?' * len(payload))})",
+            tuple(payload.values()),
         )
         inserted_id = cursor.lastrowid
         if inserted_id is None:
@@ -773,3 +759,40 @@ __all__ = [
     "session_adjustments",
     "replace_continuous_sessions",
 ]
+
+
+def garmin_pushes(conn: sqlite3.Connection) -> dict[int, GarminPush]:
+    """Every pushed workout, by session id."""
+    rows = conn.execute("SELECT * FROM garmin_push").fetchall()
+    return {row["session_id"]: GarminPush.model_validate(dict(row)) for row in rows}
+
+
+def save_garmin_push(conn: sqlite3.Connection, push: GarminPush) -> None:
+    """Record (or replace) a session's pushed workout; committed at once (per-call persistence)."""
+    values = push.model_dump(mode="json")
+    with conn:
+        conn.execute(
+            f"INSERT OR REPLACE INTO garmin_push ({', '.join(values)}) "
+            f"VALUES ({', '.join('?' * len(values))})",
+            tuple(values.values()),
+        )
+
+
+def delete_garmin_push(conn: sqlite3.Connection, session_id: int) -> None:
+    """Forget a session's pushed workout."""
+    with conn:
+        conn.execute("DELETE FROM garmin_push WHERE session_id = ?", (session_id,))
+
+
+def activity_starting_at(conn: sqlite3.Connection, started_at: str) -> int | None:
+    """An activity already stored with this start time (the same run from another source)."""
+    row = conn.execute("SELECT id FROM activity WHERE started_at = ?", (started_at,)).fetchone()
+    return int(row["id"]) if row is not None else None
+
+
+def session_activity(conn: sqlite3.Connection, session_id: int) -> Activity | None:
+    """The activity linked to a session, if any."""
+    row = conn.execute(
+        "SELECT * FROM activity WHERE session_id = ? ORDER BY id LIMIT 1", (session_id,)
+    ).fetchone()
+    return from_row(row) if row is not None else None

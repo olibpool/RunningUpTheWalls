@@ -53,7 +53,7 @@ def _save_plan(client: TestClient) -> str:
 def test_health_reports_the_migrated_schema(client: TestClient) -> None:
     payload = client.get("/healthz").json()
     assert payload["status"] == "ok"
-    assert payload["db_version"] == 2
+    assert payload["db_version"] == 3
 
 
 def test_empty_week_offers_a_plan(client: TestClient) -> None:

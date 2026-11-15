@@ -19,7 +19,7 @@ from runcoach import db
 from runcoach.adapt.heat import adjust_for_heat
 from runcoach.adapt.reschedule import reschedule_for_calendar
 from runcoach.adapt.rules import Change, PlanState, evaluate
-from runcoach.config import ConfigNode, SchedulingConfig, load_scheduling_config
+from runcoach.config import ConfigNode, GarminConfig, SchedulingConfig, load_scheduling_config
 from runcoach.display import monday
 from runcoach.domain.models import LOCAL_TIMEZONE, Athlete, Commitment
 from runcoach.engine.continuous import (
@@ -35,6 +35,7 @@ from runcoach.engine.replan import should_replan
 from runcoach.ingest.calendar import fetch_ical_events, to_busy
 from runcoach.ingest.inbox import ingest_inbox
 from runcoach.ingest.matcher import local_day, match
+from runcoach.integrations import garmin
 from runcoach.integrations.weather import fetch_forecast
 
 log = logging.getLogger(__name__)
@@ -234,25 +235,68 @@ def _replan(
     return "ok: not due" if result is None else f"ok: {len(result.sessions)} sessions planned"
 
 
+def _garmin_pull(
+    conn: sqlite3.Connection, cfg: SchedulingConfig, today: date,
+    client: Callable[[], garmin.GarminClient],
+) -> str:  # fmt: skip
+    if not cfg.garmin.enabled:
+        return "skipped: Garmin off ([garmin] enabled)"
+    api = client()
+    activities = garmin.pull_activities(conn, api, cfg, today)
+    return f"ok: {activities}, {garmin.pull_resting_hr(conn, api, cfg.garmin, today)}"
+
+
+def _watch_push(
+    conn: sqlite3.Connection, cfg: SchedulingConfig, today: date, now: datetime,
+    client: Callable[[], garmin.GarminClient],
+) -> str:  # fmt: skip
+    if cfg.export.backend != "garmin":
+        return f"skipped: export backend is {cfg.export.backend!r}"
+    plan = db.active_plan(conn)
+    sessions = db.plan_sessions(conn, plan.id) if plan and plan.id else []
+    start = date.fromisoformat(plan.start_date) if plan else today
+    exporter = garmin.GarminExporter(conn, client(), cfg, start, now)
+    report = exporter.sync_window(
+        sessions, today, today + timedelta(days=cfg.export.push_horizon_days)
+    )
+    return f"ok: {report.pushed} pushed, {report.removed} removed, {report.unchanged} unchanged"
+
+
 def run_sync(
     conn: sqlite3.Connection,
     cfg: ConfigNode,
     now_utc: datetime,
     *,
     client: httpx.Client | None = None,
+    garmin_connect: Callable[[GarminConfig], garmin.GarminClient] = garmin.connect,
 ) -> dict[str, str]:
     """Run every sync step in order and return each step's one-line outcome."""
     typed = load_scheduling_config(cfg)
     today = now_utc.astimezone(TZ).date()
+    connected: list[garmin.GarminClient | Exception] = []
+
+    def garmin_client() -> garmin.GarminClient:
+        # One login per sync, shared by pull and push; a failed login is not retried.
+        if not connected:
+            try:
+                connected.append(garmin_connect(typed.garmin))
+            except Exception as exc:
+                connected.append(exc)
+        if isinstance(connected[0], Exception):
+            raise connected[0]
+        return connected[0]
+
     steps: dict[str, Callable[[], str]] = {
         "inbox": lambda: "ok: {} added, {} duplicates, {} failed".format(
             *vars(ingest_inbox(conn, typed)).values()
         ),
+        "garmin": lambda: _garmin_pull(conn, typed, today, garmin_client),
         "calendar": lambda: _calendar(conn, typed, today, client),
         "forecast": lambda: _forecast(conn, typed, client),
         "matching": lambda: match_activities(conn, typed),
         "adaptation": lambda: f"ok: {len(adapt_plan(conn, typed, today))} changes",
         "replan": lambda: _replan(conn, cfg, typed, today, now_utc),
+        "watch": lambda: _watch_push(conn, typed, today, now_utc, garmin_client),
     }
     report: dict[str, str] = {}
     for name, step in steps.items():

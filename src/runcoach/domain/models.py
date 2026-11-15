@@ -83,6 +83,16 @@ class Plan(BaseModel):
     config_snapshot: str = "{}"
 
 
+class Lap(BaseModel):
+    """One lap as the watch recorded it; a structured workout records one lap per step."""
+
+    duration_s: float
+    distance_m: float | None = None
+    avg_speed_mps: float | None = None
+    avg_hr: int | None = None
+    step_index: int | None = None  # the workout step the lap belongs to, when recorded
+
+
 class Activity(BaseModel):
     id: int | None = None
     source: str
@@ -96,6 +106,7 @@ class Activity(BaseModel):
     load: float | None = None
     session_id: int | None = None
     raw_path: str | None = None
+    laps: list[Lap] = Field(default_factory=list)
 
 
 class Commitment(BaseModel):
@@ -177,3 +188,14 @@ class Checkin(BaseModel):
     ill: bool = False
     resting_hr: int | None = None
     notes: str | None = None
+
+
+class GarminPush(BaseModel):
+    """A workout pushed to Garmin Connect for a session."""
+
+    session_id: int
+    workout_id: str
+    schedule_id: str | None
+    date: date
+    hash: str
+    pushed_at: str

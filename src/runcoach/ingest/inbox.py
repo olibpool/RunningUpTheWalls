@@ -12,12 +12,17 @@ from pathlib import Path
 from runcoach import db
 from runcoach.config import SchedulingConfig
 from runcoach.domain.models import Activity
+from runcoach.ingest.fit import parse_fit_file
 from runcoach.ingest.gpx import parse_gpx_file
 
 log = logging.getLogger(__name__)
 
-# shortcut: GPX only; P2-T1 adds ".fit" once the human supplies a sample file.
-PARSERS: dict[str, Callable[[bytes], Activity]] = {".gpx": parse_gpx_file}
+# A ".zip" is a Garmin Connect "original" download, which wraps one FIT file.
+PARSERS: dict[str, Callable[[bytes], Activity]] = {
+    ".gpx": parse_gpx_file,
+    ".fit": parse_fit_file,
+    ".zip": parse_fit_file,
+}
 
 
 @dataclass(frozen=True)
@@ -40,11 +45,21 @@ def ingest_file(
     parser = PARSERS.get(Path(filename).suffix.lower())
     if parser is None:
         raise ValueError(f"Unsupported file type: {filename} (supported: {', '.join(PARSERS)})")
-    activity = parser(data)
-    if activity.external_id:
-        existing = db.find_activity(conn, activity.source, activity.external_id)
-        if existing is not None:
-            return IngestResult(existing, added=False)
+    return store_activity(conn, parser(data), cfg)
+
+
+def store_activity(
+    conn: sqlite3.Connection, activity: Activity, cfg: SchedulingConfig
+) -> IngestResult:
+    """Store a parsed activity once: the same file, or the same run from another source,
+    is not stored again."""
+    existing = (
+        db.find_activity(conn, activity.source, activity.external_id)
+        if activity.external_id
+        else None
+    ) or db.activity_starting_at(conn, activity.started_at)
+    if existing is not None:
+        return IngestResult(existing, added=False)
     if activity.rpe is None and activity.load is None:
         # Until it is matched, estimate load from the sport's default RPE.
         defaults: dict[str, float] = {str(k): v for k, v in cfg.default_rpe.items()}

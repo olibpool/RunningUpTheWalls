@@ -1,7 +1,7 @@
 """Watch export (Phase 4): a neutral workout format and the exporter interface.
 
-The engine never imports this. Library-specific mapping (garminconnect's typed models, a FIT
-writer) sits behind WatchExporter once the P4-T1 spike confirms how the watch shows workouts.
+The engine never imports this. Library-specific mappings live in integrations/garmin.py
+(Garmin Connect) and integrations/fit.py (a workout file for the watch).
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Literal, Protocol
 
-from runcoach.config import ExportConfig
 from runcoach.domain.models import Session, Step
 
 StepKind = Literal["warmup", "cooldown", "interval", "recovery", "run"]
@@ -78,12 +77,6 @@ def to_workout_spec(session: Session, week_number: int) -> WorkoutSpec:
 
 
 @dataclass(frozen=True)
-class PushResult:
-    workout_id: str | None
-    schedule_id: str | None
-
-
-@dataclass(frozen=True)
 class SyncReport:
     pushed: int = 0
     removed: int = 0
@@ -91,30 +84,6 @@ class SyncReport:
 
 
 class WatchExporter(Protocol):
-    def push_session(self, s: Session) -> PushResult: ...
-
-    def remove_session(self, s: Session) -> None: ...
+    """Keeps a watch platform's calendar in step with the planned runs in [start, end)."""
 
     def sync_window(self, sessions: list[Session], start: date, end: date) -> SyncReport: ...
-
-
-class NullExporter:
-    """The default: nothing is pushed anywhere."""
-
-    def push_session(self, s: Session) -> PushResult:
-        return PushResult(None, None)
-
-    def remove_session(self, s: Session) -> None:
-        return None
-
-    def sync_window(self, sessions: list[Session], start: date, end: date) -> SyncReport:
-        return SyncReport()
-
-
-def exporter_for(cfg: ExportConfig) -> WatchExporter:
-    """Pick the exporter configured in [export] backend."""
-    if cfg.backend == "none":
-        return NullExporter()
-    raise NotImplementedError(
-        f"The {cfg.backend} exporter is Phase 4 work that starts with the P4-T1 Garmin spike."
-    )

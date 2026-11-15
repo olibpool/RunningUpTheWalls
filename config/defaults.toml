@@ -204,5 +204,16 @@ backup_dir = "backups"
 backup_keep = 14
 
 [export]
-backend = "none"              # none | garmin | fit (garmin and fit arrive with Phase 4)
+backend = "none"              # none | garmin (push runs to Garmin Connect each sync) | fit (download only)
 push_horizon_days = 7         # watches hold few workouts; push this many days ahead
+
+[garmin]
+enabled = false               # pull activities and resting HR; log in first with `runcoach garmin login`
+token_dir = "~/.config/runcoach/garmin"  # session token only; the password is never stored
+pull_days_back = 14           # each sync looks this far back for activities not yet stored
+health_days_back = 7          # resting HR days copied into check-ins (your own entries win)
+workout_name_max = 32         # shortcut: Garmin's real limit is unconfirmed; check after the spike
+
+[compliance]
+pace_tolerance_s_per_km = 5   # a lap this close to its pace range still counts as on target
+on_target_share = 0.75        # share of targeted steps on target for the workout to count as hit
