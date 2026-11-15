@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
+from runcoach.adapt.compliance import score
 from runcoach.config import SchedulingConfig
 from runcoach.display import monday
 from runcoach.domain.models import Activity, Checkin, PlannedSession, Session, Step
@@ -173,8 +174,28 @@ def _pace(seconds: float, metres: float) -> float:
     return seconds / (metres / 1000)
 
 
+def _quality_verdict(s: Session, activity: Activity | None, cfg: SchedulingConfig) -> str:
+    """'fast', 'slow' or '' for one done quality session, from its laps when they line up
+    with the planned steps, otherwise from its average pace."""
+    if activity is None:
+        return ""
+    effort_ok = activity.rpe is None or s.rpe is None or activity.rpe <= s.rpe
+    scored = score(s, activity, cfg.compliance)
+    if scored is not None and scored.targeted:
+        if scored.count("fast") == scored.targeted and effort_ok:
+            return "fast"
+        missed = not scored.hit(cfg.compliance) and scored.count("slow") > scored.count("fast")
+        return "slow" if missed else ""
+    if not (activity.distance_m and activity.rpe is not None and s.distance_m and s.duration_min):
+        return ""
+    planned = _pace(s.duration_min * 60, s.distance_m)
+    actual = _pace(activity.duration_s, activity.distance_m)
+    return "fast" if actual <= planned * (1 - cfg.retest.faster_by) and effort_ok else ""
+
+
 def retest_suggested(state: PlanState, cfg: SchedulingConfig) -> list[Change]:
-    """Suggest a re-test when recent quality runs were all faster than target at no extra effort.
+    """Suggest a time trial when the last quality runs were all faster than target at no extra
+    effort, or all missed their pace targets: either way the paces no longer fit.
 
     VDOT is never changed here; the human confirms a time trial first.
     """
@@ -187,26 +208,19 @@ def retest_suggested(state: PlanState, cfg: SchedulingConfig) -> list[Change]:
     )[-cfg.retest.quality_runs :]
     if len(quality) < cfg.retest.quality_runs:
         return []
-    for s in quality:
-        activity = by_session.get(s.id)
-        if not (
-            activity
-            and activity.distance_m
-            and activity.rpe is not None
-            and s.rpe is not None
-            and s.distance_m
-            and s.duration_min
-        ):
-            return []
-        planned = _pace(s.duration_min * 60, s.distance_m)
-        actual = _pace(activity.duration_s, activity.distance_m)
-        if actual > planned * (1 - cfg.retest.faster_by) or activity.rpe > s.rpe:
-            return []
-    reason = (
-        f"Your last {len(quality)} quality runs were all over "
-        f"{cfg.retest.faster_by:.0%} faster than target at or below the planned effort. "
-        "Consider a 5 km time trial to update your paces."
-    )
+    verdicts = {_quality_verdict(s, by_session.get(s.id), cfg) for s in quality}
+    if verdicts == {"fast"}:
+        reason = (
+            f"Your last {len(quality)} quality runs were all faster than target at or below "
+            "the planned effort. Consider a 5 km time trial to update your paces."
+        )
+    elif verdicts == {"slow"}:
+        reason = (
+            f"Your last {len(quality)} quality runs all missed their pace targets. The paces may "
+            "be too hard right now: consider a 5 km time trial to reset them."
+        )
+    else:
+        return []
     return [Change(None, "flag", {"value": reason}, "retest_suggested", reason)]
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -148,9 +148,13 @@ def overview(
 
 
 @router.get("/new", response_class=HTMLResponse)
-def new(request: Request) -> HTMLResponse:
-    """The plan wizard with sensible starting values."""
-    return _wizard(request, {"distance": "half", "runs_per_week": 4, "climbing_target_per_week": 2})
+def new(request: Request, conn: Annotated[sqlite3.Connection, Depends(get_conn)]) -> HTMLResponse:
+    """The plan wizard, with weekly distance taken from the last 4 weeks of recorded runs."""
+    four_weeks_km = db.run_km_since(conn, datetime.now(timezone.utc) - timedelta(weeks=4))
+    form: dict[str, Any] = {"distance": "half", "runs_per_week": 4, "climbing_target_per_week": 2}
+    if four_weeks_km:
+        form["current_weekly_km"] = round(four_weeks_km / 4, 1)
+    return _wizard(request, form)
 
 
 @router.post("/new", response_class=HTMLResponse)

@@ -67,7 +67,23 @@ def _page(
                 else "off",
             ),
             ("Activity inbox", str(Path(typed.inbox.path).expanduser())),
-            ("Garmin", "not set up (Phase 4)"),
+            (
+                "Garmin activities and resting HR",
+                ("on" if typed.garmin.enabled else "off")
+                + (
+                    ", logged in"
+                    if Path(typed.garmin.token_dir).expanduser().exists()
+                    else ", not logged in (run `runcoach garmin login`)"
+                ),
+            ),
+            (
+                "Watch workouts",
+                {
+                    "garmin": "pushed to Garmin Connect each sync",
+                    "fit": "download a .fit file from each session",
+                    "none": "off",
+                }[typed.export.backend],
+            ),
         ],
         "availability": typed.availability,
         **_status(request, conn),

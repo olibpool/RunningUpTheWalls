@@ -11,6 +11,23 @@
 {% include "_messages.html" %}
 
 {% if s.steps %}<h2>Steps</h2>{{ steps_list(s.steps) }}{% endif %}
+{% if s.sport == "run" and s.steps %}
+<p class="muted">{% if on_watch %}<span class="badge">On your watch</span> {% endif %}<a href="/session/{{ s.id }}/workout.fit" download>Download as a watch workout (.fit)</a></p>
+{% endif %}
+
+{% if compliance %}
+<h2>How it went</h2>
+<p>{{ compliance.summary(compliance_cfg) }}</p>
+<table>
+  <thead><tr><th scope="col">Step</th><th scope="col">Target</th><th scope="col">Ran</th><th scope="col"></th></tr></thead>
+  <tbody>{% for step in compliance.steps %}
+    <tr><td>{{ step.label }}</td>
+      <td>{% if step.target %}{{ step.target[0] | pace }}–{{ step.target[1] | pace }}{% endif %}</td>
+      <td>{% if step.pace_s_per_km %}{{ step.pace_s_per_km | pace }}{% endif %}</td>
+      <td>{% if step.verdict != "untargeted" %}{{ {"on": "on pace", "fast": "too fast", "slow": "too slow"}[step.verdict] }}{% endif %}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% endif %}
 
 {% if s.status == "planned" %}
 <h2>Log it</h2>

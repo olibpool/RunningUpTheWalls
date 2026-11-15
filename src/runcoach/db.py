@@ -796,3 +796,12 @@ def session_activity(conn: sqlite3.Connection, session_id: int) -> Activity | No
         "SELECT * FROM activity WHERE session_id = ? ORDER BY id LIMIT 1", (session_id,)
     ).fetchone()
     return from_row(row) if row is not None else None
+
+
+def run_km_since(conn: sqlite3.Connection, since: datetime) -> float:
+    """Kilometres run in stored activities since a moment."""
+    row = conn.execute(
+        "SELECT COALESCE(SUM(distance_m), 0) FROM activity WHERE sport = 'run' AND started_at >= ?",
+        (since.astimezone(timezone.utc).isoformat(),),
+    ).fetchone()
+    return float(row[0]) / 1000

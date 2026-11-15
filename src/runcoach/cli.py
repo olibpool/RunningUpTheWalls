@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import logging
 import sys
 from collections.abc import Callable
@@ -21,6 +22,7 @@ from runcoach.domain.models import (
 )
 from runcoach.engine.plan import InfeasibleGoal, generate_race_plan_result, plan_snapshot
 from runcoach.ingest.inbox import ingest_file
+from runcoach.integrations import garmin
 from runcoach.sync import run_sync
 
 
@@ -200,6 +202,30 @@ def _sync(_args: argparse.Namespace) -> int:
     return 1 if any(outcome.startswith("error") for outcome in report.values()) else 0
 
 
+def _garmin_login(_args: argparse.Namespace) -> int:
+    cfg = load_scheduling_config(load_config()).garmin
+    print("Log in to Garmin Connect. Only the session token is saved, in", cfg.token_dir)
+    email = input("Garmin email: ").strip()
+    password = getpass.getpass("Password (not stored): ")
+    try:
+        garmin.login(cfg, email, password, lambda: input("MFA code: ").strip())
+    except Exception as exc:  # one attempt only, so Garmin doesn't lock the account
+        print(f"Login failed ({type(exc).__name__}). Check the details and try again later.")
+        return 1
+    print('Logged in. Set [garmin] enabled = true (and [export] backend = "garmin" to push).')
+    return 0
+
+
+def _garmin_status(_args: argparse.Namespace) -> int:
+    try:
+        garmin.connect(load_scheduling_config(load_config()).garmin)
+    except RuntimeError as exc:
+        print(exc)
+        return 1
+    print("Garmin Connect: logged in.")
+    return 0
+
+
 def _backup(_args: argparse.Namespace) -> int:
     storage = load_config().storage
     directory = db.ROOT / str(storage.backup_dir)  # an absolute backup_dir replaces ROOT
@@ -279,11 +305,19 @@ def main() -> None:
         help="Persist the generated plan to SQLite",
     )
     plan_generate.set_defaults(func=_plan_generate)
-    ingest_parser = subparsers.add_parser("ingest", help="Store a GPX activity file")
+    ingest_parser = subparsers.add_parser("ingest", help="Store a GPX or FIT activity file")
     ingest_parser.add_argument("file")
     ingest_parser.set_defaults(func=_ingest)
     sync_parser = subparsers.add_parser("sync", help="Inbox, calendar, weather, matching, rules")
     sync_parser.set_defaults(func=_sync)
+    garmin_parser = subparsers.add_parser("garmin", help="Garmin Connect login")
+    garmin_sub = garmin_parser.add_subparsers(dest="action", required=True)
+    garmin_sub.add_parser("login", help="Log in once; saves a session token").set_defaults(
+        func=_garmin_login
+    )
+    garmin_sub.add_parser("status", help="Check the saved session still works").set_defaults(
+        func=_garmin_status
+    )
     backup_parser = subparsers.add_parser("backup", help="Copy the database to [storage]")
     backup_parser.set_defaults(func=_backup)
     args = parser.parse_args()

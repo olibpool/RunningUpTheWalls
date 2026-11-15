@@ -9,13 +9,17 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from runcoach import db
+from runcoach.adapt.compliance import score
 from runcoach.adapt.rules import Change
 from runcoach.config import ConfigNode, load_scheduling_config
+from runcoach.display import monday
 from runcoach.domain.models import Activity, PlannedSession, Session
 from runcoach.engine.events import day_constraints, expand_commitments
 from runcoach.engine.plan import fixed_instances
 from runcoach.engine.safety import check_plan
 from runcoach.ingest.calendar import to_busy
+from runcoach.integrations.fit import workout_file
+from runcoach.integrations.watch import to_workout_spec
 from runcoach.web.deps import TIMEZONE, get_cfg, get_conn, is_htmx, parse_form, redirect, render
 
 router = APIRouter(prefix="/session")
@@ -55,6 +59,9 @@ def _detail(
     errors: list[str] | None = None,
     status_code: int = 200,
 ) -> HTMLResponse:
+    typed = load_scheduling_config(request.app.state.cfg)
+    activity = db.session_activity(conn, session.id)
+    compliance = score(session, activity, typed.compliance) if activity else None
     return render(
         request,
         "session.html",
@@ -63,8 +70,30 @@ def _detail(
             "s": session,
             "history": db.session_adjustments(conn, session.id),
             "errors": errors or [],
+            "compliance": compliance,
+            "compliance_cfg": typed.compliance,
+            "on_watch": session.id in db.garmin_pushes(conn),
         },
         status_code=status_code,
+    )
+
+
+@router.get("/{session_id}/workout.fit")
+def workout_fit(
+    session_id: int, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
+) -> Response:
+    """The run as a FIT workout file, to copy onto the watch's GARMIN/NewFiles folder (P4-T7)."""
+    session = _load(conn, session_id)
+    plan = conn.execute("SELECT start_date FROM plan WHERE id = ?", (session.plan_id,)).fetchone()
+    week = (monday(session.date) - monday(date.fromisoformat(plan["start_date"]))).days // 7 + 1
+    try:
+        spec = to_workout_spec(session, week)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    return Response(
+        workout_file(spec, datetime.now(timezone.utc)),
+        media_type="application/vnd.ant.fit",
+        headers={"Content-Disposition": f'attachment; filename="coachal-{session.id}.fit"'},
     )
 
 

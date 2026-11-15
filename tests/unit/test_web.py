@@ -426,3 +426,50 @@ def test_pwa_manifest_and_service_worker_are_served_with_their_types(client: Tes
     assert worker.headers["cache-control"] == "no-cache"
     assert client.get("/static/icon-512.png").status_code == 200
     assert 'rel="manifest"' in client.get("/week").text
+
+
+def test_garmin_watch_pieces_fit_download_scoring_and_prefill(
+    client: TestClient, db_path: Path
+) -> None:
+    from datetime import datetime, timezone
+
+    from fitdata import activity_fit
+
+    from runcoach.domain.models import Activity
+
+    _save_plan(client)
+    conn = db.connect(db_path)
+    plan = db.active_plan(conn)
+    assert plan is not None and plan.id is not None
+    quality = next(s for s in db.plan_sessions(conn, plan.id) if s.kind in {"tempo", "intervals"})
+
+    fit = client.get(f"/session/{quality.id}/workout.fit")
+    assert fit.status_code == 200 and fit.content[8:12] == b".FIT"
+    assert "attachment" in fit.headers["content-disposition"]
+    assert "Download as a watch workout" in client.get(f"/session/{quality.id}").text
+
+    # A run whose laps line up with the steps gets a per-step verdict.
+    from runcoach.adapt.compliance import executed_steps
+
+    steps = executed_steps(quality.steps)
+    laps = [
+        (s.duration_s or 600, (s.duration_s or 600) * 1000 / (s.pace_max_s_per_km or 360))
+        for s in steps
+    ]
+    start = datetime.combine(quality.date, datetime.min.time(), tzinfo=timezone.utc)
+    from runcoach.ingest.fit import parse_fit_file
+
+    parsed = parse_fit_file(activity_fit(start, laps))
+    activity_id = db.insert_activity(conn, Activity(**{**parsed.model_dump(), "id": None}))
+    db.link_activity(conn, activity_id, quality.id, rule="matched", reason="test")
+    detail = client.get(f"/session/{quality.id}").text
+    assert "How it went" in detail and "on pace" in detail and "Workout hit." in detail
+
+    # Recorded runs fill in the weekly distance on a new plan.
+    assert 'name="current_weekly_km" value=""' not in client.get("/plan/new").text
+    conn.close()
+
+
+def test_settings_reports_garmin_and_watch_status(client: TestClient) -> None:
+    page = client.get("/settings").text
+    assert "Garmin activities and resting HR" in page and "Watch workouts" in page

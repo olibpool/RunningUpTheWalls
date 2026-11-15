@@ -229,3 +229,56 @@ def test_events_logged_after_the_plan_ease_drop_and_ramp() -> None:
         }
     )
     assert evaluate(PlanState(**{**state.__dict__, "applied": applied}), MONDAY, CFG) == []
+
+
+def _interval_session(sid: int, day: date) -> Session:
+    steps = [
+        Step(kind="warmup", duration_s=600, pace_min_s_per_km=300, pace_max_s_per_km=330),
+        Step(kind="repeat", repeats=2, children=[
+            Step(kind="work", duration_s=180, pace_min_s_per_km=240, pace_max_s_per_km=250),
+            Step(kind="recover", duration_s=120),
+        ]),
+    ]  # fmt: skip
+    return _session(sid, day, kind="intervals", status="done").model_copy(update={"steps": steps})
+
+
+def _laps_run(session: Session, rep_paces: list[float]) -> Activity:
+    from runcoach.domain.models import Lap
+
+    laps = [Lap(duration_s=600, avg_speed_mps=1000 / 340)]  # a slow warm-up isn't judged
+    for pace in rep_paces:
+        laps += [Lap(duration_s=180, avg_speed_mps=1000 / pace), Lap(duration_s=120)]
+    return Activity(
+        id=100 + session.id, source="garmin", sport="run", duration_s=1200,
+        started_at=f"{session.date.isoformat()}T07:00:00+00:00", session_id=session.id,
+        laps=laps,
+    )  # fmt: skip
+
+
+def test_compliance_scores_each_rep_against_its_pace_range() -> None:
+    from runcoach.adapt.compliance import score
+
+    session = _interval_session(1, MONDAY)
+    result = score(session, _laps_run(session, [246, 262]), CFG.compliance)
+    assert result is not None
+    assert [s.verdict for s in result.steps] == ["untargeted", "on", "untargeted", "slow",
+                                                 "untargeted"]  # fmt: skip
+    assert not result.hit(CFG.compliance)
+    assert result.summary(CFG.compliance) == (
+        "1 of 2 targeted steps on pace (1 slow). Workout missed its targets."
+    )
+    lap_pressed = _laps_run(session, [246, 246])
+    lap_pressed.laps.append(lap_pressed.laps[-1])
+    assert score(session, lap_pressed, CFG.compliance) is None  # laps don't line up
+
+
+def test_retest_suggested_from_laps_when_reps_are_all_fast_or_all_missed() -> None:
+    sessions = [_interval_session(i, MONDAY + timedelta(days=2 * i)) for i in range(3)]
+    fast = [_laps_run(s, [225, 228]) for s in sessions]
+    (flag,) = retest_suggested(PlanState(sessions, fast, []), CFG)
+    assert "faster than target" in flag.reason
+    slow = [_laps_run(s, [262, 266]) for s in sessions]
+    (flag,) = retest_suggested(PlanState(sessions, slow, []), CFG)
+    assert "missed their pace targets" in flag.reason
+    mixed = [*fast[:2], slow[2]]
+    assert retest_suggested(PlanState(sessions, mixed, []), CFG) == []

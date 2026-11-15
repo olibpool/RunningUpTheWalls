@@ -31,7 +31,7 @@
     {{ distance_select("race_distance", "Recent race or time trial", blank=True) }}
     {{ field("race_time", "Its finishing time", hint="mm:ss or h:mm:ss", attrs='placeholder="25:00"') }}
     {{ field("vdot", "Or your VDOT", "number", hint="Used only when no race time is given", attrs='step="0.1" min="20" max="90"') }}
-    {{ field("current_weekly_km", "Current weekly running (km)", "number", attrs='step="0.5" min="0" required') }}
+    {{ field("current_weekly_km", "Current weekly running (km)", "number", hint="Filled in from your last 4 weeks of recorded runs, when there are any.", attrs='step="0.1" min="0" required') }}
   </fieldset>
   <fieldset>
     <legend>Week shape</legend>
