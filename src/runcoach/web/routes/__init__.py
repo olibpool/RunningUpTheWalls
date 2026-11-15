@@ -6,6 +6,7 @@ from runcoach.web.routes import (
     activities,
     checkin,
     events,
+    export,
     health,
     plans,
     sessions,
@@ -14,5 +15,5 @@ from runcoach.web.routes import (
 )
 
 router = APIRouter()
-for module in (health, week, sessions, plans, events, activities, checkin, settings):
+for module in (health, week, sessions, plans, events, activities, checkin, settings, export):
     router.include_router(module.router)

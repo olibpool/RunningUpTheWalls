@@ -202,3 +202,7 @@ reschedule_days = 14
 db_path = "runcoach.db"       # relative to the project root, or absolute (e.g. /var/lib/runcoach/runcoach.db)
 backup_dir = "backups"
 backup_keep = 14
+
+[export]
+backend = "none"              # none | garmin | fit (garmin and fit arrive with Phase 4)
+push_horizon_days = 7         # watches hold few workouts; push this many days ahead

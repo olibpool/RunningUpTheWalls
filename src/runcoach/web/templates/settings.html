@@ -54,6 +54,7 @@
   <table>
     <tbody>{% for name, state in integrations %}<tr><th scope="row">{{ name }}</th><td>{{ state }}</td></tr>{% endfor %}</tbody>
   </table>
+  <p>Calendar feed of your plan: <a href="/export/plan.ics">/export/plan.ics</a> (subscribe from a calendar app on your tailnet).</p>
   <h3>Availability windows</h3>
   <p>Weekdays: {% for a, b in availability.weekday %}{{ a }}–{{ b }}{% if not loop.last %}, {% endif %}{% endfor %}.
      Weekends: {% for a, b in availability.weekend %}{{ a }}–{{ b }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>

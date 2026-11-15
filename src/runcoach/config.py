@@ -327,6 +327,13 @@ class StorageConfig(BaseModel):
     backup_keep: int = Field(gt=0)
 
 
+class ExportConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    backend: Literal["none", "garmin", "fit"]
+    push_horizon_days: int = Field(gt=0)
+
+
 class SchedulingConfig(BaseModel):
     """Typed view of the whole config; unknown sections or keys raise."""
 
@@ -361,6 +368,7 @@ class SchedulingConfig(BaseModel):
     inbox: InboxConfig
     gcal: GcalConfig
     storage: StorageConfig
+    export: ExportConfig
 
 
 def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

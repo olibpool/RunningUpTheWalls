@@ -57,3 +57,24 @@ def km(distance_m: float | None) -> str:
 def monday(day: date) -> date:
     """Return the Monday of the week containing day."""
     return day - timedelta(days=day.weekday())
+
+
+def describe_steps(steps: list[Step], indent: str = "") -> list[str]:
+    """One line per step, e.g. 'Work 3:00 at 3:56/km', with repeats nested."""
+    lines: list[str] = []
+    for step in steps:
+        if step.kind == "repeat":
+            lines.append(f"{indent}{step.repeats} x")
+            lines += describe_steps(step.children, indent + "  ")
+            continue
+        parts = [step.kind.title()]
+        if step.duration_s:
+            parts.append(clock(step.duration_s))
+        if step.distance_m:
+            parts.append(km(step.distance_m))
+        if step_pace(step):
+            parts.append(f"at {step_pace(step)}")
+        elif step.rpe:
+            parts.append(f"RPE {step.rpe:g}")
+        lines.append(indent + " ".join(parts))
+    return lines
