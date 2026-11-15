@@ -135,10 +135,10 @@ def test_safety_flags_each_rule_with_a_bad_plan() -> None:
     rise = [_run(MONDAY + timedelta(weeks=w), "easy", 40, load) for w, load in ((0, 100), (1, 130))]
     assert "weekly-rise" in kinds(rise)
     assert "weekly-rise" not in kinds(rise, exempt_load_weeks={MONDAY + timedelta(weeks=1)})
-    # Long run above its share of weekly run time.
-    assert "long-run-share" in kinds(
-        [_run(MONDAY, "long", 90, 360), _run(MONDAY + timedelta(days=3), "easy", 30, 90)]
-    )
+    # Long run above its share of weekly run time; 2-run weeks are exempt.
+    two_runs = [_run(MONDAY, "long", 90, 360), _run(MONDAY + timedelta(days=3), "easy", 30, 90)]
+    assert "long-run-share" not in kinds(two_runs)
+    assert "long-run-share" in kinds([*two_runs, _run(MONDAY + timedelta(days=5), "easy", 30, 90)])
     # Taper week above the preceding peak.
     taper = [
         _run(MONDAY + timedelta(weeks=w), "easy", 40, load) for w, load in ((0, 100), (1, 105))
@@ -261,3 +261,19 @@ def test_golden_half_marathon_plan(request: pytest.FixtureRequest) -> None:
     assert plan == json.loads(GOLDEN.read_text(encoding="utf-8")), (
         "plan output changed; review it, then run pytest --update-golden"
     )
+
+
+def test_two_run_weeks_keep_a_full_long_run() -> None:
+    inp = PlanInput(
+        distance="10k",
+        goal_date=date(2027, 3, 14),
+        vdot=45,
+        runs_per_week=2,
+        climbing_target_per_week=0,
+        current_weekly_km=25,
+    )
+    result = generate_race_plan_result(inp, MONDAY, CFG)
+    assert not result.violations
+    long_runs = [s for s in result.sessions if s.kind == "long"]
+    others = [s for s in result.sessions if s.kind != "long"]
+    assert max(s.duration_min or 0 for s in long_runs) > max(s.duration_min or 0 for s in others)

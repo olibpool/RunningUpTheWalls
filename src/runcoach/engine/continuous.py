@@ -285,10 +285,11 @@ def _sessions_for_week(
         context = WeekContext(week_start, duration, progress, strides=with_strides)
         session = build_session(kind, context, zones, typed_cfg)
         sessions.append(session.model_copy(update={"reason": reason}))
-    share_cap = typed_cfg.progression.max_long_run_share
-    others = sum(session.duration_min or 0 for session in sessions)
-    # Keep the long run within its share of weekly run time (matters most at 2 runs a week).
-    long_minutes = max(1, min(long_minutes, int(share_cap / (1 - share_cap) * others)))
+    if len(sessions) >= 2:  # 2-run weeks are exempt from the share rule
+        share_cap = typed_cfg.progression.max_long_run_share
+        others = sum(session.duration_min or 0 for session in sessions)
+        # Keep the long run within its share of weekly run time.
+        long_minutes = max(1, min(long_minutes, int(share_cap / (1 - share_cap) * others)))
     long_run = build_session("long", WeekContext(week_start, long_minutes), zones, typed_cfg)
     result = [long_run.model_copy(update={"reason": long_reason}), *sessions]
     shrinkable = 1.0 - typed_cfg.scheduler.max_run_volume_reduction

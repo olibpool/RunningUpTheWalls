@@ -164,10 +164,11 @@ def _week_sessions(
 
     sessions = quality + easy
     if long_minutes:
-        share_cap = cfg.progression.max_long_run_share
-        others = sum(s.duration_min or 0 for s in sessions)
-        # Keep the long run within its share of weekly run time, even when volume is low.
-        long_minutes = max(1, min(long_minutes, int(share_cap / (1 - share_cap) * others)))
+        if len(sessions) >= 2:  # 2-run weeks are exempt from the share rule
+            share_cap = cfg.progression.max_long_run_share
+            others = sum(s.duration_min or 0 for s in sessions)
+            # Keep the long run within its share of weekly run time, even when volume is low.
+            long_minutes = max(1, min(long_minutes, int(share_cap / (1 - share_cap) * others)))
         sessions.append(build_session("long", WeekContext(week.start, long_minutes), zones, cfg))
 
     note = f"{week.label.title()} block"

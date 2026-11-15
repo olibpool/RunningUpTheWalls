@@ -66,7 +66,7 @@ T6 ❌ `deploy/` units, T7 ❌ (human: Pi bring-up), T8 🟡 (`docs/perf.md` has
   weeks compose with growth 1.0. `InfeasibleGoal` covers too few weeks and growth above the cap,
   each with a suggested date.
 - `engine/safety.py` `check_plan` now also checks the weekly leg-load rise (against the last
-  week that wasn't a dip), long-run share of run time, pace order and taper above peak.
+  week that wasn't a dip), long-run share of run time (weeks with 3+ runs only), pace order and taper above peak.
   `plan_start` excludes a partial first week. `exempt_load_weeks` covers return ramps and
   weeks where the scheduler dropped sessions. `cfg` is required.
 - Tests: per-rule bad plans, templates, progression, the P1-T9 Hypothesis property test, and the
@@ -120,18 +120,17 @@ Monday bug below.
 9. The day-of penalty RPE cap (`penalty.day_of_max_rpe`) also applies to the following
    "easy" days. The spec only removes quality on those days. Low risk.
 
-## Spec tensions to raise with the human
+## Human decisions on Phase 1 details (2026-11-15)
 
-- **Two runs a week.** "Long run ≤ 35% of weekly volume" means the long run must be the
-  *shorter* of the two runs. The generator obeys this, so 2-run plans have small long runs.
-  Options: exempt 2-run weeks, or measure share against total leg load including
-  football and climbing.
-- **`min_peak_weekly_km`** (5k 3, 10k 6, half 12.7, marathon 25.3) keeps the old code's
-  "distance × 0.6" heuristic so behaviour is unchanged. It's unsourced, so ask.
-- **`templates.max_quality_share` = 0.25**, `min_easy_minutes` = 20, and the scheduler's
-  `same_day_session_cost` = 3 / `adjacent_run_day_cost` = 1 are new unsourced defaults.
-- Race-week rules (no long run in race week, nothing on or after race day, no "race" session
-  emitted) were a judgement call. The plans are silent.
+- **Two-run weeks are exempt from the long-run-share rule.** `check_plan` skips the rule for
+  any week with two or fewer runs, and both generators only apply the share cap at 3+ runs.
+- **Accepted as defaults** (still unsourced, tune from use): `min_peak_weekly_km`
+  (5k 3, 10k 6, half 12.7, marathon 25.3, which keeps the old "distance × 0.6" heuristic),
+  `templates.max_quality_share` = 0.25, `min_easy_minutes` = 20, and the scheduler's
+  `same_day_session_cost` = 3 / `adjacent_run_day_cost` = 1.
+- **Accepted race-week rules:** no long run in race week, nothing on or after race day, and no
+  "race" session emitted.
+- The human will run the Phase 1 gate (read a printed half-marathon plan).
 
 ## Ordered work for the next sessions
 
