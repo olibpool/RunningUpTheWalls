@@ -15,18 +15,7 @@
 </div>
 {% endif %}
 
-{% if hint.suggests_extension %}
-<div class="banner warning" role="status">
-  <p>Resting heart rate {{ hint.today_bpm | round | int }} is above your baseline of {{ hint.baseline_bpm | round | int }}. Consider taking tomorrow easy too.</p>
-  <form method="post" action="/events" class="actions">
-    <input type="hidden" name="form" value="drinks">
-    <input type="hidden" name="title" value="Elevated resting heart rate">
-    <input type="hidden" name="date" value="{{ today }}">
-    <input type="hidden" name="severity" value="1">
-    <button type="submit">Make tomorrow easy</button>
-  </form>
-</div>
-{% endif %}
+{% include "_readiness.html" %}
 
 <form method="post" action="/checkin" class="stack panel">
   <fieldset class="feel">

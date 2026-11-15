@@ -49,6 +49,8 @@ class GarminClient(Protocol):
 
     def get_rhr_daily(self, start: str, end: str) -> list[dict[str, Any]]: ...
 
+    def get_sleep_data(self, cdate: str) -> dict[str, Any]: ...
+
     def upload_workout(self, workout_json: dict[str, Any] | list[Any] | str) -> dict[str, Any]: ...
 
     def schedule_workout(self, workout_id: int | str, date_str: str) -> dict[str, Any]: ...
@@ -127,6 +129,36 @@ def pull_resting_hr(
         db.save_checkin(conn, base.model_copy(update={"resting_hr": int(value)}))
         filled += 1
     return f"{filled} resting HR days"
+
+
+def pull_sleep(
+    conn: sqlite3.Connection, client: GarminClient, cfg: GarminConfig, today: date
+) -> str:
+    """Copy each night's sleep into check-ins, never over a value you entered.
+
+    Garmin's API is unofficial, so calls are kept few: each sync asks only for nights still
+    missing among the last two, and the full `health_days_back` window once a day."""
+    if not cfg.health_days_back:
+        return "sleep off"
+    backfill = db.get_kv(conn, "garmin.sleep_backfill") != today.isoformat()
+    start = today - timedelta(days=cfg.health_days_back if backfill else 1)
+    existing = {c.date: c for c in db.checkins(conn, start)}
+    filled = 0
+    day = start
+    while day <= today:
+        current = existing.get(day)
+        if current is None or current.sleep_hours is None:
+            summary = (client.get_sleep_data(day.isoformat()) or {}).get("dailySleepDTO") or {}
+            seconds = summary.get("sleepTimeSeconds")
+            if seconds:  # None or 0: not recorded (yet); asked again at a later sync
+                base = current or Checkin(date=day)
+                hours = round(seconds / 3600, 2)
+                db.save_checkin(conn, base.model_copy(update={"sleep_hours": hours}))
+                filled += 1
+        day += timedelta(days=1)
+    if backfill:
+        db.set_kv(conn, "garmin.sleep_backfill", today.isoformat())
+    return f"{filled} sleep nights"
 
 
 # Garmin workout-service ids (garminconnect.workout.StepType / ConditionType / TargetType).

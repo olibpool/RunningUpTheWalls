@@ -12,7 +12,7 @@ from runcoach import db
 from runcoach.adapt.rules import Change
 from runcoach.config import ConfigNode, load_scheduling_config
 from runcoach.domain.models import Checkin
-from runcoach.engine.readiness import resting_heart_rate_hint
+from runcoach.engine.readiness import resting_heart_rate_hint, sleep_hint
 from runcoach.sync import adapt_plan
 from runcoach.web.deps import get_cfg, get_conn, parse_form, render, today
 
@@ -44,12 +44,15 @@ def _page(
     recent = db.checkins(conn, day - timedelta(days=typed.readiness.rhr_window_days - 1))
     current = next((c for c in recent if c.date == day), None)
     hint = resting_heart_rate_hint(recent, day, typed)
+    sleep = sleep_hint(recent, day, typed)
     context: dict[str, Any] = {
         "active": "checkin",
         "errors": errors or [],
         "today": day,
         "current": current,
         "hint": hint,
+        "sleep": sleep,
+        "sleep_cfg": typed.readiness,
         "changes": changes,
         "saved": saved,
         "illness": typed.illness,

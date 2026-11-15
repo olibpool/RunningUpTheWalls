@@ -1,0 +1,24 @@
+{% from "_icons.html" import icon %}
+{# Readiness suggestions from resting heart rate and sleep. Nothing changes until accepted. #}
+{% if (hint and hint.suggests_extension) or (sleep and sleep.short) %}
+<div class="banner warning" role="status">
+  {{ icon("heart") }}
+  <div>
+    {% if hint and hint.suggests_extension %}
+    <p>Resting heart rate {{ hint.today_bpm | round | int }} is above your baseline of {{ hint.baseline_bpm | round | int }}.</p>
+    {% endif %}
+    {% if sleep and sleep.short %}
+    <p>{% if sleep.last_night_h is not none and sleep.last_night_h < sleep_cfg.short_sleep_h %}You slept {{ "%.1f" | format(sleep.last_night_h) }} h last night.{% else %}You have averaged {{ "%.1f" | format(sleep.average_h) }} h over the last {{ sleep_cfg.sleep_avg_nights }} nights.{% endif %}
+      Hard sessions adapt poorly on short sleep.</p>
+    {% endif %}
+    <p class="small">An easy day today, and no hard session tomorrow, is the safer choice.</p>
+    <form method="post" action="/events" class="actions">
+      <input type="hidden" name="form" value="drinks">
+      <input type="hidden" name="title" value="{{ 'Short sleep' if sleep and sleep.short else 'Elevated resting heart rate' }}">
+      <input type="hidden" name="date" value="{{ today }}">
+      <input type="hidden" name="severity" value="1">
+      <button type="submit" class="small">Make today easy</button>
+    </form>
+  </div>
+</div>
+{% endif %}

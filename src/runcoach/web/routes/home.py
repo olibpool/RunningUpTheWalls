@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse
 from runcoach import db
 from runcoach.config import ConfigNode, load_scheduling_config
 from runcoach.display import monday
+from runcoach.engine.readiness import resting_heart_rate_hint, sleep_hint
 from runcoach.engine.zones import zones_from_vdot
 from runcoach.web import stats
 from runcoach.web.deps import get_cfg, get_conn, render, today
@@ -36,7 +37,9 @@ def home(
     activities = db.activities(conn)
     weeks = stats.weekly(activities, monday(current), 12)
     athlete = db.get_athlete(conn)
-    resting = [c for c in db.checkins(conn, current - timedelta(days=27)) if c.resting_hr]
+    recent_checkins = db.checkins(conn, current - timedelta(days=27))
+    resting = [c for c in recent_checkins if c.resting_hr]
+    slept = [c for c in recent_checkins if c.sleep_hours is not None]
     return render(
         request,
         "home.html",
@@ -62,6 +65,10 @@ def home(
             "athlete": athlete,
             "zones": zones_from_vdot(athlete.vdot, typed.zones) if athlete else None,
             "resting": [(c.date, c.resting_hr) for c in resting],
+            "slept": [(c.date, c.sleep_hours) for c in slept],
+            "hint": resting_heart_rate_hint(recent_checkins, current, typed),
+            "sleep": sleep_hint(recent_checkins, current, typed),
+            "sleep_cfg": typed.readiness,
             "unmatched": sum(a.session_id is None for a in activities),
             "unrated": db.unrated_activities(
                 conn, datetime.now(timezone.utc) - timedelta(days=7), 5

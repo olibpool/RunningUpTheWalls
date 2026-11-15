@@ -13,6 +13,8 @@
 <div class="banner warning" role="status">{{ icon("alert") }}<div><p>{{ retest }}</p><p><a href="/settings">Update your paces in Settings</a></p></div></div>
 {% endif %}
 
+{% include "_readiness.html" %}
+
 {% if not plan %}
 <section class="panel onboarding" aria-labelledby="start-title">
   <h2 id="start-title">Get started</h2>
@@ -124,16 +126,24 @@
     {% endif %}
   </section>
 
-  {% if resting | length > 1 %}
-  <section class="panel" aria-labelledby="rhr-title">
+  {% if resting | length > 1 or slept | length > 1 %}
+  <section class="panel" aria-labelledby="recovery-title">
     <div class="panel-head">
-      <h2 id="rhr-title">Resting heart rate</h2>
+      <h2 id="recovery-title">Recovery</h2>
       <span class="muted">last 4 weeks</span>
     </div>
+    {% if resting | length > 1 %}
     <div class="spark-row">
-      <p class="figure">{{ resting[-1][1] }}<small> bpm</small></p>
+      <div><p class="eyebrow">Resting HR</p><p class="figure">{{ resting[-1][1] }}<small> bpm</small></p></div>
       {{ spark(resting, "bpm", "Resting heart rate over the last four weeks, from " ~ resting[0][1] ~ " to " ~ resting[-1][1] ~ " bpm") }}
     </div>
+    {% endif %}
+    {% if slept | length > 1 %}
+    <div class="spark-row">
+      <div><p class="eyebrow">Sleep</p><p class="figure">{{ "%.1f" | format(slept[-1][1]) }}<small> h</small></p></div>
+      {{ spark(slept, "h", "Sleep over the last four weeks, from " ~ slept[0][1] ~ " to " ~ slept[-1][1] ~ " hours") }}
+    </div>
+    {% endif %}
   </section>
   {% endif %}
 

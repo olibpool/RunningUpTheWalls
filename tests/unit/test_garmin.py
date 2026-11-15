@@ -24,6 +24,7 @@ class FakeGarmin:
         self.activities: list[dict[str, Any]] = []
         self.files: dict[str, bytes] = {}
         self.rhr: list[dict[str, Any]] = []
+        self.sleep: dict[str, int] = {}  # calendar date -> sleepTimeSeconds
         self.workouts: dict[str, dict[str, Any]] = {}
         self.scheduled: dict[str, str] = {}
         self.calls: list[str] = []
@@ -42,6 +43,10 @@ class FakeGarmin:
 
     def get_rhr_daily(self, start: str, end: str) -> list[dict[str, Any]]:
         return self.rhr
+
+    def get_sleep_data(self, cdate: str) -> dict[str, Any]:
+        self.calls.append(f"sleep {cdate}")
+        return {"dailySleepDTO": {"calendarDate": cdate, "sleepTimeSeconds": self.sleep.get(cdate)}}
 
     def upload_workout(self, workout_json: dict[str, Any] | list[Any] | str) -> dict[str, Any]:
         if self.fail_upload_after is not None and len(self.workouts) >= self.fail_upload_after:
@@ -184,7 +189,7 @@ def test_pull_stores_new_activities_once_matches_them_and_fills_resting_hr(
     ]
 
     report = _sync(conn, cfg, fake)
-    assert report["garmin"] == "ok: 1 activities added, 1 skipped, 1 resting HR days"
+    assert report["garmin"] == "ok: 1 activities added, 1 skipped, 1 resting HR days, 0 sleep nights"
     assert report["matching"].startswith("ok: 1 matched")
     (activity,) = db.activities(conn)
     assert activity.source == "garmin" and activity.external_id == "555"
@@ -227,3 +232,29 @@ def test_long_workout_names_are_cut_to_the_limit(name_max: int) -> None:
 
     session = Session(id=1, plan_id=1, **_run(TODAY).model_dump())
     assert len(to_garmin_workout(to_workout_spec(session, 12), "", name_max)["workoutName"]) == 10
+
+
+def test_sleep_fills_missing_nights_only_and_keeps_your_own(tmp_path) -> None:
+    from datetime import date
+
+    from runcoach import db
+    from runcoach.domain.models import Checkin
+    from runcoach.integrations.garmin import pull_sleep
+
+    conn = db.connect(tmp_path / "s.db")
+    cfg = load_scheduling_config(load_config(env={})).garmin
+    today = date(2026, 11, 15)
+    db.save_checkin(conn, Checkin(date=date(2026, 11, 14), sleep_hours=8.0))  # typed by you
+    fake = FakeGarmin()
+    fake.sleep = {"2026-11-15": 6 * 3600 + 900, "2026-11-14": 4 * 3600, "2026-11-10": 7 * 3600}
+
+    assert pull_sleep(conn, fake, cfg, today) == "2 sleep nights"  # first sync: full backfill
+    nights = {c.date: c.sleep_hours for c in db.checkins(conn)}
+    assert nights[date(2026, 11, 15)] == 6.25 and nights[date(2026, 11, 10)] == 7.0
+    assert nights[date(2026, 11, 14)] == 8.0  # never overwritten
+    assert len(fake.calls) == cfg.health_days_back  # every night but the one you typed
+
+    fake.calls.clear()
+    assert pull_sleep(conn, fake, cfg, today) == "0 sleep nights"
+    assert fake.calls == []  # later syncs only ask about missing recent nights
+    conn.close()

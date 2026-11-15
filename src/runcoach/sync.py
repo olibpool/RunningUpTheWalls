@@ -253,7 +253,8 @@ def _garmin_pull(
         return "skipped: Garmin off ([garmin] enabled)"
     api = client()
     activities = garmin.pull_activities(conn, api, cfg, today)
-    return f"ok: {activities}, {garmin.pull_resting_hr(conn, api, cfg.garmin, today)}"
+    rhr = garmin.pull_resting_hr(conn, api, cfg.garmin, today)
+    return f"ok: {activities}, {rhr}, {garmin.pull_sleep(conn, api, cfg.garmin, today)}"
 
 
 def _watch_push(

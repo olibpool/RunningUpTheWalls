@@ -576,3 +576,16 @@ def test_session_page_shows_fuel_and_pacing_for_the_race(client: TestClient, db_
     conn.close()
     page = client.get(f"/session/{race.id}").text
     assert "Fuel and pacing" in page and "Pacing:" in page
+
+
+def test_sleep_check_in_round_trips_and_a_short_night_suggests_an_easy_day(
+    client: TestClient, db_path: Path
+) -> None:
+    assert client.post("/checkin", data={"sleep_hours": "5.25"}).status_code == 200
+    assert client.post("/checkin", data={"sleep_hours": "5.3"}).status_code == 400  # quarters
+    conn = db.connect(db_path)
+    (checkin,) = db.checkins(conn)
+    conn.close()
+    assert checkin.sleep_hours == 5.25
+    for page in (client.get("/").text, client.get("/checkin").text):
+        assert "You slept 5.2 h last night" in page and "Make today easy" in page
