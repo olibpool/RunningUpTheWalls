@@ -156,3 +156,38 @@ estimated_5k_duration_min = 25
 [readiness]
 rhr_window_days = 28
 rhr_min_samples = 7
+
+# ---- Phase 2: ingestion and adaptation (unsourced starting points; tune from use) ----
+
+[default_rpe]                 # used when an activity has no RPE and matches no session
+run = 4.0
+climb = 5.5
+football = 6.5
+other = 4.0
+
+[matching]
+max_score = 0.6               # day offset (0 or 0.5) + relative duration difference
+
+[illness]
+niggle_days = 3
+ill_days = 14
+return_ramp = [0.7, 0.85]     # weekly multipliers on run load after the window, then 100%
+
+[retest]
+quality_runs = 3
+faster_by = 0.03              # each run this much faster than target, at or below planned RPE
+
+[heat_pace_penalty_pct]       # [apparent_temp_c, slowdown_fraction]
+points = [[15, 0.00], [20, 0.01], [25, 0.03], [28, 0.05], [32, 0.08], [35, 0.12]]
+quality_to_easy_above_c = 32
+suggest_rest_or_indoor_above_c = 35
+days_ahead = 3
+
+[weather]
+enabled = false               # set latitude and longitude in config/local.toml, then enable
+latitude = 0.0
+longitude = 0.0
+timeout_s = 10.0
+
+[inbox]
+path = "~/runcoach-inbox"

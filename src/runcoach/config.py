@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from runcoach.domain.models import Distance
+from runcoach.domain.models import Distance, Sport
 
 
 class ConfigNode(SimpleNamespace):
@@ -258,6 +258,58 @@ class TemplatesConfig(BaseModel):
     max_quality_share: float = Field(gt=0, le=1)
 
 
+class MatchingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    max_score: float = Field(gt=0)
+
+
+class IllnessConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    niggle_days: int = Field(gt=0)
+    ill_days: int = Field(gt=0)
+    return_ramp: list[float]
+
+
+class RetestConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    quality_runs: int = Field(gt=0)
+    faster_by: float = Field(gt=0, lt=1)
+
+
+class HeatConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    points: list[tuple[float, float]]
+    quality_to_easy_above_c: float
+    suggest_rest_or_indoor_above_c: float
+    days_ahead: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_points(self) -> HeatConfig:
+        temps = [t for t, _ in self.points]
+        if len(temps) < 2 or temps != sorted(temps):
+            raise ValueError("heat_pace_penalty_pct.points need 2+ entries in temperature order")
+        return self
+
+
+class WeatherConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    timeout_s: float = Field(gt=0)
+
+
+class InboxConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+
+
 class SchedulingConfig(BaseModel):
     """Typed view of the whole config; unknown sections or keys raise."""
 
@@ -283,6 +335,13 @@ class SchedulingConfig(BaseModel):
     minimal_plan: MinimalPlanConfig
     time_trial: TimeTrialConfig
     readiness: ReadinessConfig
+    default_rpe: dict[Sport, float]
+    matching: MatchingConfig
+    illness: IllnessConfig
+    retest: RetestConfig
+    heat_pace_penalty_pct: HeatConfig
+    weather: WeatherConfig
+    inbox: InboxConfig
 
 
 def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
