@@ -25,6 +25,7 @@ class CheckinForm(BaseModel):
     ill: bool = False
     fever: bool = False
     resting_hr: int | None = Field(default=None, gt=20, lt=150)
+    sleep_hours: float | None = Field(default=None, ge=0, le=16, multiple_of=0.25)
     notes: str | None = None
 
 

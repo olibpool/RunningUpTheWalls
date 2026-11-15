@@ -22,6 +22,10 @@
     <label>Weekly load ceiling (continuous mode, optional)
       <input type="number" name="max_weekly_load" min="1" step="1" value="{{ athlete.max_weekly_load or '' if athlete else '' }}">
     </label>
+    <label>Maximum heart rate (optional)
+      <input type="number" name="max_hr" min="120" max="230" inputmode="numeric" value="{{ athlete.max_hr or '' if athlete else '' }}">
+      <small class="muted">From a hard race finish or an all-out hill effort, not an age formula. Used to estimate fitness from your easy runs.</small>
+    </label>
     <div class="actions"><button type="submit">Save profile</button></div>
   </form>
   {% if athlete %}<p class="muted">VDOT from {{ athlete.vdot_source }}, updated {{ athlete.vdot_updated_at[:10] }}.</p>{% endif %}
@@ -60,10 +64,48 @@
     <tbody>{% for name, state in integrations %}<tr><th scope="row">{{ name }}</th><td>{{ state }}</td></tr>{% endfor %}</tbody>
   </table>
   <p>Calendar feed of your plan: <a href="/export/plan.ics" hx-boost="false">/export/plan.ics</a> (subscribe from a calendar app on your tailnet).</p>
-  <h3>Availability windows</h3>
-  <p>Weekdays: {% for a, b in availability.weekday %}{{ a }}–{{ b }}{% if not loop.last %}, {% endif %}{% endfor %}.
-     Weekends: {% for a, b in availability.weekend %}{{ a }}–{{ b }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
-  <p class="muted">Availability, location and the calendar address are set in <code>config/local.toml</code> (or <code>RUNCOACH_*</code> environment variables).</p>
 </section>
 </div>
+
+{% macro windows(pairs) %}{% for a, b in pairs %}{{ a }}-{{ b }}{% if not loop.last %}, {% endif %}{% endfor %}{% endmacro %}
+<section class="panel" aria-labelledby="prefs-title">
+  <h2 id="prefs-title">Schedule and connections</h2>
+  <form method="post" action="/settings/app" class="stack">
+    <fieldset class="stack">
+      <legend>When sessions can go</legend>
+      <label>Weekday windows <input name="weekday" value="{{ windows(typed.availability.weekday) }}" placeholder="06:30-08:00, 17:30-21:00"></label>
+      <label>Weekend windows <input name="weekend" value="{{ windows(typed.availability.weekend) }}" placeholder="07:00-13:00"></label>
+      <label>Minutes kept free around calendar events <input type="number" name="buffer_minutes" min="0" max="120" required value="{{ typed.availability.buffer_minutes }}"></label>
+    </fieldset>
+    <fieldset class="stack">
+      <legend>Google Calendar</legend>
+      <label>Secret iCal address ({{ "saved" if typed.gcal.ics_url else "not set" }}; leave blank to keep)
+        <input type="password" name="ics_url" autocomplete="off" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
+      </label>
+      <label><input type="checkbox" name="clear_ics_url"> Forget the saved address</label>
+      <label>Fixed events (comma-separated words) <input name="keywords_fixed" value="{{ typed.calendar_keywords.fixed | join(', ') }}"></label>
+      <label>Go easy the day after <input name="keywords_penalty" value="{{ typed.calendar_keywords.penalty | join(', ') }}"></label>
+      <label>No training <input name="keywords_block" value="{{ typed.calendar_keywords.block | join(', ') }}"></label>
+    </fieldset>
+    <fieldset class="stack">
+      <legend>Weather (heat adjustment)</legend>
+      <label><input type="checkbox" name="weather_enabled" {{ "checked" if typed.weather.enabled }}> Adjust paces for heat</label>
+      <label>Latitude <input type="number" name="latitude" step="0.01" min="-90" max="90" value="{{ typed.weather.latitude }}"></label>
+      <label>Longitude <input type="number" name="longitude" step="0.01" min="-180" max="180" value="{{ typed.weather.longitude }}"></label>
+    </fieldset>
+    <fieldset class="stack">
+      <legend>Garmin and watch</legend>
+      <label><input type="checkbox" name="garmin_enabled" {{ "checked" if typed.garmin.enabled }}> Pull activities and resting HR from Garmin Connect</label>
+      <label>Watch workouts
+        <select name="export_backend">
+          {% for value, label in [("none", "Off"), ("garmin", "Push to Garmin Connect each sync"), ("fit", "Download a .fit file per session")] %}
+          <option value="{{ value }}" {{ "selected" if typed.export.backend == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <p class="muted">Garmin login still runs once from the command line: <code>runcoach garmin login</code>.</p>
+    </fieldset>
+    <div class="actions"><button type="submit">Save settings</button></div>
+  </form>
+</section>
 {% endblock %}

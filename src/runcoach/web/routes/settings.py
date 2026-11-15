@@ -5,14 +5,14 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import HTMLResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 
 from runcoach import db
-from runcoach.config import ConfigNode, load_scheduling_config
+from runcoach.config import ConfigNode, load_scheduling_config, save_settings, with_overrides
 from runcoach.domain.models import DISTANCE_METRES, Athlete, Distance
 from runcoach.engine.time_trial import apply_time_trial_result
 from runcoach.sync import run_sync
@@ -29,11 +29,70 @@ class AthleteForm(BaseModel):
     runs_per_week: int = Field(ge=2, le=6)
     climbing_target_per_week: int = Field(ge=0, le=3)
     max_weekly_load: float | None = Field(default=None, gt=0)
+    max_hr: int | None = Field(default=None, ge=120, le=230)
 
 
 class TimeTrialForm(BaseModel):
     distance: Distance
     time: str
+
+
+def _windows(text: str) -> list[tuple[str, str]]:
+    """'06:30-08:00, 17:30-21:00' -> [('06:30', '08:00'), ('17:30', '21:00')]."""
+    windows = []
+    for part in filter(None, (p.strip() for p in text.split(","))):
+        start, sep, end = part.partition("-")
+        if not sep:
+            raise ValueError(f"'{part}' is not a window like 06:30-08:00")
+        times = [datetime.strptime(t.strip(), "%H:%M").strftime("%H:%M") for t in (start, end)]
+        if times[0] >= times[1]:
+            raise ValueError(f"'{part}' ends before it starts")
+        windows.append((times[0], times[1]))
+    return windows
+
+
+def _words(text: str) -> list[str]:
+    return [word.strip().lower() for word in text.split(",") if word.strip()]
+
+
+class AppSettingsForm(BaseModel):
+    weekday: Annotated[list[tuple[str, str]], BeforeValidator(_windows)] = []
+    weekend: Annotated[list[tuple[str, str]], BeforeValidator(_windows)] = []
+    buffer_minutes: int = Field(ge=0, le=120)
+    weather_enabled: bool = False
+    latitude: float = Field(default=0.0, ge=-90, le=90)
+    longitude: float = Field(default=0.0, ge=-180, le=180)
+    ics_url: str | None = Field(default=None, pattern=r"^https://", repr=False)
+    clear_ics_url: bool = False
+    keywords_fixed: Annotated[list[str], BeforeValidator(_words)] = []
+    keywords_penalty: Annotated[list[str], BeforeValidator(_words)] = []
+    keywords_block: Annotated[list[str], BeforeValidator(_words)] = []
+    garmin_enabled: bool = False
+    export_backend: Literal["none", "garmin", "fit"]
+
+    def overrides(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "availability": {
+                "weekday": self.weekday,
+                "weekend": self.weekend,
+                "buffer_minutes": self.buffer_minutes,
+            },
+            "weather": {
+                "enabled": self.weather_enabled,
+                "latitude": self.latitude,
+                "longitude": self.longitude,
+            },
+            "calendar_keywords": {
+                "fixed": self.keywords_fixed,
+                "penalty": self.keywords_penalty,
+                "block": self.keywords_block,
+            },
+            "garmin": {"enabled": self.garmin_enabled},
+            "export": {"backend": self.export_backend},
+        }
+        if self.clear_ics_url or self.ics_url:  # a blank field keeps the saved address
+            result["gcal"] = {"ics_url": "" if self.clear_ics_url else self.ics_url}
+        return result
 
 
 def _status(request: Request, conn: sqlite3.Connection) -> dict[str, Any]:
@@ -85,7 +144,7 @@ def _page(
                 }[typed.export.backend],
             ),
         ],
-        "availability": typed.availability,
+        "typed": typed,
         **_status(request, conn),
     }
     return render(request, "settings.html", context, status_code=status_code)
@@ -119,6 +178,26 @@ async def save_athlete(
     db.save_athlete(
         conn, Athlete(**form.model_dump(), vdot_source=source, vdot_updated_at=updated_at)
     )
+    return redirect(request, "/settings")
+
+
+@router.post("/settings/app", response_model=None)
+async def save_app_settings(
+    request: Request,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+) -> Response:
+    """Save availability, calendar, weather and Garmin settings; the CLI and sync read them too."""
+    form, errors = parse_form(AppSettingsForm, await request.form())
+    if form is None:
+        return _page(request, conn, cfg, errors, status_code=400)
+    update = form.overrides()
+    try:
+        load_scheduling_config(with_overrides(cfg, update))
+    except ValueError as exc:
+        return _page(request, conn, cfg, [str(exc)], status_code=400)
+    save_settings(update)
+    request.app.state.cfg = with_overrides(cfg, update)
     return redirect(request, "/settings")
 
 

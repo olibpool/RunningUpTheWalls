@@ -45,6 +45,9 @@
   <label>Resting heart rate (bpm)
     <input type="number" name="resting_hr" min="21" max="149" inputmode="numeric" value="{{ current.resting_hr if current and current.resting_hr else '' }}">
   </label>
+  <label>Sleep last night (hours)
+    <input type="number" name="sleep_hours" min="0" max="16" step="0.25" inputmode="decimal" value="{{ current.sleep_hours if current and current.sleep_hours is not none else '' }}">
+  </label>
   <label>Notes <input name="notes" value="{{ current.notes if current and current.notes else '' }}"></label>
   <div class="actions"><button type="submit">Save check-in</button></div>
 </form>

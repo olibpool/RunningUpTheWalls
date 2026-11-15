@@ -184,6 +184,35 @@ estimated_5k_duration_min = 25
 [readiness]
 rhr_window_days = 28
 rhr_min_samples = 7
+short_sleep_h = 6.0           # one night under this suggests an easier day
+low_sleep_avg_h = 6.5         # ... as does this average over the last few nights
+sleep_avg_nights = 3
+
+# After the race: one easy day per mile raced (a common rule of thumb), the first few as rest.
+[recovery]
+easy_days = { "5k" = 3, "10k" = 6, "half" = 13, "marathon" = 26 }
+rest_days = { "5k" = 1, "10k" = 1, "half" = 2, "marathon" = 3 }
+volume = [0.5, 0.7, 0.85]     # share of the pre-race peak km, week by week
+
+[fuel]
+long_run_min = 75             # carbs during runs from this long
+carbs_g_per_h = [30, 60]
+carb_load_days = { "half" = 1, "marathon" = 2 }
+carb_load_g_per_kg = [7, 10]
+first_km_slower_s = [5, 10]   # race pacing: start this much slower than target per km
+
+# Fitness from training: %HRR approximates %VO2 reserve (Swain & Leutholtz), applied to
+# Daniels' oxygen cost of running. Easy runs only; heat and hills bias it low.
+[fitness]
+window_days = 42
+min_runs = 4
+min_minutes = 20
+hrr_range = [0.5, 0.9]
+retest_gap_vdot = 2.0
+trend_weeks = 12
+
+[monotony]
+high = 2.0                    # Foster: mean / SD of daily load; above this is too uniform
 
 # ---- Phase 2: ingestion and adaptation (unsourced starting points; tune from use) ----
 

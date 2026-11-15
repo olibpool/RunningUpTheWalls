@@ -514,11 +514,11 @@ def save_checkin(conn: sqlite3.Connection, checkin: Checkin) -> None:
     with conn:
         conn.execute(
             """
-            INSERT INTO checkin (date, feel, niggle, ill, fever, resting_hr, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO checkin (date, feel, niggle, ill, fever, resting_hr, sleep_hours, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(date) DO UPDATE SET feel = excluded.feel, niggle = excluded.niggle,
                 ill = excluded.ill, fever = excluded.fever, resting_hr = excluded.resting_hr,
-                notes = excluded.notes
+                sleep_hours = excluded.sleep_hours, notes = excluded.notes
             """,
             (
                 checkin.date.isoformat(),
@@ -527,6 +527,7 @@ def save_checkin(conn: sqlite3.Connection, checkin: Checkin) -> None:
                 int(checkin.ill),
                 int(checkin.fever),
                 checkin.resting_hr,
+                checkin.sleep_hours,
                 checkin.notes,
             ),
         )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tomllib
 from pathlib import Path
@@ -190,6 +191,41 @@ class RaceConfig(BaseModel):
     week_max_runs: int = Field(ge=0)
 
 
+class RecoveryConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    easy_days: dict[Distance, int]
+    rest_days: dict[Distance, int]
+    volume: list[float] = Field(min_length=1)
+
+
+class FuelConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    long_run_min: int = Field(gt=0)
+    carbs_g_per_h: tuple[int, int]
+    carb_load_days: dict[Distance, int]
+    carb_load_g_per_kg: tuple[int, int]
+    first_km_slower_s: tuple[int, int]
+
+
+class FitnessConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    window_days: int = Field(gt=0)
+    min_runs: int = Field(gt=0)
+    min_minutes: int = Field(gt=0)
+    hrr_range: tuple[float, float]
+    retest_gap_vdot: float = Field(gt=0)
+    trend_weeks: int = Field(gt=0)
+
+
+class MonotonyConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    high: float = Field(gt=0)
+
+
 class TimeTrialConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -206,6 +242,9 @@ class ReadinessConfig(BaseModel):
 
     rhr_window_days: int = Field(gt=0)
     rhr_min_samples: int = Field(gt=0)
+    short_sleep_h: float = Field(gt=0)
+    low_sleep_avg_h: float = Field(gt=0)
+    sleep_avg_nights: int = Field(gt=0)
 
     @model_validator(mode="after")
     def validate_sample_count(self) -> ReadinessConfig:
@@ -403,6 +442,10 @@ class SchedulingConfig(BaseModel):
     minimal_plan: MinimalPlanConfig
     time_trial: TimeTrialConfig
     race: RaceConfig
+    recovery: RecoveryConfig
+    fuel: FuelConfig
+    fitness: FitnessConfig
+    monotony: MonotonyConfig
     readiness: ReadinessConfig
     default_rpe: dict[Sport, float]
     matching: MatchingConfig
@@ -496,6 +539,41 @@ def _to_mapping(value: object) -> object:
     return value
 
 
+SETTINGS_PATH = Path("~/.config/runcoach/settings.json")  # written by the in-app settings page
+
+
+def read_settings(path: Path | None = None) -> dict[str, Any]:
+    """Overrides saved from the settings page; empty when none were saved."""
+    file = (path or SETTINGS_PATH).expanduser()
+    if not file.exists():
+        return {}
+    data = json.loads(file.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{file} must hold a JSON object")
+    return data
+
+
+def save_settings(update: dict[str, Any], path: Path | None = None) -> dict[str, Any]:
+    """Merge update into the saved overrides and write them atomically; returns the result."""
+    file = (path or SETTINGS_PATH).expanduser()
+    merged = _merge(read_settings(file), update)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    tmp = file.with_suffix(".tmp")
+    tmp.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+    tmp.chmod(0o600)  # holds the calendar's secret address
+    tmp.replace(file)
+    return merged
+
+
+def with_overrides(config: ConfigNode, overrides: dict[str, Any]) -> ConfigNode:
+    """A copy of config with overrides merged on top."""
+    data = _to_mapping(config)
+    assert isinstance(data, dict)
+    result = ConfigNode.from_mapping(_merge(data, overrides))
+    assert isinstance(result, ConfigNode)
+    return result
+
+
 def load_scheduling_config(config: ConfigNode) -> SchedulingConfig:
     """Validate the typed multi-sport scheduling configuration."""
     data = _to_mapping(config)
@@ -508,7 +586,9 @@ def load_config(
     defaults_path: Path | str | None = None,
     local_path: Path | str | None = None,
     env: dict[str, str] | None = None,
+    settings_path: Path | None = None,
 ) -> ConfigNode:
+    """defaults.toml, then local.toml, then RUNCOACH_* env, then the settings page's saves."""
     base_dir = Path(__file__).resolve().parents[2]
     defaults_file = Path(defaults_path) if defaults_path else base_dir / "config" / "defaults.toml"
     local_file = Path(local_path) if local_path else base_dir / "config" / "local.toml"
@@ -518,6 +598,7 @@ def load_config(
     local_cfg = _load_toml(local_file)
     config = _merge(config, local_cfg)
     config = _apply_env_overrides(config, env_map)
+    config = _merge(config, read_settings(settings_path))
     result = ConfigNode.from_mapping(config)
     assert isinstance(result, ConfigNode)
     return result

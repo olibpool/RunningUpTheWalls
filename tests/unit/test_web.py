@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from runcoach import db
-from runcoach.config import load_config
+from runcoach import config, db
+from runcoach.config import load_config, load_scheduling_config
 from runcoach.engine.plan import PlanGenerationResult
 from runcoach.engine.safety import Violation
 from runcoach.web.app import create_app
@@ -54,7 +54,7 @@ def _save_plan(client: TestClient) -> str:
 def test_health_reports_the_migrated_schema(client: TestClient) -> None:
     payload = client.get("/healthz").json()
     assert payload["status"] == "ok"
-    assert payload["db_version"] == 4
+    assert payload["db_version"] == 5
 
 
 def test_empty_week_offers_a_plan(client: TestClient) -> None:
@@ -486,6 +486,43 @@ def test_garmin_watch_pieces_fit_download_scoring_and_prefill(
     # Recorded runs fill in the weekly distance on a new plan.
     assert 'name="current_weekly_km" value=""' not in client.get("/plan/new").text
     conn.close()
+
+
+def test_app_settings_save_and_reload(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    saved = tmp_path / "settings.json"
+    monkeypatch.setattr(config, "SETTINGS_PATH", saved)
+    form = {
+        "weekday": "6:30-08:00, 18:00-20:00",
+        "weekend": "",
+        "buffer_minutes": "15",
+        "weather_enabled": "on",
+        "latitude": "51.5",
+        "longitude": "-0.12",
+        "ics_url": "https://example.com/secret.ics",
+        "keywords_fixed": "Football, Netball",
+        "export_backend": "fit",
+    }
+    assert client.post("/settings/app", data=form, follow_redirects=False).status_code == 303
+    page = client.get("/settings").text
+    assert "06:30-08:00, 18:00-20:00" in page and "football, netball" in page
+    assert "secret.ics" not in page  # the secret is never echoed back
+
+    # A blank address keeps the saved one; the CLI and sync see the saves through load_config.
+    assert client.post("/settings/app", data={**form, "ics_url": ""}).status_code == 200
+    typed = load_scheduling_config(load_config(local_path=tmp_path / "none.toml", env={}))
+    assert typed.gcal.ics_url == "https://example.com/secret.ics"
+    assert typed.availability.weekday == [("06:30", "08:00"), ("18:00", "20:00")]
+    assert typed.availability.weekend == [] and typed.weather.enabled
+    assert typed.export.backend == "fit" and not typed.garmin.enabled
+
+    bad = client.post("/settings/app", data={**form, "weekday": "09:00-08:00"})
+    assert bad.status_code == 400 and "ends before it starts" in bad.text
+    assert config.read_settings(saved)["availability"]["weekday"] == [["06:30", "08:00"], ["18:00", "20:00"]]
+
+    client.post("/settings/app", data={**form, "clear_ics_url": "on"})
+    assert config.read_settings(saved)["gcal"]["ics_url"] == ""
 
 
 def test_settings_reports_garmin_and_watch_status(client: TestClient) -> None:

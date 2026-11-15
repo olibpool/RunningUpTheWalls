@@ -60,6 +60,7 @@ class Athlete(BaseModel):
     climbing_target_per_week: int = 2
     max_weekly_load: float | None = None
     timezone: str = "Europe/London"
+    max_hr: int | None = None  # for the fitness estimate from training heart rate
 
 
 class PlanInput(BaseModel):
@@ -189,6 +190,7 @@ class Checkin(BaseModel):
     ill: bool = False
     fever: bool = False  # fever or chest symptoms: rest, not easy running
     resting_hr: int | None = None
+    sleep_hours: float | None = None  # the night before this date
     notes: str | None = None
 
 

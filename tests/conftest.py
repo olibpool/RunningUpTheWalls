@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 from hypothesis import settings
+
+from runcoach import config
+
+# Set before test modules import, so module-level configs never read the developer's own saves.
+config.SETTINGS_PATH = Path(__file__).parent / "no-settings.json"
 
 # Pick with HYPOTHESIS_PROFILE=ci|pi; tests without their own max_examples use these counts.
 settings.register_profile("dev", max_examples=25, deadline=None)
