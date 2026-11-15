@@ -218,7 +218,7 @@ def test_compose_week_reduces_runs_to_combined_leg_load_cap(tmp_path) -> None:
         sport="run",
         kind="easy",
         title="Easy run",
-        steps=[Step(kind="steady", duration_s=6000, distance_m=15000)],
+        steps=[Step(kind="steady", duration_s=12000)],
         duration_min=200,
         distance_m=20000,
         rpe=4.0,
@@ -240,8 +240,8 @@ def test_compose_week_reduces_runs_to_combined_leg_load_cap(tmp_path) -> None:
     assert result.allowed_leg_load == 1100.0
     assert result.actual_leg_load == 1098.0
     assert scaled.duration_min == 126
-    assert scaled.distance_m == 12650
-    assert scaled.steps[0].duration_s == 3795
+    assert scaled.distance_m == 12600
+    assert scaled.steps[0].duration_s == 126 * 60  # whole minutes
     assert scaled.leg_load == 504.0
     assert "reduced to 63%" in scaled.reason
     assert not result.warnings

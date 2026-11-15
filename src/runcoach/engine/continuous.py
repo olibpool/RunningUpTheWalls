@@ -273,7 +273,7 @@ def _sessions_for_week(
     sessions: list[PlannedSession] = []
     long_minutes = 0
     long_reason = ""
-    strides = profile == "speed"
+    strides = True  # strides every week, whatever the block: leg speed at almost no load
     for kind, _title, rpe, target_load, reason in specifications:
         duration = max(1, round(target_load / (rpe * run_factor)))
         if kind == "long":

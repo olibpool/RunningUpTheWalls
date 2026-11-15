@@ -26,6 +26,16 @@ def velocity_at_vo2(vo2: float) -> float:
     return numerator / (2.0 * float(a))
 
 
+def race_time_s(distance_m: float, vdot: float) -> float:
+    """Predicted race time for a VDOT: the time whose VDOT equals it (bisection)."""
+    low, high = 60.0, 12 * 3600.0
+    for _ in range(60):
+        mid = (low + high) / 2
+        # A faster time means a higher VDOT, so a too-high VDOT means the guess is too fast.
+        low, high = (mid, high) if vdot_from_race(distance_m, mid) > vdot else (low, mid)
+    return (low + high) / 2
+
+
 def riegel_time(t1_s: float, d1_m: float, d2_m: float, exponent: float = 1.06) -> float:
     if d1_m <= 0:
         raise ValueError("d1_m must be positive")

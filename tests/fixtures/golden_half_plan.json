@@ -20,8 +20,8 @@
     "kind": "work",
     "duration_s": 900,
     "distance_m": null,
-    "pace_min_s_per_km": 260.83476968533756,
-    "pace_max_s_per_km": 260.83476968533756,
+    "pace_min_s_per_km": 256.02652564052966,
+    "pace_max_s_per_km": 256.02652564052966,
     "rpe": null,
     "repeats": null,
     "children": []
@@ -38,7 +38,7 @@
    }
   ],
   "duration_min": 35,
-  "distance_m": 7198,
+  "distance_m": 7263,
   "rpe": 6.0,
   "leg_load": 210.0,
   "finger_load": 0.0,
@@ -53,7 +53,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 2640,
+    "duration_s": 2520,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -62,10 +62,10 @@
     "children": []
    }
   ],
-  "duration_min": 44,
-  "distance_m": 8245,
+  "duration_min": 42,
+  "distance_m": 7870,
   "rpe": 3.0,
-  "leg_load": 132.0,
+  "leg_load": 126.0,
   "finger_load": 0.0,
   "reason": "Base block; Wednesday availability"
  },
@@ -74,86 +74,11 @@
   "start_time": "06:30",
   "sport": "run",
   "kind": "easy",
-  "title": "Easy run",
+  "title": "Easy run + strides",
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 2640,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 44,
-  "distance_m": 8245,
-  "rpe": 3.0,
-  "leg_load": 132.0,
-  "finger_load": 0.0,
-  "reason": "Base block; Friday availability"
- },
- {
-  "date": "2026-11-22",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 2940,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 49,
-  "distance_m": 9182,
-  "rpe": 4.0,
-  "leg_load": 196.0,
-  "finger_load": 0.0,
-  "reason": "Base block; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2026-11-23",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 2662,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 44,
-  "distance_m": 8313,
-  "rpe": 3.0,
-  "leg_load": 132.0,
-  "finger_load": 0.0,
-  "reason": "Base block; run volume reduced to 91% to respect the combined leg-load ceiling.; Monday availability"
- },
- {
-  "date": "2026-11-25",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "intervals",
-  "title": "Intervals",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 543,
+    "duration_s": 2520,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -168,33 +93,48 @@
     "pace_min_s_per_km": null,
     "pace_max_s_per_km": null,
     "rpe": null,
-    "repeats": 3,
+    "repeats": 6,
     "children": [
      {
       "kind": "work",
-      "duration_s": 163,
+      "duration_s": 20,
       "distance_m": null,
-      "pace_min_s_per_km": 236.6056714173424,
-      "pace_max_s_per_km": 236.6056714173424,
-      "rpe": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
       "repeats": null,
       "children": []
      },
      {
       "kind": "recover",
-      "duration_s": 163,
+      "duration_s": 40,
       "distance_m": null,
-      "pace_min_s_per_km": 301.0466006895854,
-      "pace_max_s_per_km": 339.3496150826357,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
       "rpe": null,
       "repeats": null,
       "children": []
      }
     ]
-   },
+   }
+  ],
+  "duration_min": 48,
+  "distance_m": 8411,
+  "rpe": 3.0,
+  "leg_load": 144.0,
+  "finger_load": 0.0,
+  "reason": "Base block; Friday availability"
+ },
+ {
+  "date": "2026-11-22",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
    {
-    "kind": "cooldown",
-    "duration_s": 543,
+    "kind": "steady",
+    "duration_s": 3180,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -203,15 +143,15 @@
     "children": []
    }
   ],
-  "duration_min": 34,
-  "distance_m": 6986,
-  "rpe": 8.0,
-  "leg_load": 272.0,
+  "duration_min": 53,
+  "distance_m": 9931,
+  "rpe": 4.0,
+  "leg_load": 212.0,
   "finger_load": 0.0,
-  "reason": "Base block; run volume reduced to 91% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
+  "reason": "Base block; Sunday availability; weekend long-run slot"
  },
  {
-  "date": "2026-11-27",
+  "date": "2026-11-23",
   "start_time": "06:30",
   "sport": "run",
   "kind": "easy",
@@ -219,7 +159,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 2662,
+    "duration_s": 2760,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -228,12 +168,113 @@
     "children": []
    }
   ],
-  "duration_min": 44,
-  "distance_m": 8313,
+  "duration_min": 46,
+  "distance_m": 8620,
   "rpe": 3.0,
-  "leg_load": 132.0,
+  "leg_load": 138.0,
   "finger_load": 0.0,
-  "reason": "Base block; run volume reduced to 91% to respect the combined leg-load ceiling.; Friday availability"
+  "reason": "Base block; Monday availability"
+ },
+ {
+  "date": "2026-11-25",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "tempo",
+  "title": "Tempo",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "work",
+    "duration_s": 900,
+    "distance_m": null,
+    "pace_min_s_per_km": 256.02652564052966,
+    "pace_max_s_per_km": 256.02652564052966,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 35,
+  "distance_m": 7263,
+  "rpe": 6.0,
+  "leg_load": 210.0,
+  "finger_load": 0.0,
+  "reason": "Base block; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2026-11-27",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 2760,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 6,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 52,
+  "distance_m": 9160,
+  "rpe": 3.0,
+  "leg_load": 156.0,
+  "finger_load": 0.0,
+  "reason": "Base block; Friday availability"
  },
  {
   "date": "2026-11-29",
@@ -244,7 +285,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 2934,
+    "duration_s": 3480,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -253,12 +294,12 @@
     "children": []
    }
   ],
-  "duration_min": 48,
-  "distance_m": 9162,
+  "duration_min": 58,
+  "distance_m": 10868,
   "rpe": 4.0,
-  "leg_load": 192.0,
+  "leg_load": 232.0,
   "finger_load": 0.0,
-  "reason": "Base block; run volume reduced to 91% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
+  "reason": "Base block; Sunday availability; weekend long-run slot"
  },
  {
   "date": "2026-11-30",
@@ -269,7 +310,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3000,
+    "duration_s": 3060,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -278,10 +319,10 @@
     "children": []
    }
   ],
-  "duration_min": 50,
-  "distance_m": 9369,
+  "duration_min": 51,
+  "distance_m": 9557,
   "rpe": 3.0,
-  "leg_load": 150.0,
+  "leg_load": 153.0,
   "finger_load": 0.0,
   "reason": "Base block; Monday availability"
  },
@@ -306,8 +347,8 @@
     "kind": "work",
     "duration_s": 900,
     "distance_m": null,
-    "pace_min_s_per_km": 260.83476968533756,
-    "pace_max_s_per_km": 260.83476968533756,
+    "pace_min_s_per_km": 256.02652564052966,
+    "pace_max_s_per_km": 256.02652564052966,
     "rpe": null,
     "repeats": null,
     "children": []
@@ -324,7 +365,7 @@
    }
   ],
   "duration_min": 35,
-  "distance_m": 7198,
+  "distance_m": 7263,
   "rpe": 6.0,
   "leg_load": 210.0,
   "finger_load": 0.0,
@@ -335,86 +376,11 @@
   "start_time": "06:30",
   "sport": "run",
   "kind": "easy",
-  "title": "Easy run",
+  "title": "Easy run + strides",
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3000,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 50,
-  "distance_m": 9369,
-  "rpe": 3.0,
-  "leg_load": 150.0,
-  "finger_load": 0.0,
-  "reason": "Base block; Friday availability"
- },
- {
-  "date": "2026-12-06",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 3240,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 54,
-  "distance_m": 10119,
-  "rpe": 4.0,
-  "leg_load": 216.0,
-  "finger_load": 0.0,
-  "reason": "Base block; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2026-12-07",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 1778,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 29,
-  "distance_m": 5552,
-  "rpe": 3.0,
-  "leg_load": 87.0,
-  "finger_load": 0.0,
-  "reason": "Base block, cut-back week; run volume reduced to 85% to respect the combined leg-load ceiling.; Monday availability"
- },
- {
-  "date": "2026-12-09",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "intervals",
-  "title": "Intervals",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 508,
+    "duration_s": 3060,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -429,33 +395,48 @@
     "pace_min_s_per_km": null,
     "pace_max_s_per_km": null,
     "rpe": null,
-    "repeats": 3,
+    "repeats": 6,
     "children": [
      {
       "kind": "work",
-      "duration_s": 152,
+      "duration_s": 20,
       "distance_m": null,
-      "pace_min_s_per_km": 236.6056714173424,
-      "pace_max_s_per_km": 236.6056714173424,
-      "rpe": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
       "repeats": null,
       "children": []
      },
      {
       "kind": "recover",
-      "duration_s": 152,
+      "duration_s": 40,
       "distance_m": null,
-      "pace_min_s_per_km": 301.0466006895854,
-      "pace_max_s_per_km": 339.3496150826357,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
       "rpe": null,
       "repeats": null,
       "children": []
      }
     ]
-   },
+   }
+  ],
+  "duration_min": 57,
+  "distance_m": 10097,
+  "rpe": 3.0,
+  "leg_load": 171.0,
+  "finger_load": 0.0,
+  "reason": "Base block; Friday availability"
+ },
+ {
+  "date": "2026-12-06",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
    {
-    "kind": "cooldown",
-    "duration_s": 508,
+    "kind": "steady",
+    "duration_s": 3840,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -464,15 +445,15 @@
     "children": []
    }
   ],
-  "duration_min": 32,
-  "distance_m": 6533,
-  "rpe": 8.0,
+  "duration_min": 64,
+  "distance_m": 11993,
+  "rpe": 4.0,
   "leg_load": 256.0,
   "finger_load": 0.0,
-  "reason": "Base block, cut-back week; run volume reduced to 85% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
+  "reason": "Base block; Sunday availability; weekend long-run slot"
  },
  {
-  "date": "2026-12-11",
+  "date": "2026-12-07",
   "start_time": "06:30",
   "sport": "run",
   "kind": "easy",
@@ -480,7 +461,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 1778,
+    "duration_s": 2160,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -489,12 +470,113 @@
     "children": []
    }
   ],
-  "duration_min": 29,
-  "distance_m": 5552,
+  "duration_min": 36,
+  "distance_m": 6746,
   "rpe": 3.0,
-  "leg_load": 87.0,
+  "leg_load": 108.0,
   "finger_load": 0.0,
-  "reason": "Base block, cut-back week; run volume reduced to 85% to respect the combined leg-load ceiling.; Friday availability"
+  "reason": "Base block, cut-back week; run volume reduced to 93% to respect the combined leg-load ceiling.; Monday availability"
+ },
+ {
+  "date": "2026-12-09",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "tempo",
+  "title": "Tempo",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "work",
+    "duration_s": 900,
+    "distance_m": null,
+    "pace_min_s_per_km": 256.02652564052966,
+    "pace_max_s_per_km": 256.02652564052966,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 35,
+  "distance_m": 7263,
+  "rpe": 6.0,
+  "leg_load": 210.0,
+  "finger_load": 0.0,
+  "reason": "Base block, cut-back week; run volume reduced to 93% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2026-12-11",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 2160,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 5,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 41,
+  "distance_m": 7197,
+  "rpe": 3.0,
+  "leg_load": 123.0,
+  "finger_load": 0.0,
+  "reason": "Base block, cut-back week; run volume reduced to 93% to respect the combined leg-load ceiling.; Friday availability"
  },
  {
   "date": "2026-12-13",
@@ -505,7 +587,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 2184,
+    "duration_s": 2760,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -514,12 +596,12 @@
     "children": []
    }
   ],
-  "duration_min": 36,
-  "distance_m": 6822,
+  "duration_min": 46,
+  "distance_m": 8620,
   "rpe": 4.0,
-  "leg_load": 144.0,
+  "leg_load": 184.0,
   "finger_load": 0.0,
-  "reason": "Base block, cut-back week; run volume reduced to 85% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
+  "reason": "Base block, cut-back week; run volume reduced to 93% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
  },
  {
   "date": "2026-12-14",
@@ -530,7 +612,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3420,
+    "duration_s": 3360,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -539,10 +621,10 @@
     "children": []
    }
   ],
-  "duration_min": 57,
-  "distance_m": 10681,
+  "duration_min": 56,
+  "distance_m": 10494,
   "rpe": 3.0,
-  "leg_load": 171.0,
+  "leg_load": 168.0,
   "finger_load": 0.0,
   "reason": "Base block; Monday availability"
  },
@@ -567,8 +649,8 @@
     "kind": "work",
     "duration_s": 900,
     "distance_m": null,
-    "pace_min_s_per_km": 260.83476968533756,
-    "pace_max_s_per_km": 260.83476968533756,
+    "pace_min_s_per_km": 256.02652564052966,
+    "pace_max_s_per_km": 256.02652564052966,
     "rpe": null,
     "repeats": null,
     "children": []
@@ -585,7 +667,7 @@
    }
   ],
   "duration_min": 35,
-  "distance_m": 7198,
+  "distance_m": 7263,
   "rpe": 6.0,
   "leg_load": 210.0,
   "finger_load": 0.0,
@@ -596,86 +678,11 @@
   "start_time": "06:30",
   "sport": "run",
   "kind": "easy",
-  "title": "Easy run",
+  "title": "Easy run + strides",
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3420,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 57,
-  "distance_m": 10681,
-  "rpe": 3.0,
-  "leg_load": 171.0,
-  "finger_load": 0.0,
-  "reason": "Base block; Friday availability"
- },
- {
-  "date": "2026-12-20",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 3540,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 59,
-  "distance_m": 11056,
-  "rpe": 4.0,
-  "leg_load": 236.0,
-  "finger_load": 0.0,
-  "reason": "Base block; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2026-12-21",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 3511,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 58,
-  "distance_m": 10966,
-  "rpe": 3.0,
-  "leg_load": 174.0,
-  "finger_load": 0.0,
-  "reason": "Base block; run volume reduced to 91% to respect the combined leg-load ceiling.; Monday availability"
- },
- {
-  "date": "2026-12-23",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "intervals",
-  "title": "Intervals",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 549,
+    "duration_s": 3360,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -690,33 +697,48 @@
     "pace_min_s_per_km": null,
     "pace_max_s_per_km": null,
     "rpe": null,
-    "repeats": 3,
+    "repeats": 6,
     "children": [
      {
       "kind": "work",
-      "duration_s": 165,
+      "duration_s": 20,
       "distance_m": null,
-      "pace_min_s_per_km": 236.6056714173424,
-      "pace_max_s_per_km": 236.6056714173424,
-      "rpe": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
       "repeats": null,
       "children": []
      },
      {
       "kind": "recover",
-      "duration_s": 165,
+      "duration_s": 40,
       "distance_m": null,
-      "pace_min_s_per_km": 301.0466006895854,
-      "pace_max_s_per_km": 339.3496150826357,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
       "rpe": null,
       "repeats": null,
       "children": []
      }
     ]
-   },
+   }
+  ],
+  "duration_min": 62,
+  "distance_m": 11034,
+  "rpe": 3.0,
+  "leg_load": 186.0,
+  "finger_load": 0.0,
+  "reason": "Base block; Friday availability"
+ },
+ {
+  "date": "2026-12-20",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
    {
-    "kind": "cooldown",
-    "duration_s": 549,
+    "kind": "steady",
+    "duration_s": 4200,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -725,15 +747,15 @@
     "children": []
    }
   ],
-  "duration_min": 34,
-  "distance_m": 7055,
-  "rpe": 8.0,
-  "leg_load": 272.0,
+  "duration_min": 70,
+  "distance_m": 13117,
+  "rpe": 4.0,
+  "leg_load": 280.0,
   "finger_load": 0.0,
-  "reason": "Base block; run volume reduced to 91% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
+  "reason": "Base block; Sunday availability; weekend long-run slot"
  },
  {
-  "date": "2026-12-25",
+  "date": "2026-12-21",
   "start_time": "06:30",
   "sport": "run",
   "kind": "easy",
@@ -741,7 +763,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3511,
+    "duration_s": 3720,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -750,12 +772,113 @@
     "children": []
    }
   ],
-  "duration_min": 58,
-  "distance_m": 10966,
+  "duration_min": 62,
+  "distance_m": 11618,
   "rpe": 3.0,
-  "leg_load": 174.0,
+  "leg_load": 186.0,
   "finger_load": 0.0,
-  "reason": "Base block; run volume reduced to 91% to respect the combined leg-load ceiling.; Friday availability"
+  "reason": "Base block; Monday availability"
+ },
+ {
+  "date": "2026-12-23",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "tempo",
+  "title": "Tempo",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "work",
+    "duration_s": 900,
+    "distance_m": null,
+    "pace_min_s_per_km": 256.02652564052966,
+    "pace_max_s_per_km": 256.02652564052966,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 35,
+  "distance_m": 7263,
+  "rpe": 6.0,
+  "leg_load": 210.0,
+  "finger_load": 0.0,
+  "reason": "Base block; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2026-12-25",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3720,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 6,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 68,
+  "distance_m": 12159,
+  "rpe": 3.0,
+  "leg_load": 204.0,
+  "finger_load": 0.0,
+  "reason": "Base block; Friday availability"
  },
  {
   "date": "2026-12-27",
@@ -766,7 +889,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3566,
+    "duration_s": 4620,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -775,12 +898,12 @@
     "children": []
    }
   ],
-  "duration_min": 59,
-  "distance_m": 11137,
+  "duration_min": 77,
+  "distance_m": 14429,
   "rpe": 4.0,
-  "leg_load": 236.0,
+  "leg_load": 308.0,
   "finger_load": 0.0,
-  "reason": "Base block; run volume reduced to 91% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
+  "reason": "Base block; Sunday availability; weekend long-run slot"
  },
  {
   "date": "2026-12-28",
@@ -791,7 +914,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3900,
+    "duration_s": 3960,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -800,10 +923,10 @@
     "children": []
    }
   ],
-  "duration_min": 65,
-  "distance_m": 12180,
+  "duration_min": 66,
+  "distance_m": 12367,
   "rpe": 3.0,
-  "leg_load": 195.0,
+  "leg_load": 198.0,
   "finger_load": 0.0,
   "reason": "Build block; Monday availability"
  },
@@ -828,8 +951,8 @@
     "kind": "work",
     "duration_s": 900,
     "distance_m": null,
-    "pace_min_s_per_km": 260.83476968533756,
-    "pace_max_s_per_km": 260.83476968533756,
+    "pace_min_s_per_km": 256.02652564052966,
+    "pace_max_s_per_km": 256.02652564052966,
     "rpe": null,
     "repeats": null,
     "children": []
@@ -846,7 +969,7 @@
    }
   ],
   "duration_min": 35,
-  "distance_m": 7198,
+  "distance_m": 7263,
   "rpe": 6.0,
   "leg_load": 210.0,
   "finger_load": 0.0,
@@ -861,7 +984,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3900,
+    "duration_s": 3960,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -901,10 +1024,10 @@
     ]
    }
   ],
-  "duration_min": 71,
-  "distance_m": 12721,
+  "duration_min": 72,
+  "distance_m": 12908,
   "rpe": 3.0,
-  "leg_load": 213.0,
+  "leg_load": 216.0,
   "finger_load": 0.0,
   "reason": "Build block; Friday availability"
  },
@@ -917,7 +1040,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3960,
+    "duration_s": 4980,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -926,10 +1049,10 @@
     "children": []
    }
   ],
-  "duration_min": 66,
-  "distance_m": 12367,
+  "duration_min": 83,
+  "distance_m": 15553,
   "rpe": 4.0,
-  "leg_load": 264.0,
+  "leg_load": 332.0,
   "finger_load": 0.0,
   "reason": "Build block; Sunday availability; weekend long-run slot"
  },
@@ -942,224 +1065,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 2392,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 39,
-  "distance_m": 7472,
-  "rpe": 3.0,
-  "leg_load": 117.0,
-  "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 87% to respect the combined leg-load ceiling.; Monday availability"
- },
- {
-  "date": "2027-01-06",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "intervals",
-  "title": "Intervals",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 520,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 3,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 156,
-      "distance_m": null,
-      "pace_min_s_per_km": 236.6056714173424,
-      "pace_max_s_per_km": 236.6056714173424,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 156,
-      "distance_m": null,
-      "pace_min_s_per_km": 301.0466006895854,
-      "pace_max_s_per_km": 339.3496150826357,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   },
-   {
-    "kind": "cooldown",
-    "duration_s": 520,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 32,
-  "distance_m": 6688,
-  "rpe": 8.0,
-  "leg_load": 256.0,
-  "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 87% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
- },
- {
-  "date": "2027-01-08",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run + strides",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 2392,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 6,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 17,
-      "distance_m": null,
-      "pace_min_s_per_km": 221.88194424302054,
-      "pace_max_s_per_km": 221.88194424302054,
-      "rpe": 3.5,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 35,
-      "distance_m": null,
-      "pace_min_s_per_km": null,
-      "pace_max_s_per_km": null,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   }
-  ],
-  "duration_min": 45,
-  "distance_m": 7940,
-  "rpe": 3.0,
-  "leg_load": 135.0,
-  "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 87% to respect the combined leg-load ceiling.; Friday availability"
- },
- {
-  "date": "2027-01-10",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 2809,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 46,
-  "distance_m": 8771,
-  "rpe": 4.0,
-  "leg_load": 184.0,
-  "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 87% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2027-01-11",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4056,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 67,
-  "distance_m": 12666,
-  "rpe": 3.0,
-  "leg_load": 201.0,
-  "finger_load": 0.0,
-  "reason": "Build block; run volume reduced to 99% to respect the combined leg-load ceiling.; Monday availability"
- },
- {
-  "date": "2027-01-13",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "tempo",
-  "title": "Tempo",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 596,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "work",
-    "duration_s": 1253,
-    "distance_m": null,
-    "pace_min_s_per_km": 260.83476968533756,
-    "pace_max_s_per_km": 260.83476968533756,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "cooldown",
-    "duration_s": 596,
+    "duration_s": 2400,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -1169,1089 +1075,14 @@
    }
   ],
   "duration_min": 40,
-  "distance_m": 8527,
-  "rpe": 6.0,
-  "leg_load": 240.0,
-  "finger_load": 0.0,
-  "reason": "Build block; run volume reduced to 99% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
- },
- {
-  "date": "2027-01-15",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run + strides",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4056,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 6,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 20,
-      "distance_m": null,
-      "pace_min_s_per_km": 221.88194424302054,
-      "pace_max_s_per_km": 221.88194424302054,
-      "rpe": 3.5,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 40,
-      "distance_m": null,
-      "pace_min_s_per_km": null,
-      "pace_max_s_per_km": null,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   }
-  ],
-  "duration_min": 73,
-  "distance_m": 13204,
-  "rpe": 3.0,
-  "leg_load": 219.0,
-  "finger_load": 0.0,
-  "reason": "Build block; run volume reduced to 99% to respect the combined leg-load ceiling.; Friday availability"
- },
- {
-  "date": "2027-01-17",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4533,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 75,
-  "distance_m": 14156,
-  "rpe": 4.0,
-  "leg_load": 300.0,
-  "finger_load": 0.0,
-  "reason": "Build block; run volume reduced to 99% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2027-01-18",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 3727,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 62,
-  "distance_m": 11640,
-  "rpe": 3.0,
-  "leg_load": 186.0,
-  "finger_load": 0.0,
-  "reason": "Build block; run volume reduced to 89% to respect the combined leg-load ceiling.; Monday availability"
- },
- {
-  "date": "2027-01-20",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "intervals",
-  "title": "Intervals",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 532,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 4,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 213,
-      "distance_m": null,
-      "pace_min_s_per_km": 236.6056714173424,
-      "pace_max_s_per_km": 236.6056714173424,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 213,
-      "distance_m": null,
-      "pace_min_s_per_km": 301.0466006895854,
-      "pace_max_s_per_km": 339.3496150826357,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   },
-   {
-    "kind": "cooldown",
-    "duration_s": 532,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 46,
-  "distance_m": 9587,
-  "rpe": 8.0,
-  "leg_load": 368.0,
-  "finger_load": 0.0,
-  "reason": "Build block; run volume reduced to 89% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
- },
- {
-  "date": "2027-01-22",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run + strides",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 3727,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 6,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 18,
-      "distance_m": null,
-      "pace_min_s_per_km": 221.88194424302054,
-      "pace_max_s_per_km": 221.88194424302054,
-      "rpe": 3.5,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 35,
-      "distance_m": null,
-      "pace_min_s_per_km": null,
-      "pace_max_s_per_km": null,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   }
-  ],
-  "duration_min": 67,
-  "distance_m": 12120,
-  "rpe": 3.0,
-  "leg_load": 201.0,
-  "finger_load": 0.0,
-  "reason": "Build block; run volume reduced to 89% to respect the combined leg-load ceiling.; Friday availability"
- },
- {
-  "date": "2027-01-24",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4472,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 74,
-  "distance_m": 13968,
-  "rpe": 4.0,
-  "leg_load": 296.0,
-  "finger_load": 0.0,
-  "reason": "Build block; run volume reduced to 89% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2027-01-25",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4140,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 69,
-  "distance_m": 12929,
-  "rpe": 3.0,
-  "leg_load": 207.0,
-  "finger_load": 0.0,
-  "reason": "Build block; Monday availability"
- },
- {
-  "date": "2027-01-27",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "tempo",
-  "title": "Tempo",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 600,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "work",
-    "duration_s": 1680,
-    "distance_m": null,
-    "pace_min_s_per_km": 260.83476968533756,
-    "pace_max_s_per_km": 260.83476968533756,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "cooldown",
-    "duration_s": 600,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 48,
-  "distance_m": 10189,
-  "rpe": 6.0,
-  "leg_load": 288.0,
-  "finger_load": 0.0,
-  "reason": "Build block; Wednesday availability; spaced before the long run"
- },
- {
-  "date": "2027-01-29",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run + strides",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4140,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 6,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 20,
-      "distance_m": null,
-      "pace_min_s_per_km": 221.88194424302054,
-      "pace_max_s_per_km": 221.88194424302054,
-      "rpe": 3.5,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 40,
-      "distance_m": null,
-      "pace_min_s_per_km": null,
-      "pace_max_s_per_km": null,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   }
-  ],
-  "duration_min": 75,
-  "distance_m": 13470,
-  "rpe": 3.0,
-  "leg_load": 225.0,
-  "finger_load": 0.0,
-  "reason": "Build block; Friday availability"
- },
- {
-  "date": "2027-01-31",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 5040,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 84,
-  "distance_m": 15740,
-  "rpe": 4.0,
-  "leg_load": 336.0,
-  "finger_load": 0.0,
-  "reason": "Build block; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2027-02-01",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 2402,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 40,
-  "distance_m": 7500,
+  "distance_m": 7495,
   "rpe": 3.0,
   "leg_load": 120.0,
   "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 85% to respect the combined leg-load ceiling.; Monday availability"
+  "reason": "Build block, cut-back week; run volume reduced to 83% to respect the combined leg-load ceiling.; Monday availability"
  },
  {
-  "date": "2027-02-03",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "intervals",
-  "title": "Intervals",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 511,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 4,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 204,
-      "distance_m": null,
-      "pace_min_s_per_km": 236.6056714173424,
-      "pace_max_s_per_km": 236.6056714173424,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 204,
-      "distance_m": null,
-      "pace_min_s_per_km": 301.0466006895854,
-      "pace_max_s_per_km": 339.3496150826357,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   },
-   {
-    "kind": "cooldown",
-    "duration_s": 511,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 44,
-  "distance_m": 9200,
-  "rpe": 8.0,
-  "leg_load": 352.0,
-  "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 85% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
- },
- {
-  "date": "2027-02-05",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run + strides",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 2402,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 6,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 17,
-      "distance_m": null,
-      "pace_min_s_per_km": 221.88194424302054,
-      "pace_max_s_per_km": 221.88194424302054,
-      "rpe": 3.5,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 34,
-      "distance_m": null,
-      "pace_min_s_per_km": null,
-      "pace_max_s_per_km": null,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   }
-  ],
-  "duration_min": 45,
-  "distance_m": 7961,
-  "rpe": 3.0,
-  "leg_load": 135.0,
-  "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 85% to respect the combined leg-load ceiling.; Friday availability"
- },
- {
-  "date": "2027-02-07",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 3526,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 58,
-  "distance_m": 11011,
-  "rpe": 4.0,
-  "leg_load": 232.0,
-  "finger_load": 0.0,
-  "reason": "Build block, cut-back week; run volume reduced to 85% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2027-02-08",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4371,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 72,
-  "distance_m": 13651,
-  "rpe": 3.0,
-  "leg_load": 216.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; run volume reduced to 100% to respect the combined leg-load ceiling.; Monday availability"
- },
- {
-  "date": "2027-02-10",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "tempo",
-  "title": "Tempo",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 599,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "work",
-    "duration_s": 2036,
-    "distance_m": null,
-    "pace_min_s_per_km": 260.83476968533756,
-    "pace_max_s_per_km": 260.83476968533756,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "cooldown",
-    "duration_s": 599,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 53,
-  "distance_m": 11545,
-  "rpe": 6.0,
-  "leg_load": 318.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; run volume reduced to 100% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
- },
- {
-  "date": "2027-02-12",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run + strides",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4371,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 6,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 20,
-      "distance_m": null,
-      "pace_min_s_per_km": 221.88194424302054,
-      "pace_max_s_per_km": 221.88194424302054,
-      "rpe": 3.5,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 40,
-      "distance_m": null,
-      "pace_min_s_per_km": null,
-      "pace_max_s_per_km": null,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   }
-  ],
-  "duration_min": 78,
-  "distance_m": 14191,
-  "rpe": 3.0,
-  "leg_load": 234.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; run volume reduced to 100% to respect the combined leg-load ceiling.; Friday availability"
- },
- {
-  "date": "2027-02-14",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 5748,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 95,
-  "distance_m": 17952,
-  "rpe": 4.0,
-  "leg_load": 380.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; run volume reduced to 100% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2027-02-15",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 3402,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 56,
-  "distance_m": 10626,
-  "rpe": 3.0,
-  "leg_load": 168.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; run volume reduced to 85% to respect the combined leg-load ceiling.; Monday availability"
- },
- {
-  "date": "2027-02-17",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "intervals",
-  "title": "Intervals",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 508,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 6,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 254,
-      "distance_m": null,
-      "pace_min_s_per_km": 236.6056714173424,
-      "pace_max_s_per_km": 236.6056714173424,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 254,
-      "distance_m": null,
-      "pace_min_s_per_km": 301.0466006895854,
-      "pace_max_s_per_km": 339.3496150826357,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   },
-   {
-    "kind": "cooldown",
-    "duration_s": 508,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 67,
-  "distance_m": 14369,
-  "rpe": 8.0,
-  "leg_load": 536.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; run volume reduced to 85% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
- },
- {
-  "date": "2027-02-19",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run + strides",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 3402,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 6,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 17,
-      "distance_m": null,
-      "pace_min_s_per_km": 221.88194424302054,
-      "pace_max_s_per_km": 221.88194424302054,
-      "rpe": 3.5,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 34,
-      "distance_m": null,
-      "pace_min_s_per_km": null,
-      "pace_max_s_per_km": null,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   }
-  ],
-  "duration_min": 61,
-  "distance_m": 11084,
-  "rpe": 3.0,
-  "leg_load": 183.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; run volume reduced to 85% to respect the combined leg-load ceiling.; Friday availability"
- },
- {
-  "date": "2027-02-21",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 5485,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 91,
-  "distance_m": 17128,
-  "rpe": 4.0,
-  "leg_load": 364.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; run volume reduced to 85% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2027-02-22",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4140,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 69,
-  "distance_m": 12929,
-  "rpe": 3.0,
-  "leg_load": 207.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; Monday availability"
- },
- {
-  "date": "2027-02-24",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "tempo",
-  "title": "Tempo",
-  "steps": [
-   {
-    "kind": "warmup",
-    "duration_s": 600,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "work",
-    "duration_s": 2400,
-    "distance_m": null,
-    "pace_min_s_per_km": 260.83476968533756,
-    "pace_max_s_per_km": 260.83476968533756,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "cooldown",
-    "duration_s": 600,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 60,
-  "distance_m": 12949,
-  "rpe": 6.0,
-  "leg_load": 360.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; Wednesday availability; spaced before the long run"
- },
- {
-  "date": "2027-02-26",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run + strides",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4140,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   },
-   {
-    "kind": "repeat",
-    "duration_s": null,
-    "distance_m": null,
-    "pace_min_s_per_km": null,
-    "pace_max_s_per_km": null,
-    "rpe": null,
-    "repeats": 6,
-    "children": [
-     {
-      "kind": "work",
-      "duration_s": 20,
-      "distance_m": null,
-      "pace_min_s_per_km": 221.88194424302054,
-      "pace_max_s_per_km": 221.88194424302054,
-      "rpe": 3.5,
-      "repeats": null,
-      "children": []
-     },
-     {
-      "kind": "recover",
-      "duration_s": 40,
-      "distance_m": null,
-      "pace_min_s_per_km": null,
-      "pace_max_s_per_km": null,
-      "rpe": null,
-      "repeats": null,
-      "children": []
-     }
-    ]
-   }
-  ],
-  "duration_min": 75,
-  "distance_m": 13470,
-  "rpe": 3.0,
-  "leg_load": 225.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; Friday availability"
- },
- {
-  "date": "2027-02-28",
-  "start_time": "07:00",
-  "sport": "run",
-  "kind": "long",
-  "title": "Long run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 6120,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 102,
-  "distance_m": 19113,
-  "rpe": 4.0,
-  "leg_load": 408.0,
-  "finger_load": 0.0,
-  "reason": "Peak block; Sunday availability; weekend long-run slot"
- },
- {
-  "date": "2027-03-01",
-  "start_time": "06:30",
-  "sport": "run",
-  "kind": "easy",
-  "title": "Easy run",
-  "steps": [
-   {
-    "kind": "steady",
-    "duration_s": 4140,
-    "distance_m": null,
-    "pace_min_s_per_km": 301.0466006895854,
-    "pace_max_s_per_km": 339.3496150826357,
-    "rpe": null,
-    "repeats": null,
-    "children": []
-   }
-  ],
-  "duration_min": 69,
-  "distance_m": 12929,
-  "rpe": 3.0,
-  "leg_load": 207.0,
-  "finger_load": 0.0,
-  "reason": "Taper block; Monday availability"
- },
- {
-  "date": "2027-03-03",
+  "date": "2027-01-06",
   "start_time": "06:30",
   "sport": "run",
   "kind": "intervals",
@@ -2314,10 +1145,91 @@
   "rpe": 8.0,
   "leg_load": 304.0,
   "finger_load": 0.0,
-  "reason": "Taper block; Wednesday availability; spaced before the long run"
+  "reason": "Build block, cut-back week; run volume reduced to 83% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
  },
  {
-  "date": "2027-03-05",
+  "date": "2027-01-08",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 2400,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 5,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 45,
+  "distance_m": 7946,
+  "rpe": 3.0,
+  "leg_load": 135.0,
+  "finger_load": 0.0,
+  "reason": "Build block, cut-back week; run volume reduced to 83% to respect the combined leg-load ceiling.; Friday availability"
+ },
+ {
+  "date": "2027-01-10",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3060,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 51,
+  "distance_m": 9557,
+  "rpe": 4.0,
+  "leg_load": 204.0,
+  "finger_load": 0.0,
+  "reason": "Build block, cut-back week; run volume reduced to 83% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
+ },
+ {
+  "date": "2027-01-11",
   "start_time": "06:30",
   "sport": "run",
   "kind": "easy",
@@ -2339,6 +1251,1311 @@
   "rpe": 3.0,
   "leg_load": 207.0,
   "finger_load": 0.0,
+  "reason": "Build block; Monday availability"
+ },
+ {
+  "date": "2027-01-13",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "tempo",
+  "title": "Tempo",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 3,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 420,
+      "distance_m": null,
+      "pace_min_s_per_km": 256.02652564052966,
+      "pace_max_s_per_km": 256.02652564052966,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 84,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 45,
+  "distance_m": 8669,
+  "rpe": 6.0,
+  "leg_load": 270.0,
+  "finger_load": 0.0,
+  "reason": "Build block; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2027-01-15",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 4140,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 6,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 75,
+  "distance_m": 13470,
+  "rpe": 3.0,
+  "leg_load": 225.0,
+  "finger_load": 0.0,
+  "reason": "Build block; Friday availability"
+ },
+ {
+  "date": "2027-01-17",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 5160,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 86,
+  "distance_m": 16115,
+  "rpe": 4.0,
+  "leg_load": 344.0,
+  "finger_load": 0.0,
+  "reason": "Build block; Sunday availability; weekend long-run slot"
+ },
+ {
+  "date": "2027-01-18",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3780,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 63,
+  "distance_m": 11805,
+  "rpe": 3.0,
+  "leg_load": 189.0,
+  "finger_load": 0.0,
+  "reason": "Build block; run volume reduced to 97% to respect the combined leg-load ceiling.; Monday availability"
+ },
+ {
+  "date": "2027-01-20",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "intervals",
+  "title": "Intervals",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 4,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 240,
+      "distance_m": null,
+      "pace_min_s_per_km": 236.6056714173424,
+      "pace_max_s_per_km": 236.6056714173424,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 240,
+      "distance_m": null,
+      "pace_min_s_per_km": 301.0466006895854,
+      "pace_max_s_per_km": 339.3496150826357,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 52,
+  "distance_m": 10803,
+  "rpe": 8.0,
+  "leg_load": 416.0,
+  "finger_load": 0.0,
+  "reason": "Build block; run volume reduced to 97% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2027-01-22",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3780,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 6,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 69,
+  "distance_m": 12346,
+  "rpe": 3.0,
+  "leg_load": 207.0,
+  "finger_load": 0.0,
+  "reason": "Build block; run volume reduced to 97% to respect the combined leg-load ceiling.; Friday availability"
+ },
+ {
+  "date": "2027-01-24",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 4980,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 83,
+  "distance_m": 15553,
+  "rpe": 4.0,
+  "leg_load": 332.0,
+  "finger_load": 0.0,
+  "reason": "Build block; run volume reduced to 97% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
+ },
+ {
+  "date": "2027-01-25",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 4020,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 67,
+  "distance_m": 12555,
+  "rpe": 3.0,
+  "leg_load": 201.0,
+  "finger_load": 0.0,
+  "reason": "Build block; Monday availability"
+ },
+ {
+  "date": "2027-01-27",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "tempo",
+  "title": "Tempo",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 3,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 540,
+      "distance_m": null,
+      "pace_min_s_per_km": 256.02652564052966,
+      "pace_max_s_per_km": 256.02652564052966,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 108,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 52,
+  "distance_m": 10075,
+  "rpe": 6.0,
+  "leg_load": 312.0,
+  "finger_load": 0.0,
+  "reason": "Build block; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2027-01-29",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 4020,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 6,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 73,
+  "distance_m": 13096,
+  "rpe": 3.0,
+  "leg_load": 219.0,
+  "finger_load": 0.0,
+  "reason": "Build block; Friday availability"
+ },
+ {
+  "date": "2027-01-31",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 5340,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 89,
+  "distance_m": 16677,
+  "rpe": 4.0,
+  "leg_load": 356.0,
+  "finger_load": 0.0,
+  "reason": "Build block; Sunday availability; weekend long-run slot"
+ },
+ {
+  "date": "2027-02-01",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 2580,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 43,
+  "distance_m": 8058,
+  "rpe": 3.0,
+  "leg_load": 129.0,
+  "finger_load": 0.0,
+  "reason": "Build block, cut-back week; run volume reduced to 90% to respect the combined leg-load ceiling.; Monday availability"
+ },
+ {
+  "date": "2027-02-03",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "intervals",
+  "title": "Intervals",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 3,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 240,
+      "distance_m": null,
+      "pace_min_s_per_km": 236.6056714173424,
+      "pace_max_s_per_km": 236.6056714173424,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 240,
+      "distance_m": null,
+      "pace_min_s_per_km": 301.0466006895854,
+      "pace_max_s_per_km": 339.3496150826357,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 44,
+  "distance_m": 9039,
+  "rpe": 8.0,
+  "leg_load": 352.0,
+  "finger_load": 0.0,
+  "reason": "Build block, cut-back week; run volume reduced to 90% to respect the combined leg-load ceiling.; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2027-02-05",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 2580,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 5,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 48,
+  "distance_m": 8508,
+  "rpe": 3.0,
+  "leg_load": 144.0,
+  "finger_load": 0.0,
+  "reason": "Build block, cut-back week; run volume reduced to 90% to respect the combined leg-load ceiling.; Friday availability"
+ },
+ {
+  "date": "2027-02-07",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 60,
+  "distance_m": 11243,
+  "rpe": 4.0,
+  "leg_load": 240.0,
+  "finger_load": 0.0,
+  "reason": "Build block, cut-back week; run volume reduced to 90% to respect the combined leg-load ceiling.; Sunday availability; weekend long-run slot"
+ },
+ {
+  "date": "2027-02-08",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3960,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 66,
+  "distance_m": 12367,
+  "rpe": 3.0,
+  "leg_load": 198.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Monday availability"
+ },
+ {
+  "date": "2027-02-10",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "tempo",
+  "title": "Tempo",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 3,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 540,
+      "distance_m": null,
+      "pace_min_s_per_km": 256.02652564052966,
+      "pace_max_s_per_km": 256.02652564052966,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 108,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 52,
+  "distance_m": 10075,
+  "rpe": 6.0,
+  "leg_load": 312.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2027-02-12",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3960,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 6,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 72,
+  "distance_m": 12908,
+  "rpe": 3.0,
+  "leg_load": 216.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Friday availability"
+ },
+ {
+  "date": "2027-02-14",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 5520,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 92,
+  "distance_m": 17239,
+  "rpe": 4.0,
+  "leg_load": 368.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Sunday availability; weekend long-run slot"
+ },
+ {
+  "date": "2027-02-15",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3900,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 65,
+  "distance_m": 12180,
+  "rpe": 3.0,
+  "leg_load": 195.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Monday availability"
+ },
+ {
+  "date": "2027-02-17",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "tempo",
+  "title": "Tempo",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 3,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 540,
+      "distance_m": null,
+      "pace_min_s_per_km": 256.02652564052966,
+      "pace_max_s_per_km": 256.02652564052966,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 108,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 52,
+  "distance_m": 10075,
+  "rpe": 6.0,
+  "leg_load": 312.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2027-02-19",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3900,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 6,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 71,
+  "distance_m": 12721,
+  "rpe": 3.0,
+  "leg_load": 213.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Friday availability"
+ },
+ {
+  "date": "2027-02-21",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 5580,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 93,
+  "distance_m": 17427,
+  "rpe": 4.0,
+  "leg_load": 372.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Sunday availability; weekend long-run slot"
+ },
+ {
+  "date": "2027-02-22",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3840,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 64,
+  "distance_m": 11993,
+  "rpe": 3.0,
+  "leg_load": 192.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Monday availability"
+ },
+ {
+  "date": "2027-02-24",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "intervals",
+  "title": "Intervals",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 3,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 300,
+      "distance_m": null,
+      "pace_min_s_per_km": 236.6056714173424,
+      "pace_max_s_per_km": 236.6056714173424,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 300,
+      "distance_m": null,
+      "pace_min_s_per_km": 301.0466006895854,
+      "pace_max_s_per_km": 339.3496150826357,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 50,
+  "distance_m": 10362,
+  "rpe": 8.0,
+  "leg_load": 400.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2027-02-26",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3840,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 6,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 70,
+  "distance_m": 12533,
+  "rpe": 3.0,
+  "leg_load": 210.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Friday availability"
+ },
+ {
+  "date": "2027-02-28",
+  "start_time": "07:00",
+  "sport": "run",
+  "kind": "long",
+  "title": "Long run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 5640,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 94,
+  "distance_m": 17614,
+  "rpe": 4.0,
+  "leg_load": 376.0,
+  "finger_load": 0.0,
+  "reason": "Peak block; Sunday availability; weekend long-run slot"
+ },
+ {
+  "date": "2027-03-01",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3240,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 54,
+  "distance_m": 10119,
+  "rpe": 3.0,
+  "leg_load": 162.0,
+  "finger_load": 0.0,
+  "reason": "Taper block; Monday availability"
+ },
+ {
+  "date": "2027-03-03",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "tempo",
+  "title": "Tempo",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "work",
+    "duration_s": 900,
+    "distance_m": null,
+    "pace_min_s_per_km": 256.02652564052966,
+    "pace_max_s_per_km": 256.02652564052966,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "cooldown",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 35,
+  "distance_m": 7263,
+  "rpe": 6.0,
+  "leg_load": 210.0,
+  "finger_load": 0.0,
+  "reason": "Taper block; Wednesday availability; spaced before the long run"
+ },
+ {
+  "date": "2027-03-05",
+  "start_time": "06:30",
+  "sport": "run",
+  "kind": "easy",
+  "title": "Easy run + strides",
+  "steps": [
+   {
+    "kind": "steady",
+    "duration_s": 3240,
+    "distance_m": null,
+    "pace_min_s_per_km": 301.0466006895854,
+    "pace_max_s_per_km": 339.3496150826357,
+    "rpe": null,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 6,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
+   }
+  ],
+  "duration_min": 60,
+  "distance_m": 10660,
+  "rpe": 3.0,
+  "leg_load": 180.0,
+  "finger_load": 0.0,
   "reason": "Taper block; Friday availability"
  },
  {
@@ -2350,7 +2567,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 4140,
+    "duration_s": 4020,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -2359,10 +2576,10 @@
     "children": []
    }
   ],
-  "duration_min": 69,
-  "distance_m": 12929,
+  "duration_min": 67,
+  "distance_m": 12555,
   "rpe": 4.0,
-  "leg_load": 276.0,
+  "leg_load": 268.0,
   "finger_load": 0.0,
   "reason": "Taper block; Sunday availability; weekend long-run slot"
  },
@@ -2387,8 +2604,8 @@
     "kind": "work",
     "duration_s": 900,
     "distance_m": null,
-    "pace_min_s_per_km": 260.83476968533756,
-    "pace_max_s_per_km": 260.83476968533756,
+    "pace_min_s_per_km": 256.02652564052966,
+    "pace_max_s_per_km": 256.02652564052966,
     "rpe": null,
     "repeats": null,
     "children": []
@@ -2405,7 +2622,7 @@
    }
   ],
   "duration_min": 35,
-  "distance_m": 7198,
+  "distance_m": 7263,
   "rpe": 6.0,
   "leg_load": 210.0,
   "finger_load": 0.0,
@@ -2420,7 +2637,7 @@
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3120,
+    "duration_s": 1800,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
@@ -2429,10 +2646,10 @@
     "children": []
    }
   ],
-  "duration_min": 52,
-  "distance_m": 9744,
+  "duration_min": 30,
+  "distance_m": 5622,
   "rpe": 3.0,
-  "leg_load": 156.0,
+  "leg_load": 90.0,
   "finger_load": 0.0,
   "reason": "Taper block, race week; Thursday availability"
  },
@@ -2441,24 +2658,90 @@
   "start_time": "07:00",
   "sport": "run",
   "kind": "easy",
-  "title": "Easy run",
+  "title": "Easy run + strides",
   "steps": [
    {
     "kind": "steady",
-    "duration_s": 3120,
+    "duration_s": 1800,
     "distance_m": null,
     "pace_min_s_per_km": 301.0466006895854,
     "pace_max_s_per_km": 339.3496150826357,
     "rpe": null,
     "repeats": null,
     "children": []
+   },
+   {
+    "kind": "repeat",
+    "duration_s": null,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": null,
+    "repeats": 6,
+    "children": [
+     {
+      "kind": "work",
+      "duration_s": 20,
+      "distance_m": null,
+      "pace_min_s_per_km": 221.88194424302054,
+      "pace_max_s_per_km": 221.88194424302054,
+      "rpe": 3.5,
+      "repeats": null,
+      "children": []
+     },
+     {
+      "kind": "recover",
+      "duration_s": 40,
+      "distance_m": null,
+      "pace_min_s_per_km": null,
+      "pace_max_s_per_km": null,
+      "rpe": null,
+      "repeats": null,
+      "children": []
+     }
+    ]
    }
   ],
-  "duration_min": 52,
-  "distance_m": 9744,
+  "duration_min": 36,
+  "distance_m": 6162,
   "rpe": 3.0,
-  "leg_load": 156.0,
+  "leg_load": 108.0,
   "finger_load": 0.0,
   "reason": "Taper block, race week; Saturday availability"
+ },
+ {
+  "date": "2027-03-14",
+  "start_time": "09:00",
+  "sport": "run",
+  "kind": "race",
+  "title": "Race: half marathon",
+  "steps": [
+   {
+    "kind": "warmup",
+    "duration_s": 600,
+    "distance_m": null,
+    "pace_min_s_per_km": null,
+    "pace_max_s_per_km": null,
+    "rpe": 3.0,
+    "repeats": null,
+    "children": []
+   },
+   {
+    "kind": "work",
+    "duration_s": null,
+    "distance_m": 21097,
+    "pace_min_s_per_km": 261.1745745840641,
+    "pace_max_s_per_km": 261.1745745840641,
+    "rpe": 9.0,
+    "repeats": null,
+    "children": []
+   }
+  ],
+  "duration_min": 102,
+  "distance_m": 21097,
+  "rpe": 9.0,
+  "leg_load": 918.0,
+  "finger_load": 0.0,
+  "reason": "Race day. Your VDOT 49.8 predicts 1:31:50; start a little slower."
  }
 ]

@@ -64,10 +64,13 @@ def test_zones_are_ordered_within_published_bands_and_read_config() -> None:
     assert zones.marathon.min_s_per_km > zones.threshold.min_s_per_km
     assert zones.threshold.min_s_per_km > zones.interval.min_s_per_km
     assert zones.interval.min_s_per_km > zones.repetition.min_s_per_km
-    assert 230.0 < zones.interval.min_s_per_km < 245.0  # 3:50-4:05 per km
-    assert 255.0 < zones.threshold.min_s_per_km < 265.0  # 4:15-4:25 per km
+    # Daniels' VDOT 50 table: M 4:31, T 4:15, I 3:55, R 3:40 per km.
+    assert 266.0 < zones.marathon.min_s_per_km < 275.0  # 4:26-4:35
+    assert 250.0 < zones.threshold.min_s_per_km < 260.0  # 4:10-4:20
+    assert 230.0 < zones.interval.min_s_per_km < 240.0  # 3:50-4:00
+    assert 215.0 < zones.repetition.min_s_per_km < 226.0  # 3:35-3:46
 
-    faster = TYPED.zones.model_copy(update={"threshold": 0.88})
+    faster = TYPED.zones.model_copy(update={"threshold": 0.90})
     assert zones_from_vdot(50.0, faster).threshold.min_s_per_km < zones.threshold.min_s_per_km
 
 
@@ -104,8 +107,12 @@ def test_templates_build_structured_sessions_with_zone_paces() -> None:
         "tempo", WeekContext(MONDAY, quality_minutes("tempo", 1.0, TYPED)), zones, TYPED
     )
     assert [step.kind for step in early.steps] == ["warmup", "work", "cooldown"]
-    assert early.steps[1].duration_s == 15 * 60 and late.steps[1].duration_s == 40 * 60
+    assert early.steps[1].duration_s == 15 * 60
     assert early.steps[1].pace_min_s_per_km == zones.threshold.min_s_per_km
+    # 40 min of threshold is run as cruise intervals: 4 x 10 min with 2 min jogs.
+    cruise = late.steps[1]
+    assert cruise.kind == "repeat" and cruise.repeats == 4
+    assert [c.duration_s for c in cruise.children] == [10 * 60, 2 * 60]
 
     intervals = build_session(
         "intervals",
@@ -168,7 +175,7 @@ def test_infeasible_goals_explain_and_suggest_a_date() -> None:
         generate_race_plan(no_base, MONDAY, CFG)
 
 
-def test_race_plan_has_paced_steps_tapers_and_stops_before_race_day() -> None:
+def test_race_plan_has_paced_steps_tapers_and_ends_with_the_race() -> None:
     inp = PlanInput(
         distance="half",
         goal_date=date(2027, 3, 14),
@@ -181,7 +188,14 @@ def test_race_plan_has_paced_steps_tapers_and_stops_before_race_day() -> None:
 
     assert not result.violations
     assert min(s.date for s in result.sessions) >= date(2026, 11, 23)  # next Monday
-    assert max(s.date for s in result.sessions) < inp.goal_date
+    race = max(result.sessions, key=lambda s: s.date)
+    assert (race.date, race.kind, race.distance_m) == (inp.goal_date, "race", 21097)
+    assert 93 * 60 < race.duration_min * 60 < 105 * 60  # VDOT 49.8: about 1:33 plus warm-up
+    before = [s for s in result.sessions if s.kind != "race"]
+    assert max(s.date for s in before) < inp.goal_date
+    # The last days before the race are easy: no quality and no long run.
+    last_two = [s for s in before if s.date >= inp.goal_date - timedelta(days=2)]
+    assert all(s.kind in {"easy", "recovery"} for s in last_two)
     assert all(s.steps and s.distance_m for s in result.sessions)
     assert {s.kind for s in result.sessions} >= {"easy", "long", "tempo", "intervals"}
     weekly: dict[date, float] = {}
@@ -275,7 +289,7 @@ def test_two_run_weeks_keep_a_full_long_run() -> None:
     result = generate_race_plan_result(inp, MONDAY, CFG)
     assert not result.violations
     long_runs = [s for s in result.sessions if s.kind == "long"]
-    others = [s for s in result.sessions if s.kind != "long"]
+    others = [s for s in result.sessions if s.kind not in {"long", "race"}]
     assert max(s.duration_min or 0 for s in long_runs) > max(s.duration_min or 0 for s in others)
 
 
@@ -301,3 +315,45 @@ def test_race_plan_honours_drinks_and_holidays() -> None:
         for s in result.sessions
         if s.date in {date(2026, 12, 3), date(2026, 12, 4)} and s.kind in hard
     ]
+
+
+def test_race_prediction_matches_daniels_tables() -> None:
+    from runcoach.engine.vdot import race_time_s
+
+    assert abs(race_time_s(5000, 50.0) - (19 * 60 + 57)) < 5  # Daniels: VDOT 50 is a 19:57 5K
+    assert abs(vdot_from_race(21097, race_time_s(21097, 45.0)) - 45.0) < 0.01
+
+
+def test_trimming_cuts_whole_reps_and_minutes_like_a_coach() -> None:
+    from runcoach.engine.templates import scale_session
+
+    zones = zones_from_vdot(50.0, TYPED.zones)
+    reps = build_session("intervals", WeekContext(MONDAY, 70, progress=1.0), zones, TYPED)
+    trimmed = scale_session(reps, 0.6)
+    before, after = reps.steps[1], trimmed.steps[1]
+    assert after.children == before.children  # rep length and pace unchanged
+    assert after.repeats == round((before.repeats or 0) * 0.6)
+    assert all(s.duration_s is None or s.duration_s % 60 == 0 for s in trimmed.steps)
+    assert trimmed.leg_load < reps.leg_load and trimmed.duration_min < reps.duration_min
+
+
+def test_football_counts_as_a_hard_day_and_volume_follows_runs_per_week() -> None:
+    football = Commitment(
+        kind="fixed", sport="football", title="Football", weekday=1,
+        start_time="19:00", duration_min=60, rpe=7.0,
+    )  # fmt: skip
+    inp = PlanInput(
+        distance="10k", goal_date=date(2027, 3, 14), vdot=48, runs_per_week=5,
+        climbing_target_per_week=0, current_weekly_km=30,
+    )  # fmt: skip
+    result = generate_race_plan_result(inp, MONDAY, CFG, commitments=[football])
+    assert not result.violations
+    assert not any("relaxed" in w for w in result.warnings)  # 48 h between hard days held
+    weeks: dict[date, list[PlannedSession]] = {}
+    for s in result.sessions:
+        weeks.setdefault(s.date - timedelta(days=s.date.weekday()), []).append(s)
+    for sessions in weeks.values():
+        quality = [s for s in sessions if s.kind in {"tempo", "intervals"}]
+        assert len(quality) <= 1  # long run + quality + football = 3 hard days
+    peak_km = max(sum(s.distance_m or 0 for s in w if s.kind != "race") for w in weeks.values())
+    assert peak_km / 1000 <= 5 * TYPED.progression.max_weekly_km_per_run + 1

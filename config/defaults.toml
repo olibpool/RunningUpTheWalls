@@ -1,7 +1,9 @@
+# Fractions of VDOT; checked against Daniels' Running Formula VDOT tables (VDOT 50: E 5:00-5:38,
+# M 4:30, T 4:15, I 3:55, R 3:41 /km). T is about the pace held for an hour's race.
 [zones]
 easy = [0.62, 0.72]
-marathon = 0.80
-threshold = 0.86
+marathon = 0.82
+threshold = 0.88
 interval = 0.97
 repetition = 1.05
 
@@ -12,13 +14,16 @@ strides = 3.5
 long = 4.0
 tempo = 6.0
 intervals = 8.0
+long_mp = 5.0                 # long run finishing at marathon pace
+race = 9.0
 
 [progression]
 max_weekly_increase = 0.10
 cutback_every_n_weeks = 4
 cutback_factor = 0.80
 max_long_run_share = 0.35
-max_long_run_minutes = 195
+max_long_run_minutes = 180      # 3 h: longer adds injury risk faster than fitness
+max_weekly_km_per_run = 13      # peak km a week is at most this x runs a week: easy runs stay easy
 min_rest_days_per_week = 1
 
 [blocks]
@@ -44,26 +49,42 @@ marathon = [0.85, 0.7, 0.5]
 half = 70
 marathon = 90
 
-# Smallest peak weekly volume a goal needs; below it the goal is infeasible. Unsourced: review.
+# Smallest peak weekly volume a goal needs; below it the goal is infeasible. Starting points
+# from the peak weeks of common novice plans (e.g. Higdon, Daniels' first plans); tune from use.
 [min_peak_weekly_km]
-5k = 3.0
-10k = 6.0
-half = 12.7
-marathon = 25.3
+5k = 15.0
+10k = 20.0
+half = 30.0
+marathon = 45.0
 
 [templates]
 warmup_min = 10
 cooldown_min = 10
-tempo_work_min = [15, 40]       # threshold block, grows across build and peak
+tempo_work_min = [15, 40]       # threshold work, grows across build and peak
+tempo_continuous_max_min = 20   # longer threshold work is split into cruise intervals (Daniels)
+cruise_rep_max_min = 10
+cruise_recovery_s_per_5min = 60 # jog 1 min per 5 min of threshold work
+tempo_max_share_of_week_km = 0.10    # Daniels: T work at most 10% of weekly volume ...
+interval_max_share_of_week_km = 0.08 # ... and I work at most 8% (never below the shortest session)
+long_mp_finish_share = 0.3      # marathon peak: every other long run ends at marathon pace
+long_mp_finish_max_min = 40
 interval_repeats = [3, 6]
 interval_rep_min = [3, 5]
 strides_repeats = 6
 stride_s = 20
 stride_recovery_s = 40
 recovery_share_of_easy = 0.6
-long_share = [0.28, 0.33]       # long run share of weekly km, grows across build and peak
+long_share = [0.30, 0.34]       # long run share of weekly km, grows across build and peak
+easy_max_share_of_long = 0.8    # an easy run is at most this share of the long run
 min_easy_minutes = 20
 max_quality_share = 0.25       # cap on one quality session's share of weekly run time
+
+[race]
+start_time = "09:00"
+warmup_min = 10               # half and marathon start from a jog; shorter races from this warm-up
+easy_days_before = 2          # no quality or long run in the last two days
+week_easy_max_min = 30        # race-week runs are shakeouts
+week_max_runs = 3             # runs before the race in race week
 
 [load_factors]
 run_leg = 1.0
@@ -85,6 +106,7 @@ buffer_minutes = 30
 
 [scheduler]
 min_hours_between_hard_leg = 48
+max_hard_leg_days_per_week = 3  # long run + quality + football: football counts as a hard session
 relaxed_hours_between_hard_leg = 24
 min_hours_between_limit_climbs = 48
 min_hours_same_day_gap = 6

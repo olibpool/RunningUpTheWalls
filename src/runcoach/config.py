@@ -63,6 +63,7 @@ class SchedulerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     min_hours_between_hard_leg: int
+    max_hard_leg_days_per_week: int = Field(ge=1)
     relaxed_hours_between_hard_leg: int
     min_hours_between_limit_climbs: int
     min_hours_same_day_gap: int
@@ -97,6 +98,7 @@ class ProgressionConfig(BaseModel):
     cutback_factor: float
     max_long_run_share: float
     max_long_run_minutes: int
+    max_weekly_km_per_run: float = Field(gt=0)
     min_rest_days_per_week: int
 
 
@@ -175,6 +177,16 @@ class MinimalPlanConfig(BaseModel):
     stride_recovery_s: int = Field(gt=0)
 
 
+class RaceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_time: str
+    warmup_min: int = Field(ge=0)
+    easy_days_before: int = Field(ge=0)
+    week_easy_max_min: int = Field(gt=0)
+    week_max_runs: int = Field(ge=0)
+
+
 class TimeTrialConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -225,6 +237,8 @@ class RpeConfig(BaseModel):
     long: float = Field(gt=0, le=10)
     tempo: float = Field(gt=0, le=10)
     intervals: float = Field(gt=0, le=10)
+    long_mp: float = Field(gt=0, le=10)
+    race: float = Field(gt=0, le=10)
 
 
 class BlocksConfig(BaseModel):
@@ -247,6 +261,13 @@ class TemplatesConfig(BaseModel):
     warmup_min: int = Field(gt=0)
     cooldown_min: int = Field(gt=0)
     tempo_work_min: tuple[int, int]
+    tempo_continuous_max_min: int = Field(gt=0)
+    cruise_rep_max_min: int = Field(gt=0)
+    cruise_recovery_s_per_5min: int = Field(ge=0)
+    tempo_max_share_of_week_km: float = Field(gt=0, le=1)
+    interval_max_share_of_week_km: float = Field(gt=0, le=1)
+    long_mp_finish_share: float = Field(gt=0, lt=1)
+    long_mp_finish_max_min: int = Field(gt=0)
     interval_repeats: tuple[int, int]
     interval_rep_min: tuple[int, int]
     strides_repeats: int = Field(gt=0)
@@ -254,6 +275,7 @@ class TemplatesConfig(BaseModel):
     stride_recovery_s: int = Field(gt=0)
     recovery_share_of_easy: float = Field(gt=0, le=1)
     long_share: tuple[float, float]
+    easy_max_share_of_long: float = Field(gt=0, le=1)
     min_easy_minutes: int = Field(gt=0)
     max_quality_share: float = Field(gt=0, le=1)
 
@@ -375,6 +397,7 @@ class SchedulingConfig(BaseModel):
     return_ramp: ReturnRampConfig
     minimal_plan: MinimalPlanConfig
     time_trial: TimeTrialConfig
+    race: RaceConfig
     readiness: ReadinessConfig
     default_rpe: dict[Sport, float]
     matching: MatchingConfig

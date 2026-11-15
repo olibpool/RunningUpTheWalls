@@ -35,6 +35,7 @@ class _Slot:
             "tempo",
             "intervals",
             "time_trial",
+            "race",
         }
 
     @property
@@ -149,7 +150,12 @@ def _load_violations(
     if taper_start is not None:
         peak = max((loads.get(w, 0.0) for w in weeks if w < taper_start), default=0.0)
         for week in weeks:
-            if week >= taper_start and loads.get(week, 0.0) > peak + 1e-6:
+            # Exempt weeks include race week, whose load is mostly the race itself.
+            if (
+                week >= taper_start
+                and week not in exempt_weeks
+                and loads.get(week, 0.0) > peak + 1e-6
+            ):
                 violations.append(
                     Violation("taper-above-peak", f"Taper week of {week.isoformat()} exceeds peak.")
                 )

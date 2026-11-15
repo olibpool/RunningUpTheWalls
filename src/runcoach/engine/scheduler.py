@@ -5,9 +5,10 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from runcoach.config import SchedulingConfig
-from runcoach.domain.models import PlannedSession, Step
+from runcoach.domain.models import PlannedSession
 from runcoach.engine.events import DayConstraint
 from runcoach.engine.load import session_load
+from runcoach.engine.templates import scale_session
 
 
 @dataclass(frozen=True)
@@ -90,7 +91,9 @@ class _Attempt:
 
 
 _QUALITY_KINDS = {"tempo", "intervals", "time_trial"}
-_HARD_LEG_KINDS = {"football", "long", "tempo", "intervals", "time_trial"}
+_HARD_LEG_KINDS = {"football", "long", "tempo", "intervals", "time_trial", "race"}
+_VOLUME_RUN_KINDS = {"easy", "recovery", "long"}
+_PROTECTED_RUN_KINDS = {"time_trial", "race"}  # distance efforts are never shortened
 _CLIMB_KINDS = ("climb_power", "climb_volume", "climb_technique")
 
 
@@ -172,7 +175,9 @@ def _fixed_placement(instance: FixedInstance, tz: ZoneInfo) -> _Placement:
         fixed=instance,
         start=start,
         end=start + timedelta(minutes=instance.duration_min),
-        kind=instance.kind if instance.sport == "climb" else instance.sport,
+        kind=instance.kind
+        if instance.sport == "climb" or instance.kind == "race"
+        else instance.sport,
         sport=instance.sport,
         title=instance.title,
     )
@@ -695,7 +700,8 @@ def _fixed_conflict_warnings(
                 )
     for index, fixed in enumerate(fixed_placements):
         constraint = day_constraints.get(fixed.start.date())
-        if constraint is not None and constraint.max_intensity != "normal":
+        # A race sits on a day blocked for everything else, by design.
+        if constraint is not None and constraint.max_intensity != "normal" and fixed.kind != "race":
             warnings.append(
                 f"Fixed commitment {fixed.title} remains on a "
                 f"{constraint.max_intensity}-intensity day: {constraint.reason}."
@@ -867,19 +873,6 @@ def schedule_week(
     return ScheduleResult(placed=placed, dropped=dropped, warnings=warnings, relaxed=relaxed)
 
 
-def _scale_step(step: Step, factor: float) -> Step:
-    updates: dict[str, object] = {
-        "duration_s": max(1, round(step.duration_s * factor))
-        if step.duration_s is not None
-        else None,
-        "distance_m": max(1, round(step.distance_m * factor))
-        if step.distance_m is not None
-        else None,
-        "children": [_scale_step(child, factor) for child in step.children],
-    }
-    return step.model_copy(update=updates)
-
-
 def fixed_leg_load(instance: FixedInstance, cfg: SchedulingConfig) -> float:
     if instance.sport not in {"run", "football", "climb", "rest"} or instance.rpe is None:
         return 0.0
@@ -942,57 +935,59 @@ def compose_week(
         + credited_leg_load
     )
     run_load = sum(session.leg_load for session in combined_sessions if session.sport == "run")
-    protected_run_load = sum(
-        session.leg_load
-        for session in combined_sessions
-        if session.sport == "run" and session.kind == "time_trial"
-    )
-    scalable_run_load = run_load - protected_run_load
     available_run_load = max(0.0, allowed_load - non_run_load)
     reduction_floor = 1.0 - cfg.scheduler.max_run_volume_reduction
-    factor = 1.0
     warnings: list[str] = []
-    if run_load > available_run_load:
-        remaining_for_scalable = max(0.0, available_run_load - protected_run_load)
-        required_factor = (
-            remaining_for_scalable / scalable_run_load if scalable_run_load > 0 else 1.0
-        )
-        factor = max(reduction_floor, required_factor)
-        if protected_run_load + scalable_run_load * factor > available_run_load:
-            warnings.append(
-                "Combined leg-load cap remains exceeded after the maximum run-volume reduction."
-            )
 
-    scaled_sessions: list[PlannedSession] = []
-    for session in combined_sessions:
-        if session.sport != "run" or session.kind == "time_trial" or factor == 1.0:
-            scaled_sessions.append(session)
-            continue
-        duration = (
-            max(1, int(session.duration_min * factor)) if session.duration_min is not None else None
+    def scalable(session: PlannedSession) -> bool:
+        return session.sport == "run" and session.kind not in _PROTECTED_RUN_KINDS
+
+    def trimmed(volume: float, quality: float) -> list[PlannedSession]:
+        return [
+            scale_session(s, volume if s.kind in _VOLUME_RUN_KINDS else quality)
+            if scalable(s)
+            else s
+            for s in combined_sessions
+        ]
+
+    def run_load_of(sessions: list[PlannedSession]) -> float:
+        return sum(s.leg_load for s in sessions if s.sport == "run")
+
+    # A coach trims easy and long running first and cuts quality reps only if that isn't enough.
+    # Whole minutes and whole reps make each step approximate, hence the few passes.
+    volume_factor = quality_factor = 1.0
+    scaled_sessions = combined_sessions
+    for _ in range(12):
+        over = run_load_of(scaled_sessions) - available_run_load
+        if over <= 1e-6:
+            break
+        tier = _VOLUME_RUN_KINDS if volume_factor > reduction_floor else None
+        if tier is None and quality_factor <= reduction_floor:
+            break
+        pool = sum(
+            s.leg_load
+            for s in scaled_sessions
+            if scalable(s) and ((s.kind in _VOLUME_RUN_KINDS) == (tier is not None))
         )
-        distance = (
-            max(1, round(session.distance_m * factor)) if session.distance_m is not None else None
+        shrink = max(0.0, pool - over) / pool if pool else 0.0
+        if tier is not None:
+            volume_factor = max(reduction_floor, volume_factor * shrink)
+        else:
+            quality_factor = max(reduction_floor, quality_factor * shrink)
+        scaled_sessions = trimmed(volume_factor, quality_factor)
+    if run_load_of(scaled_sessions) > available_run_load + 1e-6 and run_load > available_run_load:
+        warnings.append(
+            "Combined leg-load cap remains exceeded after the maximum run-volume reduction."
         )
-        load_factor = (
-            duration / session.duration_min
-            if duration is not None and session.duration_min is not None
-            else factor
-        )
-        scaled_sessions.append(
-            session.model_copy(
-                update={
-                    "duration_min": duration,
-                    "distance_m": distance,
-                    "steps": [_scale_step(step, factor) for step in session.steps],
-                    "leg_load": session.leg_load * load_factor,
-                    "reason": (
-                        f"{session.reason}; run volume reduced to {factor:.0%} "
-                        "to respect the combined leg-load ceiling."
-                    ).strip("; "),
-                }
-            )
-        )
+    kept = run_load_of(scaled_sessions) / run_load if run_load else 1.0
+    if round(kept * 100) < 100:
+        note = f"run volume reduced to {kept:.0%} to respect the combined leg-load ceiling."
+        scaled_sessions = [
+            s.model_copy(update={"reason": f"{s.reason}; {note}".strip("; ")})
+            if s is not original
+            else s
+            for s, original in zip(scaled_sessions, combined_sessions)
+        ]
 
     actual_load = non_run_load + sum(
         session.leg_load for session in scaled_sessions if session.sport == "run"
