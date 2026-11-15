@@ -25,6 +25,7 @@ class FakeGarmin:
         self.files: dict[str, bytes] = {}
         self.rhr: list[dict[str, Any]] = []
         self.sleep: dict[str, int] = {}  # calendar date -> sleepTimeSeconds
+        self.sleep_calls: list[str] = []
         self.workouts: dict[str, dict[str, Any]] = {}
         self.scheduled: dict[str, str] = {}
         self.calls: list[str] = []
@@ -45,7 +46,7 @@ class FakeGarmin:
         return self.rhr
 
     def get_sleep_data(self, cdate: str) -> dict[str, Any]:
-        self.calls.append(f"sleep {cdate}")
+        self.sleep_calls.append(cdate)
         return {"dailySleepDTO": {"calendarDate": cdate, "sleepTimeSeconds": self.sleep.get(cdate)}}
 
     def upload_workout(self, workout_json: dict[str, Any] | list[Any] | str) -> dict[str, Any]:
@@ -189,7 +190,9 @@ def test_pull_stores_new_activities_once_matches_them_and_fills_resting_hr(
     ]
 
     report = _sync(conn, cfg, fake)
-    assert report["garmin"] == "ok: 1 activities added, 1 skipped, 1 resting HR days, 0 sleep nights"
+    assert (
+        report["garmin"] == "ok: 1 activities added, 1 skipped, 1 resting HR days, 0 sleep nights"
+    )
     assert report["matching"].startswith("ok: 1 matched")
     (activity,) = db.activities(conn)
     assert activity.source == "garmin" and activity.external_id == "555"
@@ -252,9 +255,9 @@ def test_sleep_fills_missing_nights_only_and_keeps_your_own(tmp_path) -> None:
     nights = {c.date: c.sleep_hours for c in db.checkins(conn)}
     assert nights[date(2026, 11, 15)] == 6.25 and nights[date(2026, 11, 10)] == 7.0
     assert nights[date(2026, 11, 14)] == 8.0  # never overwritten
-    assert len(fake.calls) == cfg.health_days_back  # every night but the one you typed
+    assert len(fake.sleep_calls) == cfg.health_days_back  # every night but the one you typed
 
-    fake.calls.clear()
+    fake.sleep_calls.clear()
     assert pull_sleep(conn, fake, cfg, today) == "0 sleep nights"
-    assert fake.calls == []  # later syncs only ask about missing recent nights
+    assert fake.sleep_calls == []  # later syncs only ask about missing recent nights
     conn.close()
