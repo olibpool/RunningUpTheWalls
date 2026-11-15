@@ -1,16 +1,24 @@
-<section class="day{% if day.date == today %} today{% endif %}" aria-labelledby="day-{{ day.date }}">
-  <h2 id="day-{{ day.date }}">{{ day.date.strftime("%a %d %b") }}{% if day.date == today %} <span class="badge">Today</span>{% endif %}</h2>
-  {% for note in day.notes %}<p class="note">{{ note }}</p>{% endfor %}
+{% from "_icons.html" import icon %}
+<section class="day{% if day.date == today %} today{% endif %}{% if day.date < today %} past{% endif %}" aria-labelledby="day-{{ day.date }}">
+  <h2 id="day-{{ day.date }}" class="date-head">
+    <span class="dow">{{ day.date.strftime("%a") }}</span>
+    <span class="dom">{{ day.date.day }}</span>
+    <span class="sr-only">{{ day.date.strftime("%B") }}</span>
+    {% if day.date == today %}<span class="pill accent">Today</span>{% endif %}
+  </h2>
+  {% for note in day.notes %}<p class="note">{{ icon("alert") }}{{ note }}</p>{% endfor %}
   {% for f in day.fixed %}
   <article class="card fixed sport-{{ f.sport or 'other' }}">
     <header>
-      <span class="time">{{ f.start_time or "" }}</span>
-      <span class="title">{{ f.title }}</span>
+      <span class="sport-icon">{{ icon(f.sport or "other") }}</span>
+      <div class="card-title">
+        <span class="title">{{ f.title }}</span>
+        <span class="time">{{ f.start_time or "" }}{% if f.duration_min %} · {{ f.duration_min }} min{% endif %}{% if f.rpe %} · RPE {{ f.rpe }}{% endif %}</span>
+      </div>
       <span class="badge">fixed</span>
     </header>
-    <p class="meta">{% if f.duration_min %}{{ f.duration_min }} min{% endif %}{% if f.rpe %} · RPE {{ f.rpe }}{% endif %}</p>
   </article>
   {% endfor %}
   {% for s in day.sessions %}{% include "_session_card.html" %}{% endfor %}
-  {% if not day.sessions and not day.fixed %}<p class="rest">Rest</p>{% endif %}
+  {% if not day.sessions and not day.fixed %}<p class="rest">{{ icon("rest") }} Rest</p>{% endif %}
 </section>

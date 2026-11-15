@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, timedelta
 from pathlib import Path
@@ -70,6 +71,7 @@ def test_home_guides_a_new_user_then_summarises_the_plan(client: TestClient) -> 
     page = client.get("/").text
     assert "Get started" not in page
     assert "weeks to go" in page
+    assert 'id="week-stats"' in page and "Your paces" in page and "Weekly running" in page
 
 
 def test_guide_is_served_and_linked_from_the_nav(client: TestClient) -> None:
@@ -164,8 +166,12 @@ def test_session_detail_done_and_skip(client: TestClient, db_path: Path) -> None
     assert card.status_code == 200
     assert f'id="session-{first.id}"' in card.text and "done" in card.text
     assert "<html" not in card.text  # a fragment for htmx to swap
+    assert 'id="week-stats" class="week-stats" hx-swap-oob="true"' in card.text
+    assert json.loads(card.headers["HX-Trigger"])["toast"]
 
-    skipped = client.post(f"/session/{second.id}/skip", follow_redirects=False)
+    # A boosted form wants the whole page, so it gets a plain redirect to follow.
+    boosted = {"HX-Request": "true", "HX-Boosted": "true"}
+    skipped = client.post(f"/session/{second.id}/skip", headers=boosted, follow_redirects=False)
     assert skipped.status_code == 303
 
     conn = db.connect(db_path)

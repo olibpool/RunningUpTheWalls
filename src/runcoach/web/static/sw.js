@@ -1,7 +1,7 @@
 // Coachal service worker: static assets cache-first; pages network-first so plan data is
 // never stale, falling back to the last week page seen when the network is down.
-const CACHE = "coachal-v1";
-const SHELL = ["/static/app.css", "/static/vendor/htmx.min.js", "/static/icon-192.png"];
+const CACHE = "coachal-v2";
+const SHELL = ["/static/app.css", "/static/app.js", "/static/vendor/htmx.min.js", "/static/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));

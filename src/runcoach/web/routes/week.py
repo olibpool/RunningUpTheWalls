@@ -13,7 +13,9 @@ from runcoach.config import ConfigNode
 from runcoach.display import monday
 from runcoach.domain.models import Session
 from runcoach.engine.events import CommitmentOccurrence, day_constraints, expand_commitments
+from runcoach.ingest.matcher import local_day
 from runcoach.web.deps import get_cfg, get_conn, render, today
+from runcoach.web.stats import WeekProgress, week_progress
 
 router = APIRouter()
 
@@ -50,6 +52,15 @@ def build_week(
     return days, warnings
 
 
+def week_stats(conn: sqlite3.Connection, start: date) -> WeekProgress:
+    """Sessions done and run km against plan for the week starting `start`."""
+    plan = db.active_plan(conn)
+    end = start + timedelta(days=7)
+    sessions = db.plan_sessions(conn, plan.id, start, end) if plan and plan.id else []
+    done = [a for a in db.activities(conn) if start <= local_day(a.started_at) < end]
+    return week_progress(sessions, done)
+
+
 @router.get("/week", response_class=HTMLResponse)
 def week(
     request: Request,
@@ -70,6 +81,7 @@ def week(
             "warnings": warnings,
             "today": current,
             "week_start": week_start,
+            "progress": week_stats(conn, week_start),
             "previous": week_start - timedelta(days=7),
             "next": week_start + timedelta(days=7),
         },

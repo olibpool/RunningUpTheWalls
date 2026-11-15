@@ -1,58 +1,99 @@
 {% extends "base.html" %}
 {% from "_steps.html" import steps_list %}
+{% from "_icons.html" import icon %}
+{% from "_charts.html" import profile %}
 {% block title %}{{ s.title }}{% endblock %}
 {% block content %}
-<p><a href="/week?start={{ s.date }}">&larr; Back to the week</a></p>
-<h1>{{ s.title }} {{ s.steps | structure }}</h1>
-<p class="meta">{{ s.date.strftime("%A %d %B") }}{% if s.start_time %} at {{ s.start_time }}{% endif %}
-  · {{ s.duration_min }} min{% if s.distance_m %} · {{ s.distance_m | km }}{% endif %}
-  {% if s.rpe %}· RPE {{ s.rpe }}{% endif %} · <span class="badge status">{{ s.status }}</span></p>
-{% if s.reason %}<p class="reason">{{ s.reason }}</p>{% endif %}
+<p><a class="back" href="/week?start={{ s.date }}">{{ icon("left") }}Back to the week</a></p>
+<header class="session-hero sport-{{ s.sport }}">
+  <span class="sport-icon big">{{ icon(s.sport) }}</span>
+  <div>
+    <p class="eyebrow">{{ s.date.strftime("%A %d %B") }}{% if s.start_time %} · {{ s.start_time }}{% endif %}</p>
+    <h1>{{ s.title }} {{ s.steps | structure }}</h1>
+    <ul class="chips">
+      {% if s.duration_min %}<li>{{ icon("clock") }}{{ s.duration_min }} min</li>{% endif %}
+      {% if s.distance_m %}<li>{{ s.distance_m | km }}</li>{% endif %}
+      {% set p = s.steps | main_pace %}{% if p %}<li>{{ icon("target") }}{{ p }}</li>{% endif %}
+      {% if s.rpe %}<li>RPE {{ s.rpe }}</li>{% endif %}
+      <li class="status">{{ s.status }}</li>
+      {% if on_watch %}<li class="accent">{{ icon("watch") }}On your watch</li>{% endif %}
+    </ul>
+  </div>
+</header>
+{% if s.reason %}<p class="reason lead">{{ s.reason }}</p>{% endif %}
 {% include "_messages.html" %}
 
-{% if s.steps %}<h2>Steps</h2>{{ steps_list(s.steps) }}{% endif %}
-{% if s.sport == "run" and s.steps %}
-<p class="muted">{% if on_watch %}<span class="badge">On your watch</span> {% endif %}<a href="/session/{{ s.id }}/workout.fit" download>Download as a watch workout (.fit)</a></p>
+{% if s.steps %}
+<section class="panel" aria-labelledby="steps-title">
+  <div class="panel-head">
+    <h2 id="steps-title">Steps</h2>
+    {% if s.sport == "run" %}<a class="button ghost small" href="/session/{{ s.id }}/workout.fit" download hx-boost="false">{{ icon("download") }}Download as a watch workout (.fit)</a>{% endif %}
+  </div>
+  {{ profile(s.steps) }}
+  <ul class="legend" aria-hidden="true">
+    <li><span class="seg seg-warmup"></span>Warm-up / cool-down</li><li><span class="seg seg-work"></span>Work</li><li><span class="seg seg-steady"></span>Steady</li><li><span class="seg seg-recover"></span>Recovery</li>
+  </ul>
+  {{ steps_list(s.steps) }}
+</section>
 {% endif %}
 
 {% if compliance %}
-<h2>How it went</h2>
-<p>{{ compliance.summary(compliance_cfg) }}</p>
-<table>
-  <thead><tr><th scope="col">Step</th><th scope="col">Target</th><th scope="col">Ran</th><th scope="col"></th></tr></thead>
-  <tbody>{% for step in compliance.steps %}
-    <tr><td>{{ step.label }}</td>
-      <td>{% if step.target %}{{ step.target[0] | pace }}–{{ step.target[1] | pace }}{% endif %}</td>
-      <td>{% if step.pace_s_per_km %}{{ step.pace_s_per_km | pace }}{% endif %}</td>
-      <td>{% if step.verdict != "untargeted" %}{{ {"on": "on pace", "fast": "too fast", "slow": "too slow"}[step.verdict] }}{% endif %}</td></tr>
-  {% endfor %}</tbody>
-</table>
+<section class="panel" aria-labelledby="how-title">
+  <div class="panel-head">
+    <h2 id="how-title">How it went</h2>
+    <span class="pill {{ 'good' if compliance.hit(compliance_cfg) else 'warn' }}">{{ compliance.summary(compliance_cfg) }}</span>
+  </div>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th scope="col">Step</th><th scope="col">Target</th><th scope="col">Ran</th><th scope="col">Verdict</th></tr></thead>
+    <tbody>{% for step in compliance.steps %}
+      <tr><td>{{ step.label }}</td>
+        <td>{% if step.target %}{{ step.target[0] | pace }}–{{ step.target[1] | pace }}{% endif %}</td>
+        <td class="num">{% if step.pace_s_per_km %}{{ step.pace_s_per_km | pace }}{% endif %}</td>
+        <td>{% if step.verdict != "untargeted" %}<span class="pill {{ 'good' if step.verdict == 'on' else 'warn' }}">{{ {"on": "on pace", "fast": "too fast", "slow": "too slow"}[step.verdict] }}</span>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+</section>
 {% endif %}
 
 {% if s.status == "planned" %}
-<h2>Log it</h2>
-<form method="post" action="/session/{{ s.id }}/done" class="stack">
-  <label>How hard did it feel (RPE 1-10)? <input type="number" name="rpe" min="1" max="10" step="0.5"></label>
-  <label>Minutes (if different) <input type="number" name="minutes" min="1"></label>
-  <div class="actions">
-    <button type="submit">Mark done</button>
-    <button type="submit" class="secondary" formaction="/session/{{ s.id }}/skip">Skip</button>
-  </div>
-</form>
+<div class="grid-2">
+  <section class="panel" aria-labelledby="log-title">
+    <h2 id="log-title">Log it</h2>
+    <form method="post" action="/session/{{ s.id }}/done" class="stack">
+      <fieldset class="rpe">
+        <legend>How hard did it feel? (RPE 1–10)</legend>
+        <div class="segmented">
+          {% for n in range(1, 11) %}<label><input type="radio" name="rpe" value="{{ n }}"><span>{{ n }}</span></label>{% endfor %}
+        </div>
+      </fieldset>
+      <label>Minutes (if different) <input type="number" name="minutes" min="1" inputmode="numeric" placeholder="{{ s.duration_min or '' }}"></label>
+      <div class="actions">
+        <button type="submit">{{ icon("check") }}Mark done</button>
+        <button type="submit" class="ghost" formaction="/session/{{ s.id }}/skip">Skip</button>
+      </div>
+    </form>
+  </section>
 
-<h2>Move it</h2>
-<form method="post" action="/session/{{ s.id }}/move" class="stack">
-  <label>New date <input type="date" name="date" value="{{ s.date }}" required></label>
-  <label>Start time <input type="time" name="start_time" value="{{ s.start_time or '' }}"></label>
-  <div class="actions"><button type="submit" class="secondary">Move</button></div>
-</form>
-<p class="muted">A move that breaks a safety rule (such as two hard days in a row) is refused, with the reason.</p>
+  <section class="panel" aria-labelledby="move-title">
+    <h2 id="move-title">Move it</h2>
+    <form method="post" action="/session/{{ s.id }}/move" class="stack">
+      <label>New date <input type="date" name="date" value="{{ s.date }}" required></label>
+      <label>Start time <input type="time" name="start_time" value="{{ s.start_time or '' }}"></label>
+      <div class="actions"><button type="submit" class="ghost">Move</button></div>
+    </form>
+    <p class="muted small">A move that breaks a safety rule (such as two hard days in a row) is refused, with the reason.</p>
+  </section>
+</div>
 {% endif %}
 
-<h2>History</h2>
-{% if history %}
-<ul class="history">
-  {% for a in history %}<li><time>{{ a.created_at[:16] | replace("T", " ") }}</time> {{ a.reason }} <span class="muted">({{ a.rule }})</span></li>{% endfor %}
-</ul>
-{% else %}<p class="muted">No changes yet.</p>{% endif %}
+<section class="panel" aria-labelledby="history-title">
+  <h2 id="history-title">History</h2>
+  {% if history %}
+  <ol class="timeline">
+    {% for a in history %}<li><time>{{ a.created_at[:16] | replace("T", " ") }}</time><span>{{ a.reason }} <span class="muted">({{ a.rule }})</span></span></li>{% endfor %}
+  </ol>
+  {% else %}<p class="muted">No changes yet.</p>{% endif %}
+</section>
 {% endblock %}

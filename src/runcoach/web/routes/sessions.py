@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Annotated
@@ -21,6 +22,7 @@ from runcoach.ingest.calendar import to_busy
 from runcoach.integrations.fit import workout_file
 from runcoach.integrations.watch import to_workout_spec
 from runcoach.web.deps import TIMEZONE, get_cfg, get_conn, is_htmx, parse_form, redirect, render
+from runcoach.web.routes.week import week_stats
 
 router = APIRouter(prefix="/session")
 
@@ -37,10 +39,20 @@ def _load(conn: sqlite3.Connection, session_id: int) -> Session:
     return session
 
 
-def _after_action(request: Request, conn: sqlite3.Connection, session_id: int) -> Response:
-    if is_htmx(request):
-        return render(request, "_session_card.html", {"s": _load(conn, session_id)})
-    return redirect(request, f"/session/{session_id}")
+def _after_action(
+    request: Request, conn: sqlite3.Connection, session_id: int, toast: str
+) -> Response:
+    if not is_htmx(request):
+        return redirect(request, f"/session/{session_id}")
+    session = _load(conn, session_id)
+    # The card swaps in place; the week's progress ring updates out of band.
+    response = render(
+        request,
+        "_session_card.html",
+        {"s": session, "oob_progress": week_stats(conn, monday(session.date))},
+    )
+    response.headers["HX-Trigger"] = json.dumps({"toast": toast})
+    return response
 
 
 @router.get("/{session_id}", response_class=HTMLResponse)
@@ -126,7 +138,7 @@ async def done(
             session_id=session_id,
         ),
     )
-    return _after_action(request, conn, session_id)
+    return _after_action(request, conn, session_id, "Nice work. Session logged.")
 
 
 @router.post("/{session_id}/skip")
@@ -139,7 +151,7 @@ def skip(
         conn,
         [Change(session_id, "modify", {"status": "skipped"}, "manual_skip", "Skipped.")],
     )
-    return _after_action(request, conn, session_id)
+    return _after_action(request, conn, session_id, "Skipped. The plan carries on.")
 
 
 class MoveForm(BaseModel):

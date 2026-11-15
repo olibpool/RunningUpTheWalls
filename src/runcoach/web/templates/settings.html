@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Settings{% endblock %}
 {% block content %}
-<h1>Settings</h1>
+<header class="page-head"><p class="eyebrow">You and your data</p><h1>Settings</h1></header>
 {% include "_messages.html" %}
 
 {% if retest %}
@@ -11,7 +11,8 @@
 </div>
 {% endif %}
 
-<section aria-labelledby="athlete-title">
+<div class="grid-2">
+<section class="panel" aria-labelledby="athlete-title">
   <h2 id="athlete-title">Athlete</h2>
   <form method="post" action="/settings/athlete" class="stack">
     <label>Name <input name="name" value="{{ athlete.name or '' if athlete else '' }}"></label>
@@ -26,7 +27,7 @@
   {% if athlete %}<p class="muted">VDOT from {{ athlete.vdot_source }}, updated {{ athlete.vdot_updated_at[:10] }}.</p>{% endif %}
 </section>
 
-<section aria-labelledby="tt-title">
+<section class="panel" aria-labelledby="tt-title">
   <h2 id="tt-title">Update paces from a time trial</h2>
   <p class="muted">Your VDOT only changes when you submit a result here.</p>
   <form method="post" action="/settings/time-trial" class="stack">
@@ -41,7 +42,10 @@
   </form>
 </section>
 
-<section aria-labelledby="sync-title">
+</div>
+
+<div class="grid-2">
+<section class="panel" aria-labelledby="sync-title">
   <h2 id="sync-title">Sync</h2>
   {% include "_sync_status.html" %}
   <form method="post" action="/sync/run" hx-post="/sync/run" hx-target="#sync-status" hx-swap="outerHTML">
@@ -49,15 +53,17 @@
   </form>
 </section>
 
-<section aria-labelledby="integrations-title">
+
+<section class="panel" aria-labelledby="integrations-title">
   <h2 id="integrations-title">Integrations</h2>
   <table>
     <tbody>{% for name, state in integrations %}<tr><th scope="row">{{ name }}</th><td>{{ state }}</td></tr>{% endfor %}</tbody>
   </table>
-  <p>Calendar feed of your plan: <a href="/export/plan.ics">/export/plan.ics</a> (subscribe from a calendar app on your tailnet).</p>
+  <p>Calendar feed of your plan: <a href="/export/plan.ics" hx-boost="false">/export/plan.ics</a> (subscribe from a calendar app on your tailnet).</p>
   <h3>Availability windows</h3>
   <p>Weekdays: {% for a, b in availability.weekday %}{{ a }}–{{ b }}{% if not loop.last %}, {% endif %}{% endfor %}.
      Weekends: {% for a, b in availability.weekend %}{{ a }}–{{ b }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
   <p class="muted">Availability, location and the calendar address are set in <code>config/local.toml</code> (or <code>RUNCOACH_*</code> environment variables).</p>
 </section>
+</div>
 {% endblock %}

@@ -20,7 +20,7 @@
 <h1>New race plan</h1>
 <p class="muted">Fixed commitments such as football, added under <a href="/events">Events</a>, are scheduled around automatically.</p>
 <p>No race in mind? <a href="/plan/continuous">Try continuous improvement mode</a>.</p>
-<form id="plan-form" method="post" action="/plan/new" class="stack">
+<form id="plan-form" method="post" action="/plan/new" class="stack panel">
   <fieldset>
     <legend>Goal</legend>
     {{ distance_select("distance", "Race distance") }}
@@ -44,7 +44,7 @@
 {% include "_messages.html" %}
 
 {% if result %}
-<section id="preview" aria-labelledby="preview-title">
+<section id="preview" class="preview" aria-labelledby="preview-title">
   <h2 id="preview-title">Preview</h2>
   <p>VDOT {{ inp.vdot }} · {{ result.sessions | length }} sessions over {{ weeks | length }} weeks.</p>
   {% if result.violations %}

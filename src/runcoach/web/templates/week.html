@@ -1,13 +1,20 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Week of {{ week_start.strftime("%d %b") }}{% endblock %}
 {% block content %}
-<div class="pager">
-  <a href="/week?start={{ previous }}" aria-label="Previous week">&larr; Prev</a>
-  <h1>Week of {{ week_start.strftime("%d %b %Y") }}</h1>
-  <a href="/week?start={{ next }}" aria-label="Next week">Next &rarr;</a>
-</div>
+<header class="page-head pager">
+  <a class="icon-button" href="/week?start={{ previous }}" aria-label="Previous week">{{ icon("left") }}</a>
+  <div>
+    {% set ahead = ((week_start - today).days + today.weekday()) // 7 %}
+    <p class="eyebrow">{% if ahead == 0 %}This week{% elif ahead == 1 %}Next week{% elif ahead == -1 %}Last week{% elif ahead > 0 %}In {{ ahead }} weeks{% else %}{{ -ahead }} weeks ago{% endif %}</p>
+    <h1>Week of {{ week_start.strftime("%d %b %Y") }}</h1>
+  </div>
+  <a class="icon-button" href="/week?start={{ next }}" aria-label="Next week">{{ icon("right") }}</a>
+</header>
 {% include "_messages.html" %}
-{% if "No active plan yet." in warnings %}<p><a class="button" href="/plan/new">Create a plan</a></p>{% endif %}
+{% if "No active plan yet." in warnings %}<p><a class="button" href="/plan/new">Create a plan</a></p>{% else %}
+<div class="panel compact">{% include "_week_stats.html" %}</div>
+{% endif %}
 <div class="week">
   {% for day in days %}{% include "_day.html" %}{% endfor %}
 </div>

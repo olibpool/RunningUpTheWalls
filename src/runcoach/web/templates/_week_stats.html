@@ -1,0 +1,11 @@
+{% from "_charts.html" import ring %}
+{# This week's progress. Done and Skip buttons resend it out of band, so it updates in place. #}
+<div id="week-stats" class="week-stats"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% call ring(progress.share, 112, 10) %}
+    <strong>{{ progress.done }}<small>/{{ progress.total }}</small></strong><span>sessions</span>
+  {% endcall %}
+  <dl class="kv">
+    <div><dt>Run distance</dt><dd><strong>{{ "%.1f" | format(progress.km_done) }}</strong>{% if progress.km_planned %} of {{ "%.1f" | format(progress.km_planned) }}{% endif %} km</dd></div>
+    <div><dt>Still to do</dt><dd><strong>{{ progress.total - progress.done }}</strong> session{{ "" if progress.total - progress.done == 1 else "s" }}</dd></div>
+  </dl>
+</div>

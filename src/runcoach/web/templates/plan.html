@@ -1,17 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Plan{% endblock %}
 {% block content %}
-<h1>Plan</h1>
+<header class="page-head">
+  <p class="eyebrow">{% if plan %}{{ plan.mode | title }} plan{% else %}Plan{% endif %}</p>
+  <h1>{% if plan and plan.goal_date %}Race on {{ plan.goal_date }}{% elif plan %}Continuous improvement{% else %}Plan{% endif %}</h1>
+  {% if plan %}<p class="muted">{% if plan.goal_distance_m %}{{ plan.goal_distance_m | km }} · {% endif %}from {{ plan.start_date }}</p>{% endif %}
+</header>
 {% if plan %}
-<p>
-  {{ plan.mode | title }} plan{% if plan.goal_date %} for {{ plan.goal_date }}{% endif %}
-  {% if plan.goal_distance_m %}· {{ plan.goal_distance_m | km }}{% endif %}
-  · from {{ plan.start_date }}
-</p>
-<p><a class="button secondary" href="/plan/new">New race plan</a> <a class="button secondary" href="/plan/continuous">Continuous mode</a></p>
-{% include "_week_table.html" %}
+<div class="actions"><a class="button ghost" href="/plan/new">New race plan</a> <a class="button ghost" href="/plan/continuous">Continuous mode</a></div>
+{% with link_weeks=True %}{% include "_week_table.html" %}{% endwith %}
 {% else %}
-<p>No active plan yet.</p>
-<p><a class="button" href="/plan/new">Plan for a race</a> <a class="button secondary" href="/plan/continuous">Continuous improvement</a></p>
+<section class="panel empty-state">
+  <p>No active plan yet.</p>
+  <div class="actions"><a class="button" href="/plan/new">Plan for a race</a> <a class="button ghost" href="/plan/continuous">Continuous improvement</a></div>
+</section>
 {% endif %}
 {% endblock %}

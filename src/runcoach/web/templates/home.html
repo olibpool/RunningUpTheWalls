@@ -1,50 +1,138 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_charts.html" import columns, spark %}
 {% block title %}Home{% endblock %}
 {% block content %}
-<h1>Coachal</h1>
-<p class="muted">{{ today.strftime("%A %d %B") }}</p>
+<header class="page-head">
+  <p class="eyebrow">{{ today.strftime("%A %d %B") }}</p>
+  <h1>{% if athlete and athlete.name %}Hi {{ athlete.name }}{% else %}Coachal{% endif %}</h1>
+</header>
 {% include "_messages.html" %}
 
 {% if retest %}
-<div class="banner warning" role="status"><p>{{ retest }}</p><p><a href="/settings">Update your paces in Settings</a></p></div>
+<div class="banner warning" role="status">{{ icon("alert") }}<div><p>{{ retest }}</p><p><a href="/settings">Update your paces in Settings</a></p></div></div>
 {% endif %}
 
 {% if not plan %}
-<section aria-labelledby="start-title">
+<section class="panel onboarding" aria-labelledby="start-title">
   <h2 id="start-title">Get started</h2>
-  <ol>
-    <li{% if has_events %} class="muted"{% endif %}><a href="/events">Add your fixed commitments</a> (football, a standing class) so plans are built around them.</li>
-    <li><a href="/plan/new">Create a plan</a> for a race, or <a href="/plan/continuous">start continuous improvement</a> with no race.</li>
-    <li>Come back here each day, or open <a href="/week">Week</a>, to see what is next.</li>
+  <ol class="steps-onboard">
+    <li{% if has_events %} class="done"{% endif %}><div><strong><a href="/events">Add your fixed commitments</a></strong><p class="muted">Football or a standing class, so plans are built around them.</p></div></li>
+    <li><div><strong><a href="/plan/new">Create a plan</a></strong> for a race, or <a href="/plan/continuous">start continuous improvement</a><p class="muted">Preview it first. Unsafe plans are never saved.</p></div></li>
+    <li><div><strong>Come back each day</strong><p class="muted">Home shows today, Week shows what's next.</p></div></li>
   </ol>
   <p>New to Coachal? Read the <a href="/guide">user guide</a>.</p>
 </section>
 {% else %}
-<section aria-labelledby="plan-title">
-  <h2 id="plan-title">Your plan</h2>
-  <p>
-    {% if plan.mode == "race" and plan.goal_date %}
-      Race on {{ plan.goal_date }}{% if weeks_to_go is not none %} · {{ weeks_to_go }} weeks to go{% endif %}.
-    {% else %}Continuous improvement, no race date.{% endif %}
-    <a href="/plan">Full plan</a>
-  </p>
-</section>
-
-<section aria-labelledby="today-title">
-  <h2 id="today-title">Today</h2>
-  <div class="week">{% include "_day.html" %}</div>
-  {% if next_session %}
-  <p class="muted">Next: <a href="/session/{{ next_session.id }}">{{ next_session.title }}</a>, {{ next_session.date.strftime("%a %d %b") }}.</p>
-  {% endif %}
+<section class="hero" aria-labelledby="today-title">
+  <div class="hero-today">
+    <h2 id="today-title" class="eyebrow">Today</h2>
+    <div class="week">{% include "_day.html" %}</div>
+    {% if next_session %}
+    <p class="next">Next up <a href="/session/{{ next_session.id }}">{{ next_session.title }}</a> · {{ next_session.date.strftime("%a %d %b") }}</p>
+    {% endif %}
+  </div>
+  <div class="hero-week">
+    <h2 class="eyebrow">This week</h2>
+    {% include "_week_stats.html" %}
+    <a class="button ghost small" href="/week">{{ icon("calendar") }}Open the week</a>
+  </div>
 </section>
 {% endif %}
 
-<section aria-labelledby="attention-title">
-  <h2 id="attention-title">Needs attention</h2>
-  <ul>
-    {% if unmatched %}<li><a href="/activities">{{ unmatched }} activit{{ "y" if unmatched == 1 else "ies" }}</a> not matched to a session.</li>{% endif %}
-    <li><a href="/checkin">Check in</a> if you are tired, ill or sore, and the plan will adjust.</li>
-    {% if last_sync %}<li>Last sync {{ last_sync | local_time }}.</li>{% else %}<li>No sync has run yet (<a href="/settings">Settings</a>).</li>{% endif %}
-  </ul>
+<section class="tiles" aria-label="Your numbers">
+  {% if plan %}
+  <article class="tile">
+    <h2>{{ icon("flag") }}{% if days_to_go is not none %}Race day{% else %}Plan{% endif %}</h2>
+    {% if days_to_go is not none %}
+    <p class="figure">{{ days_to_go }}<small> days</small></p>
+    <p class="muted">{{ weeks_to_go }} weeks to go · {{ plan.goal_date }}</p>
+    <div class="meter" role="img" aria-label="{{ (plan_share * 100) | round | int }}% of the plan done"><span style="width: {{ plan_share * 100 }}%"></span></div>
+    {% else %}
+    <p class="figure">Ongoing</p>
+    <p class="muted">Continuous improvement, re-planned each Monday</p>
+    {% endif %}
+  </article>
+  {% endif %}
+  <article class="tile">
+    <h2>{{ icon("run") }}Last 30 days</h2>
+    <p class="figure">{{ "%.1f" | format(recent.run_km) }}<small> km</small></p>
+    <p class="muted">{{ recent.runs }} run{{ "" if recent.runs == 1 else "s" }} · {{ recent.hours }} h training</p>
+  </article>
+  <article class="tile">
+    <h2>{{ icon("flame") }}Training load</h2>
+    {% if ratio is not none %}
+    {% set low, high = ratio_band %}
+    <p class="figure">{{ "%.2f" | format(ratio) }}</p>
+    <p><span class="pill {{ 'good' if low <= ratio <= high else 'warn' }}">{% if ratio < low %}Easing off{% elif ratio > high %}Ramping fast{% else %}Balanced{% endif %}</span></p>
+    <p class="muted">Last week against your {{ low }}–{{ high }} target band</p>
+    {% else %}
+    <p class="figure">–</p>
+    <p class="muted">Needs a few weeks of logged training</p>
+    {% endif %}
+  </article>
+  <article class="tile">
+    <h2>{{ icon("target") }}Consistency</h2>
+    {% set done, due = completion %}
+    {% if due %}
+    <p class="figure">{{ (done / due * 100) | round | int }}<small>%</small></p>
+    <p class="muted">{{ done }} of {{ due }} sessions done so far</p>
+    {% else %}
+    <p class="figure">–</p>
+    <p class="muted">Counts once your first sessions pass</p>
+    {% endif %}
+  </article>
 </section>
+
+<div class="grid-2">
+  <section class="panel" aria-labelledby="trend-title">
+    <div class="panel-head">
+      <h2 id="trend-title">Weekly running</h2>
+      <span class="muted">km, last 12 weeks</span>
+    </div>
+    {% if weeks | map(attribute="run_km") | sum %}
+    {{ columns(km_bars(weeks, link=True), "km", "Run kilometres per week over the last 12 weeks") }}
+    {% else %}
+    <p class="empty">{{ icon("pulse") }}No runs logged yet. <a href="/activities">Upload one</a> or connect Garmin.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel" aria-labelledby="paces-title">
+    <div class="panel-head">
+      <h2 id="paces-title">Your paces</h2>
+      {% if athlete %}<span class="pill">VDOT {{ athlete.vdot }}</span>{% endif %}
+    </div>
+    {% if zones %}
+    <ul class="zones">
+      {% for name, z in [("Easy", zones.easy), ("Marathon", zones.marathon), ("Threshold", zones.threshold), ("Interval", zones.interval), ("Repetition", zones.repetition)] %}
+      <li class="zone-{{ loop.index }}"><span>{{ name }}</span><strong>{{ z.min_s_per_km | pace }}{% if z.max_s_per_km - z.min_s_per_km >= 1 %}–{{ z.max_s_per_km | pace }}{% endif %}</strong><small>/km</small></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">{{ icon("target") }}<a href="/settings">Set your VDOT</a> to see your training paces.</p>
+    {% endif %}
+  </section>
+
+  {% if resting | length > 1 %}
+  <section class="panel" aria-labelledby="rhr-title">
+    <div class="panel-head">
+      <h2 id="rhr-title">Resting heart rate</h2>
+      <span class="muted">last 4 weeks</span>
+    </div>
+    <div class="spark-row">
+      <p class="figure">{{ resting[-1][1] }}<small> bpm</small></p>
+      {{ spark(resting, "bpm", "Resting heart rate over the last four weeks, from " ~ resting[0][1] ~ " to " ~ resting[-1][1] ~ " bpm") }}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="panel" aria-labelledby="attention-title">
+    <h2 id="attention-title">Needs attention</h2>
+    <ul class="list">
+      {% if unmatched %}<li>{{ icon("pulse") }}<span><a href="/activities">{{ unmatched }} activit{{ "y" if unmatched == 1 else "ies" }}</a> not matched to a session.</span></li>{% endif %}
+      <li>{{ icon("heart") }}<span><a href="/checkin">Check in</a> if you are tired, ill or sore, and the plan will adjust.</span></li>
+      <li>{{ icon("sync") }}<span>{% if last_sync %}Last sync {{ last_sync | local_time }}.{% else %}No sync has run yet (<a href="/settings">Settings</a>).{% endif %}</span></li>
+    </ul>
+  </section>
+</div>
 {% endblock %}

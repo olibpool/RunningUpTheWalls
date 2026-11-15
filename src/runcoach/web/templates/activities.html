@@ -1,53 +1,72 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Activities{% endblock %}
 {% block content %}
-<h1>Activities</h1>
+<header class="page-head">
+  <p class="eyebrow">Runs in</p>
+  <h1>Activities</h1>
+</header>
 {% include "_messages.html" %}
 
-<section aria-labelledby="upload-title">
+<section class="panel" aria-labelledby="upload-title">
   <h2 id="upload-title">Upload a run</h2>
   <form method="post" action="/activities/upload" enctype="multipart/form-data" class="stack">
-    <label>Activity file ({{ accept }})
-      <input type="file" name="file" accept="{{ accept }}" required>
+    <label class="dropzone">
+      {{ icon("upload", "big") }}
+      <span><strong>Choose a file</strong> or drop it here</span>
+      <span class="dropzone-name muted">{{ accept }}</span>
+      <input type="file" name="file" accept="{{ accept }}" required aria-label="Activity file ({{ accept }})">
     </label>
-    <div class="actions"><button type="submit">Upload</button></div>
+    <progress max="100" value="0" hidden></progress>
+    <div class="actions"><button type="submit">{{ icon("upload") }}Upload</button></div>
   </form>
-  <p class="muted">Uploads are matched to your planned sessions automatically. The same file twice is ignored.</p>
+  <p class="muted small">Uploads are matched to your planned sessions automatically. The same file twice is ignored.</p>
 </section>
 
-<section aria-labelledby="unmatched-title">
+<section class="panel" aria-labelledby="unmatched-title">
   <h2 id="unmatched-title">Needs a session</h2>
   {% for a, options in unmatched %}
   <article class="card sport-{{ a.sport }}">
     <header>
-      <span class="title">{{ a.started_at | local_time }}</span>
+      <span class="sport-icon">{{ icon(a.sport) }}</span>
+      <div class="card-title">
+        <span class="title">{{ a.started_at | local_time }}</span>
+        <span class="time">{{ (a.duration_s // 60) }} min{% if a.distance_m %} · {{ a.distance_m | km }}{% endif %}</span>
+      </div>
       <span class="badge">{{ a.sport }}</span>
     </header>
-    <p class="meta">{{ (a.duration_s // 60) }} min{% if a.distance_m %} · {{ a.distance_m | km }}{% endif %}</p>
     {% if options %}
-    <form method="post" action="/activities/{{ a.id }}/assign" class="actions">
+    <form method="post" action="/activities/{{ a.id }}/assign" class="inline-form">
       <label>Was this
         <select name="session_id">
           {% for s in options %}<option value="{{ s.id }}">{{ s.date.strftime("%a %d %b") }} · {{ s.title }} ({{ s.duration_min }} min)</option>{% endfor %}
         </select>
       </label>
-      <button type="submit">Assign</button>
+      <button type="submit" class="small">Assign</button>
     </form>
     {% else %}
-    <p class="muted">No planned session nearby. It still counts towards your training load.</p>
+    <p class="muted small">No planned session nearby. It still counts towards your training load.</p>
     {% endif %}
   </article>
   {% else %}
-  <p class="muted">Everything is matched.</p>
+  <p class="empty">{{ icon("check") }}Everything is matched.</p>
   {% endfor %}
 </section>
 
-<section aria-labelledby="recent-title">
+<section class="panel" aria-labelledby="recent-title">
   <h2 id="recent-title">Recently matched</h2>
-  {% for a in recent %}
-  <p><a href="/session/{{ a.session_id }}">{{ a.started_at | local_time }}</a> · {{ a.sport }} · {{ (a.duration_s // 60) }} min{% if a.distance_m %} · {{ a.distance_m | km }}{% endif %}</p>
+  {% if recent %}
+  <ul class="feed">
+    {% for a in recent %}
+    <li class="sport-{{ a.sport }}">
+      <span class="sport-icon">{{ icon(a.sport) }}</span>
+      <a href="/session/{{ a.session_id }}">{{ a.started_at | local_time }}</a>
+      <span class="feed-stats"><span>{{ (a.duration_s // 60) }} min</span>{% if a.distance_m %}<span>{{ a.distance_m | km }}</span>{% endif %}{% if a.distance_m and a.duration_s and a.sport == "run" %}<span>{{ (a.duration_s / a.distance_m * 1000) | pace }}/km</span>{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ul>
   {% else %}
   <p class="muted">None yet.</p>
-  {% endfor %}
+  {% endif %}
 </section>
 {% endblock %}

@@ -16,22 +16,26 @@ from pydantic import BaseModel, ValidationError
 from starlette.datastructures import FormData
 
 from runcoach import db, display
+from runcoach.adapt.compliance import executed_steps
 from runcoach.config import ConfigNode
 from runcoach.domain.models import LOCAL_TIMEZONE
+from runcoach.web import stats
 
 TIMEZONE = ZoneInfo(LOCAL_TIMEZONE)
 
-# One entry per top-level page; add new pages here so the navigation stays in one place.
+# One entry per top-level page (key, label, href, icon); add new pages here so the navigation
+# stays in one place. The first five also form the phone's bottom tab bar.
 NAV = [
-    ("home", "Home", "/"),
-    ("week", "Week", "/week"),
-    ("plan", "Plan", "/plan"),
-    ("activities", "Activities", "/activities"),
-    ("checkin", "Check-in", "/checkin"),
-    ("events", "Events", "/events"),
-    ("settings", "Settings", "/settings"),
-    ("guide", "Guide", "/guide"),
+    ("home", "Home", "/", "home"),
+    ("week", "Week", "/week", "calendar"),
+    ("plan", "Plan", "/plan", "chart"),
+    ("activities", "Activities", "/activities", "pulse"),
+    ("checkin", "Check-in", "/checkin", "heart"),
+    ("events", "Events", "/events", "flag"),
+    ("settings", "Settings", "/settings", "cog"),
+    ("guide", "Guide", "/guide", "book"),
 ]
+TABS = 5
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 templates.env.filters.update(
@@ -42,7 +46,14 @@ templates.env.filters.update(
     clock=display.clock,
     km=display.km,
 )
-templates.env.globals["nav"] = NAV
+templates.env.globals.update(nav=NAV, tabs=TABS, executed_steps=executed_steps)
+
+
+def _km_bars(weeks: list[stats.HasWeekKm], link: bool = False) -> list[stats.Bar]:
+    return stats.km_bars(weeks, display.monday(today()), link)
+
+
+templates.env.globals["km_bars"] = _km_bars
 
 
 def _local_time(utc_iso: str) -> str:
@@ -73,8 +84,9 @@ def today() -> date:
 
 
 def is_htmx(request: Request) -> bool:
-    """True when htmx made the request and expects a fragment."""
-    return request.headers.get("HX-Request") == "true"
+    """True when htmx asked for a fragment; boosted links and forms want whole pages."""
+    headers = request.headers
+    return headers.get("HX-Request") == "true" and headers.get("HX-Boosted") != "true"
 
 
 def render(
