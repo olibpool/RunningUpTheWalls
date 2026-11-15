@@ -304,6 +304,12 @@ def active_plan(conn: sqlite3.Connection) -> Plan | None:
     return Plan.model_validate(dict(row)) if row is not None else None
 
 
+def get_plan(conn: sqlite3.Connection, plan_id: int) -> Plan | None:
+    """One plan by id, active or not."""
+    row = conn.execute("SELECT * FROM plan WHERE id = ?", (plan_id,)).fetchone()
+    return Plan.model_validate(dict(row)) if row is not None else None
+
+
 def _session(row: sqlite3.Row) -> Session:
     return Session(
         id=row["id"],

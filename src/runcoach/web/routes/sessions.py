@@ -14,7 +14,8 @@ from runcoach.adapt.compliance import score
 from runcoach.adapt.rules import Change
 from runcoach.config import ConfigNode, load_scheduling_config
 from runcoach.display import monday
-from runcoach.domain.models import Activity, PlannedSession, Session
+from runcoach.domain.models import DISTANCE_METRES, Activity, Distance, PlannedSession, Session
+from runcoach.engine.advice import session_notes
 from runcoach.engine.events import day_constraints, expand_commitments
 from runcoach.engine.plan import fixed_instances
 from runcoach.engine.safety import check_plan
@@ -74,13 +75,19 @@ def _detail(
     typed = load_scheduling_config(request.app.state.cfg)
     activity = db.session_activity(conn, session.id)
     compliance = score(session, activity, typed.compliance) if activity else None
+    history = db.session_adjustments(conn, session.id)
+    notes = session_notes(
+        session, _race_of(conn, session.plan_id), typed,
+        heat=any(a.rule == "heat" for a in history),
+    )  # fmt: skip
     return render(
         request,
         "session.html",
         {
             "active": "week",
             "s": session,
-            "history": db.session_adjustments(conn, session.id),
+            "history": history,
+            "notes": notes,
             "errors": errors or [],
             "compliance": compliance,
             "compliance_cfg": typed.compliance,
@@ -90,14 +97,26 @@ def _detail(
     )
 
 
+def _race_of(conn: sqlite3.Connection, plan_id: int) -> tuple[date, Distance] | None:
+    """The race a plan builds to, as (date, distance), or None for continuous plans."""
+    plan = db.get_plan(conn, plan_id)
+    if plan is None or plan.goal_date is None or plan.goal_distance_m is None:
+        return None
+    by_metres = {metres: name for name, metres in DISTANCE_METRES.items()}
+    distance = by_metres.get(int(plan.goal_distance_m))
+    return (date.fromisoformat(plan.goal_date), distance) if distance else None
+
+
 @router.get("/{session_id}/workout.fit")
 def workout_fit(
     session_id: int, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
 ) -> Response:
     """The run as a FIT workout file, to copy onto the watch's GARMIN/NewFiles folder (P4-T7)."""
     session = _load(conn, session_id)
-    plan = conn.execute("SELECT start_date FROM plan WHERE id = ?", (session.plan_id,)).fetchone()
-    week = (monday(session.date) - monday(date.fromisoformat(plan["start_date"]))).days // 7 + 1
+    plan = db.get_plan(conn, session.plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    week = (monday(session.date) - monday(date.fromisoformat(plan.start_date))).days // 7 + 1
     try:
         spec = to_workout_spec(session, week)
     except ValueError as exc:

@@ -37,6 +37,13 @@
 </section>
 {% endif %}
 
+{% if notes %}
+<section class="panel fuel" aria-labelledby="fuel-title">
+  <h2 id="fuel-title">{{ icon("flame") }}Fuel and pacing</h2>
+  <ul class="list">{% for note in notes %}<li>{{ icon("check") }}<span>{{ note }}</span></li>{% endfor %}</ul>
+</section>
+{% endif %}
+
 {% if compliance %}
 <section class="panel" aria-labelledby="how-title">
   <div class="panel-head">

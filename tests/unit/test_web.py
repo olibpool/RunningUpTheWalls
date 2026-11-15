@@ -565,3 +565,14 @@ def test_rating_an_activity_sets_its_load_and_leaves_the_list(
     conn.close()
     assert (row["rpe"], row["load"]) == (7.0, 350.0)  # 7 x 50 min
     assert 'class="rate-row' not in client.get("/").text
+
+
+def test_session_page_shows_fuel_and_pacing_for_the_race(client: TestClient, db_path: Path) -> None:
+    _save_plan(client)
+    conn = db.connect(db_path)
+    plan = db.active_plan(conn)
+    assert plan is not None and plan.id is not None
+    race = next(s for s in db.plan_sessions(conn, plan.id) if s.kind == "race")
+    conn.close()
+    page = client.get(f"/session/{race.id}").text
+    assert "Fuel and pacing" in page and "Pacing:" in page
