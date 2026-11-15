@@ -22,7 +22,14 @@ from runcoach.domain.models import LOCAL_TIMEZONE
 TIMEZONE = ZoneInfo(LOCAL_TIMEZONE)
 
 # One entry per top-level page; add new pages here so the navigation stays in one place.
-NAV = [("week", "Week", "/week"), ("plan", "Plan", "/plan"), ("events", "Events", "/events")]
+NAV = [
+    ("week", "Week", "/week"),
+    ("plan", "Plan", "/plan"),
+    ("activities", "Activities", "/activities"),
+    ("checkin", "Check-in", "/checkin"),
+    ("events", "Events", "/events"),
+    ("settings", "Settings", "/settings"),
+]
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 templates.env.filters.update(
@@ -34,6 +41,13 @@ templates.env.filters.update(
     km=display.km,
 )
 templates.env.globals["nav"] = NAV
+
+
+def _local_time(utc_iso: str) -> str:
+    return datetime.fromisoformat(utc_iso).astimezone(TIMEZONE).strftime("%a %d %b %H:%M")
+
+
+templates.env.filters["local_time"] = _local_time
 
 
 def get_conn(request: Request) -> Iterator[sqlite3.Connection]:

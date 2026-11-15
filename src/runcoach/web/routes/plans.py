@@ -25,7 +25,8 @@ from runcoach.web.deps import get_cfg, get_conn, parse_form, redirect, render, t
 router = APIRouter(prefix="/plan")
 
 
-def _race_seconds(text: str) -> int:
+def race_seconds(text: str) -> int:
+    """Parse mm:ss or h:mm:ss into seconds."""
     parts = [int(part) for part in text.split(":")]
     if not 2 <= len(parts) <= 3 or any(p < 0 for p in parts) or any(p > 59 for p in parts[1:]):
         raise ValueError("race time must look like mm:ss or h:mm:ss")
@@ -52,16 +53,14 @@ class PlanForm(BaseModel):
         if self.vdot is None and not (self.race_distance and self.race_time):
             raise ValueError("give a recent race distance and time, or a VDOT")
         if self.race_time:
-            _race_seconds(self.race_time)
+            race_seconds(self.race_time)
         return self
 
     def plan_input(self) -> PlanInput:
         """The engine input; a race result takes precedence over a typed VDOT."""
         vdot = self.vdot
         if self.race_distance and self.race_time:
-            vdot = vdot_from_race(
-                DISTANCE_METRES[self.race_distance], _race_seconds(self.race_time)
-            )
+            vdot = vdot_from_race(DISTANCE_METRES[self.race_distance], race_seconds(self.race_time))
         assert vdot is not None  # need_fitness guarantees one source
         return PlanInput(
             distance=self.distance,

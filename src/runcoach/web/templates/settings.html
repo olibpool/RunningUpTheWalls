@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+{% include "_messages.html" %}
+
+{% if retest %}
+<div class="banner warning" role="status">
+  <p>{{ retest }}</p>
+  <form method="post" action="/settings/retest/dismiss"><button type="submit" class="secondary">Dismiss</button></form>
+</div>
+{% endif %}
+
+<section aria-labelledby="athlete-title">
+  <h2 id="athlete-title">Athlete</h2>
+  <form method="post" action="/settings/athlete" class="stack">
+    <label>Name <input name="name" value="{{ athlete.name or '' if athlete else '' }}"></label>
+    <label>VDOT <input type="number" name="vdot" step="0.1" min="20" max="90" required value="{{ athlete.vdot if athlete else '' }}"></label>
+    <label>Runs per week <input type="number" name="runs_per_week" min="2" max="6" required value="{{ athlete.runs_per_week if athlete else 4 }}"></label>
+    <label>Climbing sessions per week <input type="number" name="climbing_target_per_week" min="0" max="3" value="{{ athlete.climbing_target_per_week if athlete else 2 }}"></label>
+    <label>Weekly load ceiling (continuous mode, optional)
+      <input type="number" name="max_weekly_load" min="1" step="1" value="{{ athlete.max_weekly_load or '' if athlete else '' }}">
+    </label>
+    <div class="actions"><button type="submit">Save profile</button></div>
+  </form>
+  {% if athlete %}<p class="muted">VDOT from {{ athlete.vdot_source }}, updated {{ athlete.vdot_updated_at[:10] }}.</p>{% endif %}
+</section>
+
+<section aria-labelledby="tt-title">
+  <h2 id="tt-title">Update paces from a time trial</h2>
+  <p class="muted">Your VDOT only changes when you submit a result here.</p>
+  <form method="post" action="/settings/time-trial" class="stack">
+    <label>Distance
+      <select name="distance">
+        <option value="5k">5K</option><option value="10k">10K</option>
+        <option value="half">Half marathon</option><option value="marathon">Marathon</option>
+      </select>
+    </label>
+    <label>Time <input name="time" placeholder="22:30" required></label>
+    <div class="actions"><button type="submit">Update VDOT</button></div>
+  </form>
+</section>
+
+<section aria-labelledby="sync-title">
+  <h2 id="sync-title">Sync</h2>
+  {% include "_sync_status.html" %}
+  <form method="post" action="/sync/run" hx-post="/sync/run" hx-target="#sync-status" hx-swap="outerHTML">
+    <button type="submit">Run sync now</button>
+  </form>
+</section>
+
+<section aria-labelledby="integrations-title">
+  <h2 id="integrations-title">Integrations</h2>
+  <table>
+    <tbody>{% for name, state in integrations %}<tr><th scope="row">{{ name }}</th><td>{{ state }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <h3>Availability windows</h3>
+  <p>Weekdays: {% for a, b in availability.weekday %}{{ a }}–{{ b }}{% if not loop.last %}, {% endif %}{% endfor %}.
+     Weekends: {% for a, b in availability.weekend %}{{ a }}–{{ b }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+  <p class="muted">Availability, location and the calendar address are set in <code>config/local.toml</code> (or <code>RUNCOACH_*</code> environment variables).</p>
+</section>
+{% endblock %}

@@ -1,0 +1,10 @@
+<div id="sync-status"{% if running %} hx-get="/sync/status" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %} aria-live="polite">
+  {% if running %}
+  <p><strong>Sync running…</strong></p>
+  {% elif last_run %}
+  <p>Last sync {{ last_run | local_time }}</p>
+  <ul>{% for step, outcome in report.items() %}<li><strong>{{ step }}</strong>: {{ outcome }}</li>{% endfor %}</ul>
+  {% else %}
+  <p class="muted">No sync has run yet.</p>
+  {% endif %}
+</div>

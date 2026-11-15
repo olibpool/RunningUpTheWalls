@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Check-in{% endblock %}
+{% block content %}
+<h1>Check-in for {{ today.strftime("%A %d %B") }}</h1>
+{% include "_messages.html" %}
+
+{% if saved %}
+<div class="banner warning" role="status">
+  <p><strong>Saved.</strong>
+  {% if changes %}The plan changed:{% else %}No changes to the plan.{% endif %}</p>
+  {% if changes %}<ul>{% for c in changes %}<li>{{ c.reason }}{% if c.session_id %} (<a href="/session/{{ c.session_id }}">session</a>){% endif %}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% endif %}
+
+{% if hint.suggests_extension %}
+<div class="banner warning" role="status">
+  <p>Resting heart rate {{ hint.today_bpm | round | int }} is above your baseline of {{ hint.baseline_bpm | round | int }}. Consider taking tomorrow easy too.</p>
+  <form method="post" action="/events" class="actions">
+    <input type="hidden" name="form" value="drinks">
+    <input type="hidden" name="title" value="Elevated resting heart rate">
+    <input type="hidden" name="date" value="{{ today }}">
+    <input type="hidden" name="severity" value="1">
+    <button type="submit">Make tomorrow easy</button>
+  </form>
+</div>
+{% endif %}
+
+<form method="post" action="/checkin" class="stack">
+  <fieldset>
+    <legend>How do you feel? (1 = awful, 5 = great)</legend>
+    {% for n in range(1, 6) %}
+    <label class="inline"><input type="radio" name="feel" value="{{ n }}"{% if current and current.feel == n %} checked{% endif %}> {{ n }}</label>
+    {% endfor %}
+  </fieldset>
+  <label>Any niggle? (where)
+    <input name="niggle" value="{{ current.niggle if current and current.niggle else '' }}" placeholder="e.g. left calf">
+  </label>
+  <label class="inline"><input type="checkbox" name="ill" value="true"{% if current and current.ill %} checked{% endif %}> I'm ill</label>
+  <label>Resting heart rate (bpm)
+    <input type="number" name="resting_hr" min="21" max="149" value="{{ current.resting_hr if current and current.resting_hr else '' }}">
+  </label>
+  <label>Notes <input name="notes" value="{{ current.notes if current and current.notes else '' }}"></label>
+  <div class="actions"><button type="submit">Save check-in</button></div>
+</form>
+<p class="muted">A niggle removes pace targets and quality for {{ illness.niggle_days }} days; illness for {{ illness.ill_days }}, then the plan ramps back.</p>
+{% endblock %}

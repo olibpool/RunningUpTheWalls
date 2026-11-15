@@ -132,7 +132,8 @@ def _forecast(conn: sqlite3.Connection, cfg: SchedulingConfig, client: httpx.Cli
     return f"ok: {len(forecast)} hours"
 
 
-def _matching(conn: sqlite3.Connection, cfg: SchedulingConfig) -> str:
+def match_activities(conn: sqlite3.Connection, cfg: SchedulingConfig) -> str:
+    """Link unmatched activities to planned sessions; also used right after an upload."""
     plan = db.active_plan(conn)
     if plan is None or plan.id is None:
         return "skipped: no active plan"
@@ -146,11 +147,11 @@ def _matching(conn: sqlite3.Connection, cfg: SchedulingConfig) -> str:
     return f"ok: {len(matches)} matched, {len(unmatched) - len(matches)} unmatched"
 
 
-def adapt_plan(conn: sqlite3.Connection, cfg: SchedulingConfig, today: date) -> str:
+def adapt_plan(conn: sqlite3.Connection, cfg: SchedulingConfig, today: date) -> list[Change]:
     """Run the adaptation rules and heat check on the active plan; also used by the web app."""
     plan = db.active_plan(conn)
     if plan is None or plan.id is None:
-        return "skipped: no active plan"
+        return []
     sessions = db.plan_sessions(conn, plan.id)
     applied = frozenset(db.applied_rules(conn))
     # Only events the plan wasn't generated with; it already accounts for the rest.
@@ -179,7 +180,7 @@ def adapt_plan(conn: sqlite3.Connection, cfg: SchedulingConfig, today: date) -> 
         )
         changes += [change for change in heat if change is not None]
     db.apply_changes(conn, changes)
-    return f"ok: {len(changes)} changes"
+    return changes
 
 
 def _history(conn: sqlite3.Connection, cfg: SchedulingConfig, today: date) -> History:
@@ -247,8 +248,8 @@ def run_sync(
         ),
         "calendar": lambda: _calendar(conn, typed, today, client),
         "forecast": lambda: _forecast(conn, typed, client),
-        "matching": lambda: _matching(conn, typed),
-        "adaptation": lambda: adapt_plan(conn, typed, today),
+        "matching": lambda: match_activities(conn, typed),
+        "adaptation": lambda: f"ok: {len(adapt_plan(conn, typed, today))} changes",
         "replan": lambda: _replan(conn, cfg, typed, today, now_utc),
     }
     report: dict[str, str] = {}

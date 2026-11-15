@@ -192,3 +192,141 @@ def test_logging_drinks_eases_the_next_hard_session_straight_away(
     eased = db.get_session(conn, hard.id)
     conn.close()
     assert eased is not None and eased.kind == "easy" and "by feel" in eased.title
+
+
+GPX_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="t" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+<trkpt lat="51.5" lon="-0.12"><time>{start}</time></trkpt>
+<trkpt lat="51.6" lon="-0.12"><time>{end}</time></trkpt>
+</trkseg></trk></gpx>"""
+
+
+def _gpx_for(session_date: date, start_time: str, minutes: int) -> bytes:
+    from datetime import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    local = dt.combine(
+        session_date, dt.strptime(start_time, "%H:%M").time(), ZoneInfo("Europe/London")
+    )
+    start = local.astimezone(ZoneInfo("UTC"))
+    end = start + timedelta(minutes=minutes)
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    return GPX_TEMPLATE.format(start=start.strftime(fmt), end=end.strftime(fmt)).encode()
+
+
+def _first_sessions(db_path: Path, count: int = 2):  # type: ignore[no-untyped-def]
+    conn = db.connect(db_path)
+    plan = db.active_plan(conn)
+    assert plan is not None and plan.id is not None
+    sessions = [s for s in db.plan_sessions(conn, plan.id) if s.sport == "run"][:count]
+    conn.close()
+    return sessions
+
+
+def test_activity_upload_matches_and_manual_assign(client: TestClient, db_path: Path) -> None:
+    _save_plan(client)
+    first, second = _first_sessions(db_path)
+    assert first.start_time and first.duration_min and second.start_time
+    upload = client.post(
+        "/activities/upload",
+        files={
+            "file": (
+                "run.gpx",
+                _gpx_for(first.date, first.start_time, first.duration_min),
+                "application/gpx+xml",
+            )
+        },
+        follow_redirects=False,
+    )
+    assert upload.status_code == 303
+    conn = db.connect(db_path)
+    assert db.get_session(conn, first.id).status == "done"  # type: ignore[union-attr]
+    conn.close()
+
+    # A run on the right day but far too short doesn't auto-match; assign it by hand.
+    stray = _gpx_for(second.date, second.start_time, 5)
+    client.post("/activities/upload", files={"file": ("short.gpx", stray, "application/gpx+xml")})
+    page = client.get("/activities").text
+    assert "Needs a session" in page and "Assign" in page
+    conn = db.connect(db_path)
+    (unmatched,) = db.activities(conn, unmatched_only=True)
+    conn.close()
+    client.post(f"/activities/{unmatched.id}/assign", data={"session_id": str(second.id)})
+    conn = db.connect(db_path)
+    assert db.get_session(conn, second.id).status == "done"  # type: ignore[union-attr]
+    conn.close()
+
+    bad = client.post("/activities/upload", files={"file": ("x.tcx", b"<x/>", "text/xml")})
+    assert bad.status_code == 400 and "Unsupported file type" in bad.text
+
+
+def test_checkin_niggle_changes_the_plan_and_reports_it(client: TestClient, db_path: Path) -> None:
+    _save_plan(client)
+    response = client.post(
+        "/checkin", data={"feel": "3", "niggle": "left calf", "resting_hr": "52"}
+    )
+    assert response.status_code == 200
+    assert "Saved." in response.text
+    assert client.get("/checkin").text.count('value="left calf"') == 1
+    conn = db.connect(db_path)
+    (checkin,) = db.checkins(conn)
+    conn.close()
+    assert checkin.niggle == "left calf" and checkin.resting_hr == 52
+
+
+def test_move_is_refused_when_unsafe_and_applied_when_safe(
+    client: TestClient, db_path: Path
+) -> None:
+    _save_plan(client)
+    conn = db.connect(db_path)
+    plan = db.active_plan(conn)
+    assert plan is not None and plan.id is not None
+    sessions = db.plan_sessions(conn, plan.id)
+    conn.close()
+    long_run = next(s for s in sessions if s.kind == "long")
+    hard = next(s for s in sessions if s.kind in {"tempo", "intervals"} and s.date < long_run.date)
+
+    unsafe = client.post(
+        f"/session/{hard.id}/move",
+        data={"date": (long_run.date - timedelta(days=1)).isoformat(), "start_time": "07:00"},
+    )
+    assert unsafe.status_code == 400 and "Not moved" in unsafe.text
+
+    easy = next(s for s in sessions if s.kind == "easy" and s.date < long_run.date)
+    target = easy.date + timedelta(days=1)
+    if any(s.date == target for s in sessions):
+        target = easy.date  # same day, different time is always available
+    safe = client.post(
+        f"/session/{easy.id}/move",
+        data={"date": target.isoformat(), "start_time": "12:00"},
+        follow_redirects=False,
+    )
+    assert safe.status_code == 303
+    conn = db.connect(db_path)
+    moved = db.get_session(conn, easy.id)
+    conn.close()
+    assert moved is not None and (moved.date, moved.start_time) == (target, "12:00")
+
+
+def test_settings_profile_time_trial_and_sync(client: TestClient, db_path: Path) -> None:
+    profile = {"vdot": "45", "runs_per_week": "4", "climbing_target_per_week": "2"}
+    assert client.post("/settings/athlete", data=profile, follow_redirects=False).status_code == 303
+    client.post("/settings/time-trial", data={"distance": "5k", "time": "20:00"})
+    conn = db.connect(db_path)
+    athlete = db.get_athlete(conn)
+    conn.close()
+    assert athlete is not None and athlete.vdot_source == "time_trial"
+    assert 49 < athlete.vdot < 51
+
+    page = client.get("/settings").text
+    assert "Google Calendar (iCal)" in page and "not set" in page
+    started = client.post("/sync/run", headers={"HX-Request": "true"})
+    assert "Sync running" in started.text
+    status = client.get("/sync/status").text  # TestClient runs the background task first
+    assert "inbox" in status and "Sync running" not in status
+
+
+def test_static_files_are_cached_for_a_day(client: TestClient) -> None:
+    response = client.get("/static/app.css")
+    assert response.headers["cache-control"] == "public, max-age=86400"
+    assert "cache-control" not in client.get("/week").headers

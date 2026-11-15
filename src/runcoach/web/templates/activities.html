@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Activities{% endblock %}
+{% block content %}
+<h1>Activities</h1>
+{% include "_messages.html" %}
+
+<section aria-labelledby="upload-title">
+  <h2 id="upload-title">Upload a run</h2>
+  <form method="post" action="/activities/upload" enctype="multipart/form-data" class="stack">
+    <label>Activity file ({{ accept }})
+      <input type="file" name="file" accept="{{ accept }}" required>
+    </label>
+    <div class="actions"><button type="submit">Upload</button></div>
+  </form>
+  <p class="muted">Uploads are matched to your planned sessions automatically. The same file twice is ignored.</p>
+</section>
+
+<section aria-labelledby="unmatched-title">
+  <h2 id="unmatched-title">Needs a session</h2>
+  {% for a, options in unmatched %}
+  <article class="card sport-{{ a.sport }}">
+    <header>
+      <span class="title">{{ a.started_at | local_time }}</span>
+      <span class="badge">{{ a.sport }}</span>
+    </header>
+    <p class="meta">{{ (a.duration_s // 60) }} min{% if a.distance_m %} · {{ a.distance_m | km }}{% endif %}</p>
+    {% if options %}
+    <form method="post" action="/activities/{{ a.id }}/assign" class="actions">
+      <label>Was this
+        <select name="session_id">
+          {% for s in options %}<option value="{{ s.id }}">{{ s.date.strftime("%a %d %b") }} · {{ s.title }} ({{ s.duration_min }} min)</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit">Assign</button>
+    </form>
+    {% else %}
+    <p class="muted">No planned session nearby. It still counts towards your training load.</p>
+    {% endif %}
+  </article>
+  {% else %}
+  <p class="muted">Everything is matched.</p>
+  {% endfor %}
+</section>
+
+<section aria-labelledby="recent-title">
+  <h2 id="recent-title">Recently matched</h2>
+  {% for a in recent %}
+  <p><a href="/session/{{ a.session_id }}">{{ a.started_at | local_time }}</a> · {{ a.sport }} · {{ (a.duration_s // 60) }} min{% if a.distance_m %} · {{ a.distance_m | km }}{% endif %}</p>
+  {% else %}
+  <p class="muted">None yet.</p>
+  {% endfor %}
+</section>
+{% endblock %}

@@ -8,6 +8,7 @@
   · {{ s.duration_min }} min{% if s.distance_m %} · {{ s.distance_m | km }}{% endif %}
   {% if s.rpe %}· RPE {{ s.rpe }}{% endif %} · <span class="badge status">{{ s.status }}</span></p>
 {% if s.reason %}<p class="reason">{{ s.reason }}</p>{% endif %}
+{% include "_messages.html" %}
 
 {% if s.steps %}<h2>Steps</h2>{{ steps_list(s.steps) }}{% endif %}
 
@@ -21,6 +22,14 @@
     <button type="submit" class="secondary" formaction="/session/{{ s.id }}/skip">Skip</button>
   </div>
 </form>
+
+<h2>Move it</h2>
+<form method="post" action="/session/{{ s.id }}/move" class="stack">
+  <label>New date <input type="date" name="date" value="{{ s.date }}" required></label>
+  <label>Start time <input type="time" name="start_time" value="{{ s.start_time or '' }}"></label>
+  <div class="actions"><button type="submit" class="secondary">Move</button></div>
+</form>
+<p class="muted">A move that breaks a safety rule (such as two hard days in a row) is refused, with the reason.</p>
 {% endif %}
 
 <h2>History</h2>
