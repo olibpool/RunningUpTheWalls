@@ -19,7 +19,7 @@ versions.
    then `cd /opt/runcoach && uv sync --frozen`.
 5. **Settings.** `sudo cp deploy/runcoach.env.example /etc/runcoach.env`, edit it (database path,
    iCal address, weather location), then `sudo chown root:runcoach /etc/runcoach.env && sudo chmod
-   640 /etc/runcoach.env`. Availability windows and other defaults can go in
+640 /etc/runcoach.env`. Availability windows and other defaults can go in
    `/opt/runcoach/config/local.toml`.
 6. **Services.**
    ```bash
