@@ -6,6 +6,26 @@
 <h1>Events</h1>
 {% include "_messages.html" %}
 
+{% if proposals %}
+<section aria-labelledby="proposals-title">
+  <h2 id="proposals-title">From your calendar</h2>
+  <p class="muted">These look like commitments. Nothing changes until you confirm.</p>
+  {% for p in proposals %}
+  <article class="card event">
+    <header>
+      <span class="title">{{ p.title }}</span>
+      <span class="badge">{{ {"fixed": "fixed", "penalty": "drinks", "block": "holiday"}.get(p.kind, p.kind) }}</span>
+    </header>
+    <p class="meta">{{ p.start_date }}{% if p.end_date and p.end_date != p.start_date %} to {{ p.end_date }}{% endif %}{% if p.start_time %} at {{ p.start_time }}{% endif %}</p>
+    <form method="post" action="/events/proposals/confirm">
+      <input type="hidden" name="external_id" value="{{ p.external_id }}">
+      <button type="submit">Confirm</button>
+    </form>
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+
 <section aria-labelledby="fixed-title">
   <h2 id="fixed-title">Fixed commitments</h2>
   {% for c in fixed %}

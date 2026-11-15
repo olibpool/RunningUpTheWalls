@@ -330,3 +330,45 @@ def test_static_files_are_cached_for_a_day(client: TestClient) -> None:
     response = client.get("/static/app.css")
     assert response.headers["cache-control"] == "public, max-age=86400"
     assert "cache-control" not in client.get("/week").headers
+
+
+def test_calendar_proposals_are_confirmed_not_assumed(client: TestClient, db_path: Path) -> None:
+    from runcoach.domain.models import CalendarEvent
+
+    conn = db.connect(db_path)
+    db.cache_calendar_events(
+        conn,
+        [
+            CalendarEvent(
+                external_id="cal-drinks@2027-02-05T19:00:00+00:00",
+                title="Drinks with the team",
+                starts_at="2027-02-05T19:00:00+00:00",
+                ends_at="2027-02-05T23:00:00+00:00",
+            ),
+            CalendarEvent(
+                external_id="cal-dentist@2027-02-06T09:00:00+00:00",
+                title="Dentist",
+                starts_at="2027-02-06T09:00:00+00:00",
+                ends_at="2027-02-06T09:30:00+00:00",
+            ),
+        ],
+        window_start=date(2027, 2, 1),
+        window_end=date(2027, 2, 28),
+    )
+    conn.close()
+
+    page = client.get("/events").text
+    assert "From your calendar" in page and "Drinks with the team" in page
+    assert "Dentist" not in page
+    conn = db.connect(db_path)
+    assert db.list_commitments(conn) == []  # nothing active until confirmed
+    conn.close()
+
+    client.post(
+        "/events/proposals/confirm", data={"external_id": "cal-drinks@2027-02-05T19:00:00+00:00"}
+    )
+    conn = db.connect(db_path)
+    (drinks,) = db.list_commitments(conn)
+    conn.close()
+    assert drinks.kind == "penalty" and drinks.active and drinks.source == "gcal"
+    assert "From your calendar" not in client.get("/events").text

@@ -3,13 +3,14 @@ from __future__ import annotations
 import sqlite3
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from runcoach import db
 from runcoach.config import ConfigNode, load_scheduling_config
 from runcoach.domain.models import Commitment, commitment_problem
+from runcoach.ingest.calendar import detect_commitments
 from runcoach.sync import adapt_plan
 from runcoach.web.deps import get_cfg, get_conn, parse_form, redirect, render, today
 
@@ -63,8 +64,23 @@ class EventForm(BaseModel):
         )
 
 
+def _proposals(conn: sqlite3.Connection, cfg: ConfigNode) -> list[Commitment]:
+    """Calendar events that look like commitments, minus any already confirmed."""
+    known = {c.external_id for c in db.list_commitments(conn) if c.external_id}
+    keywords = load_scheduling_config(cfg).calendar_keywords
+    return [
+        p
+        for p in detect_commitments(db.calendar_events(conn), keywords)
+        if p.external_id not in known
+    ]
+
+
 def _page(
-    request: Request, conn: sqlite3.Connection, errors: list[str], status_code: int = 200
+    request: Request,
+    conn: sqlite3.Connection,
+    cfg: ConfigNode,
+    errors: list[str],
+    status_code: int = 200,
 ) -> HTMLResponse:
     commitments = db.list_commitments(conn)
     return render(
@@ -74,6 +90,7 @@ def _page(
             "active": "events",
             "fixed": [c for c in commitments if c.kind == "fixed"],
             "events": [c for c in commitments if c.kind != "fixed"],
+            "proposals": _proposals(conn, cfg),
             "errors": errors,
         },
         status_code=status_code,
@@ -82,10 +99,12 @@ def _page(
 
 @router.get("", response_class=HTMLResponse)
 def events(
-    request: Request, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
+    request: Request,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
 ) -> HTMLResponse:
     """Fixed commitments, drinks nights and holidays, with forms to add more."""
-    return _page(request, conn, [])
+    return _page(request, conn, cfg, [])
 
 
 @router.post("", response_model=None)
@@ -108,7 +127,25 @@ async def add(
                 adapt_plan(conn, load_scheduling_config(cfg), today())  # apply it straight away
                 return redirect(request, "/events")
             errors = [problem]
-    return _page(request, conn, errors, status_code=400)
+    return _page(request, conn, cfg, errors, status_code=400)
+
+
+@router.post("/proposals/confirm", response_model=None)
+def confirm(
+    request: Request,
+    external_id: Annotated[str, Form()],
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+) -> Response:
+    """Turn a calendar proposal into an active commitment, as detected (not as posted)."""
+    proposal = next((p for p in _proposals(conn, cfg) if p.external_id == external_id), None)
+    if proposal is None:
+        return _page(request, conn, cfg, ["That proposal is no longer available."], 400)
+    if proposal.kind == "penalty":
+        proposal = proposal.model_copy(update={"severity": 2})  # the human can delete and re-log
+    db.save_commitment(conn, proposal.model_copy(update={"active": True}))
+    adapt_plan(conn, load_scheduling_config(cfg), today())
+    return redirect(request, "/events")
 
 
 @router.post("/{commitment_id}/delete", response_model=None)
