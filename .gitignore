@@ -8,3 +8,4 @@ config/local.toml
 .mypy_cache/
 .ruff_cache/
 .data/
+*.egg-info/

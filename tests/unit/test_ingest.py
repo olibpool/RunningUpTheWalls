@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from runcoach.ingest.gpx import parse_gpx_file
 from runcoach.web.app import app
 
-SAMPLE_GPX = b'''<?xml version="1.0" encoding="UTF-8"?>
+SAMPLE_GPX = b"""<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="coachal" xmlns="http://www.topografix.com/GPX/1/1">
   <trk>
     <name>Morning Run</name>
@@ -19,7 +19,7 @@ SAMPLE_GPX = b'''<?xml version="1.0" encoding="UTF-8"?>
     </trkseg>
   </trk>
 </gpx>
-'''
+"""
 
 
 def test_parse_gpx_file_extracts_activity_summary() -> None:

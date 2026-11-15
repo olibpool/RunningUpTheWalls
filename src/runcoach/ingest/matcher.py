@@ -65,10 +65,7 @@ def match(
         if best_match is None or best_score is None:
             continue
 
-        if any(
-            other.session == best_match and other.score == best_score
-            for other in matches
-        ):
+        if any(other.session == best_match and other.score == best_score for other in matches):
             continue
 
         matches.append(Match(activity=activity, session=best_match, score=best_score))

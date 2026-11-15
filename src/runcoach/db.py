@@ -5,14 +5,12 @@ import sqlite3
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from alembic.config import Config
-
-from alembic import command
 from runcoach.domain.models import Activity, CalendarEvent, PlannedSession
 
+# All SQL lives in this module behind model-in/model-out functions; that is the seam to swap
+# for SQLAlchemy later. Migrations are portable DDL so Alembic can adopt them via a baseline stamp.
 ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_DIR = ROOT / "alembic"
-_DB_PATHS: dict[int, str] = {}
+MIGRATION_DIR = ROOT / "migrations"
 
 
 def to_row(model: Activity) -> dict[str, object]:
@@ -55,9 +53,9 @@ def from_row(row: sqlite3.Row) -> Activity:
 
 
 def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
+    """Open the database with the required pragmas and apply pending migrations."""
     path = Path(db_path) if db_path is not None else ROOT / "runcoach.db"
     conn = sqlite3.connect(str(path))
-    _DB_PATHS[id(conn)] = str(path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -67,18 +65,26 @@ def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
     return conn
 
 
-def _alembic_config(db_path: Path) -> Config:
-    config = Config(str(ROOT / "alembic.ini"))
-    config.set_main_option("script_location", str(MIGRATION_DIR))
-    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path.as_posix()}")
-    return config
+def schema_version(conn: sqlite3.Connection) -> int:
+    """Return the applied migration number stored in PRAGMA user_version."""
+    return int(conn.execute("PRAGMA user_version").fetchone()[0])
 
 
-def migrate(conn: sqlite3.Connection) -> None:
-    db_path = _DB_PATHS.get(id(conn))
-    if db_path is None:
-        return
-    command.upgrade(_alembic_config(Path(db_path)), "head")
+def migrate(conn: sqlite3.Connection, migration_dir: Path = MIGRATION_DIR) -> None:
+    """Apply each NNNN_*.sql file above user_version in its own transaction."""
+    current = schema_version(conn)
+    for path in sorted(migration_dir.glob("[0-9][0-9][0-9][0-9]_*.sql")):
+        number = int(path.name[:4])
+        if number <= current:
+            continue
+        script = path.read_text(encoding="utf-8")
+        try:
+            conn.executescript(f"BEGIN;\n{script}\nPRAGMA user_version = {number};\nCOMMIT;")
+        except sqlite3.Error:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        current = number
 
 
 def insert_activity(conn: sqlite3.Connection, activity: Activity) -> int:
@@ -524,6 +530,7 @@ def save_plan(
 __all__ = [
     "connect",
     "migrate",
+    "schema_version",
     "save_plan",
     "insert_activity",
     "from_row",

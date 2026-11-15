@@ -119,16 +119,14 @@ def test_db_migration_and_fk_error(tmp_path) -> None:
     conn = db.connect(db_path)
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(commitment)").fetchall()}
     assert "minimal_plan" in columns
-    assert (
-        conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'"
-        ).fetchone()
-        is not None
-    )
+    latest = max(int(path.name[:4]) for path in db.MIGRATION_DIR.glob("*.sql"))
+    assert db.schema_version(conn) == latest
+    schema = conn.execute("SELECT sql FROM sqlite_master ORDER BY name").fetchall()
     conn.close()
 
     conn2 = db.connect(db_path)
-    conn2.execute("SELECT 1")
+    assert db.schema_version(conn2) == latest
+    assert conn2.execute("SELECT sql FROM sqlite_master ORDER BY name").fetchall() == schema
     conn2.close()
 
     conn3 = db.connect(db_path)
@@ -138,6 +136,22 @@ def test_db_migration_and_fk_error(tmp_path) -> None:
             "VALUES (999, '2026-11-10', 'run', 'easy', 'Bad', '[]', 'planned')"
         )
     conn3.close()
+
+
+def test_failed_migration_rolls_back_and_keeps_version(tmp_path) -> None:
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    (migrations / "0001_ok.sql").write_text("CREATE TABLE a (id INTEGER PRIMARY KEY);")
+    (migrations / "0002_bad.sql").write_text("CREATE TABLE b (id INTEGER);\nNOT VALID SQL;")
+    conn = sqlite3.connect(tmp_path / "m.db")
+
+    with pytest.raises(sqlite3.Error):
+        db.migrate(conn, migrations)
+
+    assert db.schema_version(conn) == 1
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert tables == {"a"}
+    conn.close()
 
 
 def test_insert_activity_is_idempotent(tmp_path) -> None:
