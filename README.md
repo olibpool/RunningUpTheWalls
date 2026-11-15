@@ -36,18 +36,21 @@ This creates the environment and installs the project dependencies.
 
 ## Run the web app
 
-Start the local API server:
+Start the server:
 
 ```bash
 uv run uvicorn runcoach.web.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Then open:
+Then open http://127.0.0.1:8000 and, in this order:
 
-- http://127.0.0.1:8000/health
-- http://127.0.0.1:8000/docs
+1. **Events**: add football (or any weekly fixed commitment) so plans are built around it.
+2. **Plan → Create a plan**: enter a recent race time (or a VDOT), preview, then save.
+   A plan that fails the safety checks can't be saved; the preview says why.
+3. **Week**: each day's sessions with paces and the reason they were placed there.
+   Mark sessions done (optionally with RPE and minutes) or skipped.
 
-The health route confirms the app is live and the Swagger UI exposes the available endpoints.
+Data lives in `runcoach.db` in the project root. `/healthz` reports the app and schema version.
 
 ## Use the CLI
 

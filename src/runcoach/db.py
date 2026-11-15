@@ -5,7 +5,15 @@ import sqlite3
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from runcoach.domain.models import Activity, CalendarEvent, PlannedSession
+from runcoach.domain.models import (
+    Activity,
+    Adjustment,
+    CalendarEvent,
+    Commitment,
+    Plan,
+    PlannedSession,
+    Session,
+)
 
 # All SQL lives in this module behind model-in/model-out functions; that is the seam to swap
 # for SQLAlchemy later. Migrations are portable DDL so Alembic can adopt them via a baseline stamp.
@@ -55,7 +63,9 @@ def from_row(row: sqlite3.Row) -> Activity:
 def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
     """Open the database with the required pragmas and apply pending migrations."""
     path = Path(db_path) if db_path is not None else ROOT / "runcoach.db"
-    conn = sqlite3.connect(str(path))
+    # Each connection serves one request or command; the web layer may open it in one worker
+    # thread and use it in another, never concurrently.
+    conn = sqlite3.connect(str(path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -261,22 +271,73 @@ def save_commitment(conn: sqlite3.Connection, commitment: object) -> int:
         return int(last_id)
 
 
-def list_commitments(conn: sqlite3.Connection) -> list[dict[str, object]]:
-    """Return all commitment rows as dictionaries."""
-    rows = conn.execute(
-        """
-        SELECT id, kind, sport, title, weekday, start_date, end_date, start_time,
-               duration_min, rpe, severity, source, external_id, active, minimal_plan
-        FROM commitment
-        ORDER BY id
-        """
-    ).fetchall()
-    return [dict(row) for row in rows]
+def list_commitments(conn: sqlite3.Connection) -> list[Commitment]:
+    """Return every commitment and event, oldest first."""
+    rows = conn.execute("SELECT * FROM commitment ORDER BY id").fetchall()
+    return [Commitment.model_validate(dict(row)) for row in rows]
 
 
 def delete_commitment(conn: sqlite3.Connection, commitment_id: int) -> None:
     """Delete a commitment row by id."""
-    conn.execute("DELETE FROM commitment WHERE id = ?", (commitment_id,))
+    with conn:
+        conn.execute("DELETE FROM commitment WHERE id = ?", (commitment_id,))
+
+
+def active_plan(conn: sqlite3.Connection) -> Plan | None:
+    """Return the newest active plan, if any."""
+    row = conn.execute(
+        "SELECT * FROM plan WHERE status = 'active' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    return Plan.model_validate(dict(row)) if row is not None else None
+
+
+def _session(row: sqlite3.Row) -> Session:
+    return Session(
+        id=row["id"],
+        plan_id=row["plan_id"],
+        status=row["status"],
+        date=row["date"],
+        start_time=row["start_time"],
+        sport=row["sport"],
+        kind=row["kind"],
+        title=row["title"],
+        steps=json.loads(row["steps_json"]),
+        duration_min=row["planned_duration_min"],
+        distance_m=row["planned_distance_m"],
+        rpe=row["planned_rpe"],
+        leg_load=row["leg_load"],
+        finger_load=row["finger_load"],
+        reason=row["reason"] or "",
+    )
+
+
+def plan_sessions(
+    conn: sqlite3.Connection, plan_id: int, start: date | None = None, end: date | None = None
+) -> list[Session]:
+    """Return a plan's sessions, optionally limited to dates in [start, end)."""
+    rows = conn.execute(
+        """
+        SELECT * FROM session
+        WHERE plan_id = ? AND date >= ? AND date < ?
+        ORDER BY date, start_time, id
+        """,
+        (plan_id, (start or date.min).isoformat(), (end or date.max).isoformat()),
+    ).fetchall()
+    return [_session(row) for row in rows]
+
+
+def get_session(conn: sqlite3.Connection, session_id: int) -> Session | None:
+    """Return one stored session by id."""
+    row = conn.execute("SELECT * FROM session WHERE id = ?", (session_id,)).fetchone()
+    return _session(row) if row is not None else None
+
+
+def session_adjustments(conn: sqlite3.Connection, session_id: int) -> list[Adjustment]:
+    """Return the adjustment log for one session, oldest first."""
+    rows = conn.execute(
+        "SELECT * FROM adjustment WHERE session_id = ? ORDER BY id", (session_id,)
+    ).fetchall()
+    return [Adjustment.model_validate(dict(row)) for row in rows]
 
 
 def cache_calendar_events(
@@ -500,6 +561,8 @@ def save_plan(
     created_at = datetime.now(timezone.utc).isoformat()
 
     with conn:
+        # One active plan at a time; the new plan supersedes any earlier one.
+        conn.execute("UPDATE plan SET status = 'complete' WHERE status = 'active'")
         cursor = conn.execute(
             """
             INSERT INTO plan (
@@ -541,5 +604,9 @@ __all__ = [
     "delete_commitment",
     "cache_calendar_events",
     "get_kv",
+    "active_plan",
+    "plan_sessions",
+    "get_session",
+    "session_adjustments",
     "replace_continuous_sessions",
 ]

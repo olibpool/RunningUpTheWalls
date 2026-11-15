@@ -293,13 +293,11 @@ def test_expand_commitments_and_commitment_roundtrip(tmp_path) -> None:
     assert commitment_id > 0
     assert travel_block_id > 0
     rows = db.list_commitments(conn)
-    assert any(row["title"] == "Football" for row in rows)
-    assert next(row for row in rows if row["id"] == travel_block_id)["minimal_plan"] == 1
+    assert any(row.title == "Football" for row in rows)
+    assert next(row for row in rows if row.id == travel_block_id).minimal_plan
     db.delete_commitment(conn, commitment_id)
     db.delete_commitment(conn, travel_block_id)
-    assert not any(
-        row["id"] in {commitment_id, travel_block_id} for row in db.list_commitments(conn)
-    )
+    assert not any(row.id in {commitment_id, travel_block_id} for row in db.list_commitments(conn))
     conn.close()
 
 

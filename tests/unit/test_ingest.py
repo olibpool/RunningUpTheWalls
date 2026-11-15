@@ -3,7 +3,9 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from runcoach.ingest.gpx import parse_gpx_file
-from runcoach.web.app import app
+from runcoach.web.app import create_app
+
+app = create_app()
 
 SAMPLE_GPX = b"""<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="coachal" xmlns="http://www.topografix.com/GPX/1/1">

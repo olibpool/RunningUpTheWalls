@@ -1,0 +1,25 @@
+<article id="session-{{ s.id }}" class="card session sport-{{ s.sport }} status-{{ s.status }}">
+  <header>
+    <span class="time">{{ s.start_time or "" }}</span>
+    <a href="/session/{{ s.id }}" class="title">{{ s.title }} {{ s.steps | structure }}</a>
+    <span class="badge">{{ s.sport }}</span>
+    {% if s.status != "planned" %}<span class="badge status">{{ s.status }}</span>{% endif %}
+  </header>
+  <p class="meta">
+    {{ s.duration_min }} min{% if s.distance_m %} · {{ s.distance_m | km }}{% endif %}
+    {% set p = s.steps | main_pace %}{% if p %} · {{ p }}{% endif %}
+  </p>
+  {% if s.reason %}<p class="reason">{{ s.reason }}</p>{% endif %}
+  {% if s.status == "planned" %}
+  <div class="actions">
+    <form method="post" action="/session/{{ s.id }}/done"
+          hx-post="/session/{{ s.id }}/done" hx-target="#session-{{ s.id }}" hx-swap="outerHTML">
+      <button type="submit">Done</button>
+    </form>
+    <form method="post" action="/session/{{ s.id }}/skip"
+          hx-post="/session/{{ s.id }}/skip" hx-target="#session-{{ s.id }}" hx-swap="outerHTML">
+      <button type="submit" class="secondary">Skip</button>
+    </form>
+  </div>
+  {% endif %}
+</article>

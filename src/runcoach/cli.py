@@ -1,53 +1,87 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from datetime import date, timedelta
+from collections.abc import Callable
+from datetime import date
 from typing import get_args
 
 from runcoach import db
 from runcoach.config import load_config
+from runcoach.display import main_pace, monday, structure
 from runcoach.domain.models import (
     DISTANCE_METRES,
     Commitment,
     Distance,
     PlanInput,
     PlannedSession,
-    Step,
+    commitment_problem,
 )
 from runcoach.engine.plan import InfeasibleGoal, generate_race_plan_result
 
 
-def _commitment_add(args: argparse.Namespace) -> int:
-    commitment = Commitment(
-        kind=args.kind,
-        sport=args.sport,
-        title=args.title,
-        weekday=int(args.weekday) if args.weekday is not None else None,
-        start_date=args.start_date,
-        end_date=args.end_date,
-        start_time=args.start_time,
-        duration_min=int(args.duration) if args.duration is not None else None,
-        rpe=float(args.rpe) if args.rpe is not None else None,
-        severity=int(args.severity) if args.severity is not None else None,
-        source="manual",
-        active=True,
-    )
+def _save_commitment(build: Callable[[], Commitment], label: str) -> int:
+    """Validate and store a hand-entered commitment or event."""
+    try:
+        commitment = build()
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    problem = commitment_problem(commitment)
+    if problem:
+        print(problem, file=sys.stderr)
+        return 2
     conn = db.connect()
     try:
-        saved_id = db.save_commitment(conn, commitment)
-        print(f"Saved commitment with id={saved_id}")
+        print(f"Saved {label} with id={db.save_commitment(conn, commitment)}")
         return 0
     finally:
         conn.close()
 
 
+def _commitment_add(args: argparse.Namespace) -> int:
+    return _save_commitment(
+        lambda: Commitment(
+            kind=args.kind,
+            sport=args.sport,
+            title=args.title,
+            weekday=args.weekday,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            start_time=args.start_time,
+            duration_min=args.duration,
+            rpe=args.rpe,
+            severity=args.severity,
+        ),
+        "commitment",
+    )
+
+
+def _event_add(args: argparse.Namespace) -> int:
+    start, end = (args.start, args.end) if args.kind == "block" else (args.date, args.date)
+    return _save_commitment(
+        lambda: Commitment(
+            kind=args.kind,
+            sport=args.sport,
+            title=args.title or args.kind.title(),
+            weekday=args.weekday,
+            start_date=start,
+            end_date=end,
+            start_time=args.start_time,
+            duration_min=args.duration,
+            rpe=args.rpe,
+            severity=args.severity,
+            minimal_plan=args.minimal_plan,
+        ),
+        "event",
+    )
+
+
 def _commitment_list(_args: argparse.Namespace) -> int:
     conn = db.connect()
     try:
-        for row in db.list_commitments(conn):
-            print(json.dumps(row, sort_keys=True))
+        for commitment in db.list_commitments(conn):
+            print(commitment.model_dump_json())
         return 0
     finally:
         conn.close()
@@ -57,146 +91,28 @@ def _commitment_remove(args: argparse.Namespace) -> int:
     conn = db.connect()
     try:
         db.delete_commitment(conn, int(args.id))
-        print(f"Deleted commitment {args.id}")
+        print(f"Deleted {args.id}")
         return 0
     finally:
         conn.close()
-
-
-def _event_add(args: argparse.Namespace) -> int:
-    if args.weekday is not None and not 0 <= args.weekday <= 6:
-        print("--weekday must be in the range 0-6, where 0 is Monday.", file=sys.stderr)
-        return 2
-    if args.kind == "block":
-        if not args.start or not args.end:
-            print("A block requires --start and --end dates.", file=sys.stderr)
-            return 2
-        start_date, end_date = args.start, args.end
-    elif args.kind == "fixed":
-        if args.weekday is None and not args.date:
-            print("A fixed event requires --weekday or --date.", file=sys.stderr)
-            return 2
-        if not args.sport or not args.start_time or not args.duration:
-            print(
-                "A fixed event requires --sport, --start-time, and --duration.",
-                file=sys.stderr,
-            )
-            return 2
-        start_date = args.date
-        end_date = args.date
-    else:
-        if not args.date:
-            print(f"A {args.kind} event requires --date.", file=sys.stderr)
-            return 2
-        start_date, end_date = args.date, args.date
-
-    if args.kind == "penalty" and args.severity is None:
-        print("A penalty event requires --severity (1-3).", file=sys.stderr)
-        return 2
-    if args.kind == "credit" and (args.rpe is None or args.duration is None):
-        print("A credit event requires --rpe and --duration.", file=sys.stderr)
-        return 2
-    if args.minimal_plan and args.kind != "block":
-        print("--minimal-plan is only valid for a block event.", file=sys.stderr)
-        return 2
-    try:
-        start = date.fromisoformat(start_date) if start_date else None
-        end = date.fromisoformat(end_date) if end_date else None
-        if start and end and start > end:
-            print("The event end date must not precede its start date.", file=sys.stderr)
-            return 2
-    except ValueError:
-        print("Event dates must use YYYY-MM-DD format.", file=sys.stderr)
-        return 2
-
-    event = Commitment(
-        kind=args.kind,
-        sport=args.sport,
-        title=args.title or args.kind.replace("_", " ").title(),
-        weekday=args.weekday,
-        start_date=start_date,
-        end_date=end_date,
-        start_time=args.start_time,
-        duration_min=args.duration,
-        rpe=args.rpe,
-        severity=args.severity,
-        source="manual",
-        active=True,
-        minimal_plan=args.minimal_plan,
-    )
-    conn = db.connect()
-    try:
-        saved_id = db.save_commitment(conn, event)
-        print(f"Saved event with id={saved_id}")
-        return 0
-    finally:
-        conn.close()
-
-
-def _event_list(_args: argparse.Namespace) -> int:
-    conn = db.connect()
-    try:
-        for row in db.list_commitments(conn):
-            print(json.dumps(row, sort_keys=True))
-        return 0
-    finally:
-        conn.close()
-
-
-def _event_remove(args: argparse.Namespace) -> int:
-    conn = db.connect()
-    try:
-        db.delete_commitment(conn, int(args.id))
-        print(f"Deleted event {args.id}")
-        return 0
-    finally:
-        conn.close()
-
-
-def _pace(seconds_per_km: float) -> str:
-    return f"{int(seconds_per_km // 60)}:{int(seconds_per_km % 60):02d}"
-
-
-def _main_pace(steps: list[Step]) -> str:
-    """Pace of the first work or steady step, searching inside repeats."""
-    for step in steps:
-        if step.kind == "repeat":
-            found = _main_pace(step.children)
-            if found:
-                return found
-        elif step.kind in {"work", "steady"} and step.pace_min_s_per_km and step.pace_max_s_per_km:
-            low, high = _pace(step.pace_min_s_per_km), _pace(step.pace_max_s_per_km)
-            return f"{low}/km" if low == high else f"{low}-{high}/km"
-    return ""
-
-
-def _structure(steps: list[Step]) -> str:
-    """Describe the main set from the steps, which stay correct after load scaling."""
-    for step in steps:
-        if step.kind == "repeat" and step.children and step.children[0].duration_s:
-            work = step.children[0].duration_s
-            return f"{step.repeats} x {work // 60}:{work % 60:02d}"
-        if step.kind == "work" and step.duration_s:
-            return f"{round(step.duration_s / 60)} min"
-    return ""
 
 
 def _print_weeks(sessions: list[PlannedSession]) -> None:
     week_start: date | None = None
     for session in sorted(sessions, key=lambda s: (s.date, s.start_time or "")):
-        monday = session.date - timedelta(days=session.date.weekday())
-        if monday != week_start:
-            week_start = monday
-            week = [s for s in sessions if monday <= s.date < monday + timedelta(days=7)]
+        week_monday = monday(session.date)
+        if week_monday != week_start:
+            week_start = week_monday
+            week = [s for s in sessions if monday(s.date) == week_monday]
             km = sum(s.distance_m or 0 for s in week if s.sport == "run") / 1000
             load = sum(s.leg_load for s in week)
-            print(f"\nWeek of {monday.isoformat()}  run {km:.1f} km  leg load {load:.0f}")
+            print(f"\nWeek of {week_monday.isoformat()}  run {km:.1f} km  leg load {load:.0f}")
         km_text = f"{(session.distance_m or 0) / 1000:5.1f} km" if session.distance_m else " " * 8
         print(
             f"  {session.date.strftime('%a %d %b')} {session.start_time or '':5}  "
-            f"{(session.title + ' ' + _structure(session.steps)).strip():<30} "
+            f"{(session.title + ' ' + structure(session.steps)).strip():<30} "
             f"{session.duration_min or 0:4d} min {km_text}  "
-            f"{_main_pace(session.steps)}"
+            f"{main_pace(session.steps)}"
         )
 
 
@@ -290,11 +206,11 @@ def main() -> None:
     event_add.set_defaults(func=_event_add)
 
     event_list = event_sub.add_parser("list")
-    event_list.set_defaults(func=_event_list)
+    event_list.set_defaults(func=_commitment_list)
 
     event_remove = event_sub.add_parser("remove")
     event_remove.add_argument("--id", required=True)
-    event_remove.set_defaults(func=_event_remove)
+    event_remove.set_defaults(func=_commitment_remove)
 
     generate_parser = subparsers.add_parser("plan")
     generate_sub = generate_parser.add_subparsers(dest="action", required=True)

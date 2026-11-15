@@ -1,0 +1,28 @@
+{# A list of WeekSummary; sessions may be planned or stored. #}
+{% for w in weeks %}
+<details class="week-summary"{% if loop.first %} open{% endif %}>
+  <summary>
+    <strong>Week of {{ w.start.strftime("%d %b") }}</strong>
+    <span>{{ "%.1f" | format(w.run_km) }} km run · leg load {{ "%.0f" | format(w.leg_load) }}</span>
+  </summary>
+  <p><a href="/week?start={{ w.start }}">Open this week</a></p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th scope="col">Day</th><th scope="col">Session</th><th scope="col">Time</th><th scope="col">Distance</th><th scope="col">Pace</th></tr>
+      </thead>
+      <tbody>
+        {% for s in w.sessions %}
+        <tr>
+          <td>{{ s.date.strftime("%a %d") }} {{ s.start_time or "" }}</td>
+          <td>{{ s.title }} {{ s.steps | structure }}</td>
+          <td>{{ s.duration_min }} min</td>
+          <td>{{ s.distance_m | km }}</td>
+          <td>{{ s.steps | main_pace }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endfor %}

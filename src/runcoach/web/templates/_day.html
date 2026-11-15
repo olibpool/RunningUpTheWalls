@@ -1,0 +1,16 @@
+<section class="day{% if day.date == today %} today{% endif %}" aria-labelledby="day-{{ day.date }}">
+  <h2 id="day-{{ day.date }}">{{ day.date.strftime("%a %d %b") }}{% if day.date == today %} <span class="badge">Today</span>{% endif %}</h2>
+  {% for note in day.notes %}<p class="note">{{ note }}</p>{% endfor %}
+  {% for f in day.fixed %}
+  <article class="card fixed sport-{{ f.sport or 'other' }}">
+    <header>
+      <span class="time">{{ f.start_time or "" }}</span>
+      <span class="title">{{ f.title }}</span>
+      <span class="badge">fixed</span>
+    </header>
+    <p class="meta">{% if f.duration_min %}{{ f.duration_min }} min{% endif %}{% if f.rpe %} · RPE {{ f.rpe }}{% endif %}</p>
+  </article>
+  {% endfor %}
+  {% for s in day.sessions %}{% include "_session_card.html" %}{% endfor %}
+  {% if not day.sessions and not day.fixed %}<p class="rest">Rest</p>{% endif %}
+</section>

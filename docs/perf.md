@@ -10,3 +10,4 @@
 Use the following command on the Pi after deployment:
 
 ps -o rss= -p $(pgrep -f uvicorn)
+- Phase 3 basic UI local check (2026-11-15): uvicorn idle working set 64.9 MiB on Windows after loading /healthz, /week, /plan/new and /events (+8 MiB over the Phase 2c reading; Jinja templates and the Phase 1 engine). Still not a Pi measurement.

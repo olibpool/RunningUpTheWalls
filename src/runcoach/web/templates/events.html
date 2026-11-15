@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% set weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+{% set event_labels = {"penalty": "drinks", "block": "holiday", "credit": "active holiday"} %}
+{% block title %}Events{% endblock %}
+{% block content %}
+<h1>Events</h1>
+{% include "_messages.html" %}
+
+<section aria-labelledby="fixed-title">
+  <h2 id="fixed-title">Fixed commitments</h2>
+  {% for c in fixed %}
+  <article class="card fixed">
+    <header>
+      <span class="title">{{ c.title }}</span>
+      <span class="badge">{{ c.sport or "other" }}</span>
+    </header>
+    <p class="meta">
+      {% if c.weekday is not none %}Every {{ weekdays[c.weekday] }}{% else %}{{ c.start_date }}{% endif %}
+      {% if c.start_time %}at {{ c.start_time }}{% endif %}
+      {% if c.duration_min %}· {{ c.duration_min }} min{% endif %}{% if c.rpe %} · RPE {{ c.rpe }}{% endif %}
+    </p>
+    <form method="post" action="/events/{{ c.id }}/delete"><button type="submit" class="secondary">Delete</button></form>
+  </article>
+  {% else %}
+  <p class="muted">None yet. Add football here so plans are built around it.</p>
+  {% endfor %}
+  <details{% if not fixed %} open{% endif %}>
+    <summary>Add a fixed commitment</summary>
+    <form method="post" action="/events" class="stack">
+      <input type="hidden" name="form" value="fixed">
+      <label>Title <input name="title" placeholder="Football"></label>
+      <label>Sport
+        <select name="sport">
+          <option value="football">Football</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label>Day
+        <select name="weekday">
+          {% for name in weekdays %}<option value="{{ loop.index0 }}"{% if loop.index0 == 1 %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Start time <input type="time" name="start_time" required></label>
+      <label>Duration (minutes) <input type="number" name="duration_min" min="1" required></label>
+      <label>Typical effort (RPE 1-10) <input type="number" name="rpe" min="1" max="10" step="0.5" required></label>
+      <div class="actions"><button type="submit">Add commitment</button></div>
+    </form>
+  </details>
+</section>
+
+<section aria-labelledby="events-title">
+  <h2 id="events-title">Drinks nights and holidays</h2>
+  {% for c in events %}
+  <article class="card event kind-{{ c.kind }}">
+    <header>
+      <span class="title">{{ c.title }}</span>
+      <span class="badge">{{ "travel with running" if c.minimal_plan else event_labels[c.kind] }}</span>
+    </header>
+    <p class="meta">{{ c.start_date }}{% if c.end_date and c.end_date != c.start_date %} to {{ c.end_date }}{% endif %}
+      {% if c.severity %}· severity {{ c.severity }}{% endif %}</p>
+    <form method="post" action="/events/{{ c.id }}/delete"><button type="submit" class="secondary">Delete</button></form>
+  </article>
+  {% else %}
+  <p class="muted">Nothing logged.</p>
+  {% endfor %}
+
+  <details>
+    <summary>Log a drinks night</summary>
+    <form method="post" action="/events" class="stack">
+      <input type="hidden" name="form" value="drinks">
+      <label>Date <input type="date" name="date" required></label>
+      <label>How big a night?
+        <select name="severity">
+          <option value="1">1 · a couple of drinks</option>
+          <option value="2" selected>2 · a proper night out</option>
+          <option value="3">3 · a big one</option>
+        </select>
+      </label>
+      <div class="actions"><button type="submit">Log drinks</button></div>
+    </form>
+  </details>
+
+  <details>
+    <summary>Add a holiday</summary>
+    <form method="post" action="/events" class="stack">
+      <input type="hidden" name="form" value="holiday">
+      <label>Title <input name="title" placeholder="Holiday"></label>
+      <label>First day <input type="date" name="start_date" required></label>
+      <label>Last day <input type="date" name="end_date" required></label>
+      <fieldset>
+        <legend>Type</legend>
+        <label class="inline"><input type="radio" name="holiday_type" value="break" checked> Full break</label>
+        <label class="inline"><input type="radio" name="holiday_type" value="travel"> Travel, with a few short runs</label>
+        <label class="inline"><input type="radio" name="holiday_type" value="active"> Active (hiking, skiing)</label>
+      </fieldset>
+      <p class="muted">For an active holiday, give the typical daily effort:</p>
+      <label>Daily minutes <input type="number" name="duration_min" min="1"></label>
+      <label>Daily effort (RPE 1-10) <input type="number" name="rpe" min="1" max="10" step="0.5"></label>
+      <div class="actions"><button type="submit">Add holiday</button></div>
+    </form>
+  </details>
+</section>
+{% endblock %}

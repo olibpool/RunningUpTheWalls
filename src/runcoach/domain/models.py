@@ -37,6 +37,17 @@ class PlannedSession(BaseModel):
     reason: str = ""
 
 
+SessionStatus = Literal["planned", "done", "skipped", "moved", "dropped"]
+
+
+class Session(PlannedSession):
+    """A planned session as stored, with its database id and status."""
+
+    id: int
+    plan_id: int
+    status: SessionStatus = "planned"
+
+
 class Athlete(BaseModel):
     id: int = 1
     name: str | None = None
@@ -107,6 +118,33 @@ class Commitment(BaseModel):
         if self.minimal_plan and self.kind != "block":
             raise ValueError("minimal_plan is only valid for block events")
         return self
+
+
+def commitment_problem(c: Commitment) -> str | None:
+    """Explain why a hand-entered commitment is incomplete or invalid, or return None."""
+    if c.weekday is not None and not 0 <= c.weekday <= 6:
+        return "Weekday must be 0-6, where 0 is Monday."
+    try:
+        start = date.fromisoformat(c.start_date) if c.start_date else None
+        end = date.fromisoformat(c.end_date) if c.end_date else None
+    except ValueError:
+        return "Dates must use YYYY-MM-DD format."
+    if start and end and end < start:
+        return "The end date must not precede the start date."
+    if c.kind == "fixed":
+        if c.weekday is None and start is None:
+            return "A fixed commitment needs a weekday or a date."
+        if not (c.sport and c.start_time and c.duration_min):
+            return "A fixed commitment needs a sport, start time and duration."
+    elif c.kind == "block" and not (start and end):
+        return "A block needs a start and an end date."
+    elif c.kind in {"penalty", "credit"} and start is None:
+        return f"A {c.kind} event needs a date."
+    if c.kind == "penalty" and c.severity is None:
+        return "A penalty event needs a severity (1-3)."
+    if c.kind == "credit" and (c.rpe is None or not c.duration_min):
+        return "A credit event needs an RPE and a duration."
+    return None
 
 
 class CalendarEvent(BaseModel):

@@ -1,6 +1,6 @@
 # Next steps: handover for the next Claude session
 
-Last updated 2026-11-15 on branch `phase1-completion`. Read `data/Strategic Plan.md`, then
+Last updated 2026-11-15 on branch `phase1-completion` (Phase 1 plus the basic Phase 3 UI). Read `data/Strategic Plan.md`, then
 `data/Implementation Plan.md`, then `AGENTS.md`, then this file. Task IDs (P2-T4 etc.) refer
 to the Implementation Plan. Where this file and the plans disagree, this file records a
 decision the human already made. Don't reopen it without asking.
@@ -38,8 +38,9 @@ decision the human already made. Don't reopen it without asking.
 
 Legend: ✅ done and matches the plan · 🟡 partial · ❌ not started.
 
-**Phase 0** 🟡. T1–T3 ✅ (scaffold, layered config, sqlite + `.sql` migrations), T4 🟡 (`/healthz`
-reports the real schema version; no Jinja, templates, static files or htmx yet), T5 ❌ PWA,
+**Phase 0** 🟡. T1–T3 ✅ (scaffold, layered config, sqlite + `.sql` migrations), T4 ✅ (Jinja, `app.css`,
+vendored htmx 2.0.4 with `static/vendor/VERSIONS.txt`, `/healthz` with the real schema version),
+T5 ❌ PWA (manifest, icons, service worker),
 T6 ❌ `deploy/` units, T7 ❌ (human: Pi bring-up), T8 🟡 (`docs/perf.md` has only a Windows reading).
 
 **Phase 1** ✅ apart from the human gate (read a printed half-marathon plan:
@@ -83,7 +84,24 @@ This pass added two soft scheduler costs, `scheduler.same_day_session_cost` and
 time-trial week also gets easy runs, and violations are returned separately. 🟡 T9: see the
 Monday bug below.
 
-**Phases 3, 4 and 5** ❌.
+**Phase 3** 🟡: the basic UI is in, moved ahead of Phase 2 at the human's request so they
+can start using the plan. See "Web UI conventions" below.
+- ✅ P3-T1 layout and nav. ✅ P3-T2 week view (`/week?start=`), with fixed commitments and
+  event notes rendered live from `commitment` (never copied into `session`).
+- 🟡 P3-T3: session detail, Done (logs a `manual` activity with optional RPE and minutes,
+  plus a `manual_done` adjustment) and Skip. **Move is not built yet**; it must validate with
+  `check_plan` and show violations.
+- ✅ P3-T6 events (fixed commitment form; drinks; holiday as full break, travel or active;
+  delete). ❌ calendar proposals to confirm (needs P2b-T10).
+- 🟡 P3-T7 plan wizard: race mode only (race time or VDOT); preview; save refuses violations
+  (D4). Continuous mode needs run history first (Phase 2).
+- 🟡 P3-T9: the origin check and gzip are done. One-day cache headers for static files aren't
+  yet. **Verify the origin check behind `tailscale serve`**, which may rewrite `Host`; the
+  middleware already prefers `X-Forwarded-Host`.
+- ❌ P3-T4 activities (upload page, unmatched list; `/activities/upload` is still the old JSON
+  parse-only stopgap), ❌ P3-T5 check-in, ❌ P3-T8 settings and sync runner, ❌ P3-T10 offline.
+
+**Phases 4 and 5** ❌.
 
 ## Known bugs and gaps (fix as part of the step that touches them)
 
@@ -113,8 +131,11 @@ Monday bug below.
 6. `compose_week` scales **every** step uniformly, including stride and interval rep lengths
    (for example "6 x 0:17" strides). Consider scaling only steady, warm-up and cool-down steps,
    then whole reps.
-7. Fixed commitments (football) aren't stored as `session` rows when a plan is saved, so a week
-   view won't show them. Decide with the human (store them, or render from `commitment`).
+7. **Race plans ignore drinks nights and holidays.** Only the continuous generator turns
+   penalty/block/credit events into `DayConstraint`s. `generate_race_plan_result` should pass
+   `day_constraints(expand_commitments(...))` to `schedule_week` and `check_plan` (merged with
+   its race-day blocks), apply `ramp_for_block` after blocks, and exempt the return weeks, as
+   continuous mode does. Until then the week view shows a banner saying so.
 8. Within a single plan, the race-plan safety check counts only planned sessions. Activities
    aren't in the load yet (Phase 2).
 9. The day-of penalty RPE cap (`penalty.day_of_max_rpe`) also applies to the following
@@ -131,6 +152,28 @@ Monday bug below.
 - **Accepted race-week rules:** no long run in race week, nothing on or after race day, and no
   "race" session emitted.
 - The human will run the Phase 1 gate (read a printed half-marathon plan).
+
+## Web UI conventions (keep to these so pages don't need rewriting)
+
+- One router module per page group in `web/routes/` (`week`, `sessions`, `plans`, `events`,
+  `health`, `activities`), registered in `web/routes/__init__.py`. Add a top-level page to
+  `NAV` in `web/deps.py`.
+- Server-rendered Jinja (`web/templates/`). Partials start with `_` and are what htmx swaps
+  (`_session_card.html`, `_day.html`, `_messages.html`, `_week_table.html`, `_steps.html`).
+  Every form works without JavaScript: `method`/`action` for plain posts, plus `hx-*` for
+  in-place swaps. Handlers use `is_htmx()` to return a fragment, and `redirect()` (a 303, or
+  `HX-Redirect` for htmx) after a POST.
+- Forms are parsed with `parse_form(Model, await request.form())`, which turns pydantic errors
+  into messages for `_messages.html`. Validation of commitments lives in
+  `domain.models.commitment_problem`, shared with the CLI.
+- Routes get the DB through `Depends(get_conn)` (one connection per request) and config
+  through `Depends(get_cfg)`. All SQL stays in `db.py` (D1). Read helpers added for the UI:
+  `active_plan`, `plan_sessions`, `get_session`, `session_adjustments`, and
+  `list_commitments`, which now returns `Commitment` models. Saving a plan marks the
+  previous active plan `complete`.
+- Formatting shared with the CLI is in `runcoach/display.py`, exposed as Jinja filters
+  (`pace`, `step_pace`, `main_pace`, `structure`, `clock`, `km`).
+- Tests: `tests/unit/test_web.py` builds `create_app(db_path=tmp, cfg=...)` per test.
 
 ## Ordered work for the next sessions
 
@@ -156,11 +199,12 @@ re-schedule the next 14 days' planned sessions, log a `calendar_change` adjustme
 `detect_commitments` proposals for confirmation (Phase 3 UI). Fix scheduler speed (bug 1)
 before this, because `sync` runs on the Pi every 30 minutes.
 
-**Step 4: Phase 0 remainder and Phase 3 frontend.** Jinja `base.html`, `app.css`, vendored
-htmx with its version noted, manifest, icons, service worker (P0-T4/T5). Then the routes table
-in the Implementation Plan, the origin-check middleware, gzip and cache headers. Then
-`deploy/*.service`/`.timer` and the backup script (P0-T6). P0-T7 and phone checks belong to
-the human. Record idle RSS in `docs/perf.md`.
+**Step 4: rest of Phase 3 and Phase 0.** Session move with `check_plan` validation (P3-T3),
+the activities page (P3-T4, after Step 2's ingest), check-in (P3-T5), settings and the sync
+runner (P3-T8), static cache headers (P3-T9), and calendar proposals on `/events`. Then the PWA
+manifest, icons and service worker (P0-T5, P3-T10), and `deploy/*.service`/`.timer` plus the
+backup script (P0-T6). P0-T7 and phone checks belong to the human. Record idle RSS in
+`docs/perf.md`.
 
 **Step 5: Phase 4 Garmin.** Start with the P4-T1 spike on the human's Forerunner 245 and wait for
 their confirmation. Then `WatchExporter`, the mapper, auth, the exporter with

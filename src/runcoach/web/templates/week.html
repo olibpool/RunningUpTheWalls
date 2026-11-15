@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Week of {{ week_start.strftime("%d %b") }}{% endblock %}
+{% block content %}
+<div class="pager">
+  <a href="/week?start={{ previous }}" aria-label="Previous week">&larr; Prev</a>
+  <h1>Week of {{ week_start.strftime("%d %b %Y") }}</h1>
+  <a href="/week?start={{ next }}" aria-label="Next week">Next &rarr;</a>
+</div>
+{% include "_messages.html" %}
+{% if "No active plan yet." in warnings %}<p><a class="button" href="/plan/new">Create a plan</a></p>{% endif %}
+<div class="week">
+  {% for day in days %}{% include "_day.html" %}{% endfor %}
+</div>
+{% endblock %}

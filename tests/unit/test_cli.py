@@ -36,9 +36,9 @@ def test_event_cli_persists_minimal_travel_block(monkeypatch, tmp_path) -> None:
     assert exc_info.value.code == 0
     conn.close()
     conn = connect(db_path)
-    event = next(row for row in db.list_commitments(conn) if row["title"] == "Block")
-    assert event["kind"] == "block"
-    assert event["minimal_plan"] == 1
+    event = next(row for row in db.list_commitments(conn) if row.title == "Block")
+    assert event.kind == "block"
+    assert event.minimal_plan
     conn.close()
 
 

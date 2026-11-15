@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Plan{% endblock %}
+{% block content %}
+<h1>Plan</h1>
+{% if plan %}
+<p>
+  {{ plan.mode | title }} plan{% if plan.goal_date %} for {{ plan.goal_date }}{% endif %}
+  {% if plan.goal_distance_m %}· {{ plan.goal_distance_m | km }}{% endif %}
+  · from {{ plan.start_date }}
+</p>
+<p><a class="button secondary" href="/plan/new">Replace with a new plan</a></p>
+{% include "_week_table.html" %}
+{% else %}
+<p>No active plan yet.</p>
+<p><a class="button" href="/plan/new">Create a plan</a></p>
+{% endif %}
+{% endblock %}
