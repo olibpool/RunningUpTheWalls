@@ -21,7 +21,8 @@ Raspberry Pi, with the sync and backup timers, follow `deploy/README.md`.
    A plan that fails the safety checks cannot be saved, and the preview says why.
 4. **Home** shows today and what needs attention. **Week** shows each day with paces and the reason
    for each placement. Mark sessions done or skipped, or move them.
-5. **Activities**: upload a GPX run; it is matched to a session. Unmatched runs can be assigned by hand.
+5. **Activities**: runs arrive from Garmin, or upload a FIT or GPX file; each is matched to a
+   session. Unmatched runs can be assigned by hand.
 6. **Check-in**: log how you feel, niggles, illness and resting heart rate.
 
 The plan adapts to missed sessions, illness, drinks, holidays and heat, and records the reason for
@@ -38,8 +39,27 @@ The usual personal settings:
 | `[availability]` | The weekday and weekend windows sessions may be placed in |
 | `[gcal] ics_url` | Your Google Calendar's secret iCal address. A secret: never commit it |
 | `[weather] enabled`, latitude, longitude | Heat adjustment |
-| `[inbox] path` | Folder watched for dropped GPX files |
+| `[inbox] path` | Folder watched for dropped FIT or GPX files |
 | `[storage] db_path` | Database location (default `runcoach.db`) |
+| `[garmin] enabled` | Pull activities and resting HR from Garmin Connect |
+| `[export] backend` | `garmin` pushes the next `push_horizon_days` of runs to Garmin Connect |
+| `[compliance]` | How close a rep must be to its pace range to count as on target |
+
+## Garmin
+
+Coachal works through Garmin Connect: the watch syncs to Garmin Connect through the phone as usual,
+and every `runcoach sync` pulls new activities (original FIT files, with laps) and resting heart
+rate, then pushes the coming week's runs as structured workouts with pace targets.
+
+```bash
+uv run python -m runcoach garmin login    # once: password and MFA prompt; saves only a token
+uv run python -m runcoach garmin status   # checks the saved token still works
+```
+
+The token lives in `[garmin] token_dir` (default `~/.config/runcoach/garmin`), never in the repo.
+The library is unofficial; a Garmin change shows as an error in the sync report and nothing else
+stops. Without Garmin Connect, each run session offers a `.fit` workout file to copy to the
+watch's `GARMIN/NewFiles` folder.
 
 ## Command line
 
@@ -47,12 +67,11 @@ The usual personal settings:
 uv run python -m runcoach plan generate --distance half --date 2027-03-14 --vdot 50 --runs 4 --current-km 20 --save
 uv run python -m runcoach commitment add --kind fixed --title Football --sport football --weekday 1 --start-time 19:00 --duration 90 --rpe 6
 uv run python -m runcoach event add --kind penalty --date 2026-11-14 --severity 2
-uv run python -m runcoach ingest ~/Downloads/run.gpx
+uv run python -m runcoach ingest ~/Downloads/run.fit   # .fit, .gpx, or Garmin's .zip
 uv run python -m runcoach sync      # inbox, calendar, weather, matching, adaptation, re-plan
 uv run python -m runcoach backup
 ```
 
 ## Not built yet
 
-FIT file import, sending workouts to a Garmin watch, Strava, writing back to Google Calendar and
-the AI explainer. `docs/next-steps.md` lists the state of each phase and what is waiting on inputs.
+Strava, writing back to Google Calendar and the AI explainer. `docs/next-steps.md` lists the state of each phase and what is waiting on inputs.

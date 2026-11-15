@@ -13,7 +13,7 @@ versions.
    sudo useradd --system --create-home --shell /usr/sbin/nologin runcoach
    sudo mkdir -p /opt/runcoach /var/lib/runcoach /var/backups/runcoach
    sudo chown runcoach:runcoach /opt/runcoach /var/lib/runcoach /var/backups/runcoach
-   sudo -u runcoach mkdir -p /home/runcoach/runcoach-inbox
+   sudo -u runcoach mkdir -p /home/runcoach/runcoach-inbox /home/runcoach/.config/runcoach
    ```
 4. **Code and Python.** Install `uv` for the `runcoach` user, clone the repo into `/opt/runcoach`,
    then `cd /opt/runcoach && uv sync --frozen`.
@@ -31,6 +31,15 @@ versions.
    sudo tailscale serve --bg 8000     # publishes http://127.0.0.1:8000 over HTTPS on your tailnet
    ```
 7. **Phone.** Open the HTTPS tailnet address, then "Add to Home Screen".
+8. **Garmin (optional).** Log in once as the app user; it asks for your password and any MFA
+   code and saves only a session token under `/home/runcoach/.config/runcoach/garmin`:
+   ```bash
+   sudo -u runcoach -H /opt/runcoach/.venv/bin/python -m runcoach garmin login
+   sudo -u runcoach -H /opt/runcoach/.venv/bin/python -m runcoach garmin status
+   ```
+   Then set `RUNCOACH_GARMIN__ENABLED=true` (pull runs and resting HR) and
+   `RUNCOACH_EXPORT__BACKEND=garmin` (push workouts) in `/etc/runcoach.env` and restart
+   `runcoach.service`. If the token expires, `sync` reports it and you run `garmin login` again.
 
 **Gate (Phase 0):** reboot the Pi; with no manual steps the page loads on the phone over HTTPS,
 `/healthz` returns `{"status": "ok", ...}`, and `sudo systemctl start backup.service` leaves a file

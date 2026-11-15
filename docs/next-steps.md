@@ -37,6 +37,9 @@ asking.
 | D10 | **Two-run weeks are exempt from the long-run-share rule** (safety and both generators). |
 | D11 | Accepted unsourced defaults: `min_peak_weekly_km`, `templates.max_quality_share` = 0.25, `min_easy_minutes` = 20, `scheduler.same_day_session_cost` = 3, `adjacent_run_day_cost` = 1. Race week has no long run, nothing on or after race day, and no "race" session. |
 | D12 | Backups use SQLite's online backup API (`runcoach backup`), not the `sqlite3` CLI, which Pi OS Lite lacks. |
+| D13 | **Phase 4 was built before the P4-T1 watch check**, at the human's request. The spike (`scripts/garmin_spike.py`) is still the gate; record its results in `docs/garmin-notes.md` and fix the mapping if the watch shows steps wrongly. |
+| D14 | Pushed workouts live in a `garmin_push` table (no foreign key), not `session.garmin_hash`, so a workout can still be removed after its session is deleted by a re-plan. A changed session is replaced by delete + upload (deleting a workout also clears its schedule). Past workouts stay on the Garmin calendar. |
+| D15 | The human also asked for: Garmin activity and resting-HR pull, per-rep scoring against pace targets (`adapt/compliance.py`, feeding the retest suggestion both ways) and the plan wizard's weekly km taken from recorded runs. Coachal's own session-RPE load stays the load model; Garmin's training-load numbers are not used. |
 
 ## State per phase
 
@@ -49,8 +52,9 @@ Legend: ✅ done · 🟡 partial · ⛔ blocked on the human · ❌ not started.
 
 **Phase 1** ✅. Gate ⛔: the human reads a printed half-marathon plan.
 
-**Phase 2** ✅ except ⛔ P2-T1 (FIT parsing needs a real FIT file and the `fitparse`
-dependency; print its `sport` values before mapping them) and P2-T10 (Strava: optional, off).
+**Phase 2** ✅ except P2-T10 (Strava: optional, off). P2-T1 (`ingest/fit.py`, FIT and
+Garmin's zipped originals, with laps) is tested only against FIT files written by
+`integrations/fit.py`; ⛔ check it against a real watch file and its `sport` values.
 - `ingest/inbox.py`: `ingest_file` (CLI `runcoach ingest`, web upload, inbox) is idempotent;
   load is estimated from `[default_rpe]` until matched, then from the session's planned RPE.
 - `ingest/matcher.py`: spec scoring (day offset 0/0.5 plus relative duration gap under
@@ -89,15 +93,25 @@ Gate ⛔ is on the human's phone. Still to verify there: the origin check behind
 
 **Docs and home page** ✅: `/` is a home dashboard (today, plan headline, attention list, first-run checklist), `/guide` is the in-app user guide, and `docs/user-guide.md` covers setup, config and CLI. Update all three when a feature lands.
 
-**Phase 4** 🟡. Done: P4-T2 (`integrations/watch.py`: `WatchExporter`, `NullExporter`,
-`[export] backend`), the library-independent half of P4-T3 (`to_workout_spec`: steps to a
-neutral `WorkoutSpec` with explicit fast/slow pace bounds and repeat groups) and P4-T8
-(`/export/plan.ics` with stable UIDs and a VTIMEZONE). ⛔ P4-T1 spike: write
-`scripts/garmin_spike.py` only after reading the installed `garminconnect` source (add it with
-its `workout` extra), then wait for the human to confirm on their Forerunner 245. After that:
-the library mapping, P4-T4 auth, P4-T5 exporter with `0003_garmin.sql` (`session.garmin_hash`),
-P4-T6 sync step and UI, P4-T7 `.fit` fallback (verify `fit-tool` can write workout files first),
-P4-T9 change propagation. Check the workout name length limit.
+**Phase 4** ✅ in code, ⛔ unverified on the watch (D13). Built against `garminconnect` 0.3.20's
+source:
+- `integrations/garmin.py`: `login`/`connect` (token-only, in `[garmin] token_dir`; one login
+  attempt per sync, shared by pull and push), `pull_activities` (last `pull_days_back` days,
+  original FIT, skips runs already stored from any source), `pull_resting_hr` (fills check-ins,
+  never over your own value), `to_garmin_workout` (P4-T3: steps numbered across the workout,
+  repeat children with `childStepId`, pace targets in m/s with the slower pace first) and
+  `GarminExporter.sync_window` (P4-T5/T9: hash diff, per-call saves, removal of runs no longer
+  planned).
+- `runcoach sync` steps: `garmin` (pull, before matching) and `watch` (push, last).
+  `runcoach garmin login|status` (P4-T4).
+- P4-T7: `integrations/fit.py` writes FIT workout files itself (no `fit-tool`), served at
+  `/session/{id}/workout.fit`; round-trip tested with fitparse.
+- UI (P4-T6): Settings shows Garmin and watch status (the existing "Run sync now" button covers
+  push and pull), and the session page shows "On your watch", the `.fit` link and "How it went".
+- ⛔ Still to confirm with the spike: the 245 shows steps, repeats and pace ranges; the name
+  limit (`[garmin] workout_name_max` = 32 is a guess); the `workoutScheduleId` response key;
+  whether laps pair 1:1 with executed steps (`adapt/compliance.py` pairs by count, see its
+  shortcut comment); and the FIT `.zip` layout of Garmin originals.
 
 **Phase 5** ❌: optional, and per the plan only after the Phase 0–4 gates pass.
 
@@ -135,12 +149,12 @@ P4-T9 change propagation. Check the workout name length limit.
 
 ## Inputs blocked on the human
 
-- A FIT file (and a GPX) from their watch
+- The Garmin spike (`scripts/garmin_spike.py`): the activity list, a FIT file, and what the
+  Forerunner 245 shows for the pushed workout
 - Home latitude and longitude, then set `[weather] enabled`
 - The Google Calendar secret iCal address, in `RUNCOACH_GCAL__ICS_URL`
 - Football details, entered in the app
 - Weekday and weekend availability windows, in `config/local.toml`
 - Pi model and RAM
 - Strava, and Google Calendar write access: both optional, decide yes or no
-- The Garmin spike on their Forerunner 245
 - A review of every number in `config/defaults.toml`

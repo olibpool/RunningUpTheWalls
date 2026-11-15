@@ -8,8 +8,11 @@ Coachal is a self-hosted training planner for runners and multi-sport athletes. 
   commitments such as football and suggested climbing sessions, with a reason for every placement
 - Refuses any plan that fails its safety checks (load rises, long-run share, hard-day spacing,
   pace order, taper)
-- Ingests GPX runs (upload, or drop files in the inbox folder), matches them to sessions and
-  adapts the plan: missed sessions, illness and niggles, drinks nights, holidays, heat
+- Ingests runs from Garmin Connect, FIT or GPX uploads, or an inbox folder, matches them to
+  sessions, scores each rep against its pace target, and adapts the plan: missed sessions,
+  illness and niggles, drinks nights, holidays, heat
+- Pushes the coming week's runs to Garmin Connect as structured workouts with pace targets (or
+  as `.fit` files to copy to the watch)
 - Reads your Google Calendar (private iCal address) and moves sessions that clash with it
 - Mobile-first web app, installable on the phone home screen; an ICS feed of the plan
 - Runs on a Raspberry Pi: SQLite, one process, a 30-minute `runcoach sync` timer, nightly backups

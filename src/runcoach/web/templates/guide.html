@@ -8,7 +8,8 @@
   <li><a href="#adapts">How the plan adapts</a></li>
   <li><a href="#safety">Safety rules</a></li>
   <li><a href="#data">Getting runs in</a></li>
-  <li><a href="#calendar">Calendar and watch</a></li>
+  <li><a href="#garmin">Garmin watch</a></li>
+  <li><a href="#calendar">Calendar</a></li>
   <li><a href="#phone">Using it on your phone</a></li>
   <li><a href="#trouble">Troubleshooting</a></li>
 </ul></nav>
@@ -49,18 +50,29 @@
 
 <section id="data"><h2>Getting runs in</h2>
   <ul>
-    <li><strong>Activities, Upload</strong> a GPX file. It is matched to the closest planned session by day and duration. Anything it cannot match with confidence is listed for you to assign by hand.</li>
-    <li>You can also drop GPX files into the inbox folder; the next sync picks them up. Uploading the same file twice does nothing.</li>
-    <li>FIT files are not supported yet.</li>
+    <li>With Garmin connected, runs arrive by themselves at the next sync (see below).</li>
+    <li><strong>Activities, Upload</strong> a FIT or GPX file. It is matched to the closest planned session by day and duration. Anything it cannot match with confidence is listed for you to assign by hand.</li>
+    <li>You can also drop FIT or GPX files into the inbox folder; the next sync picks them up. The same run is never stored twice, even if it arrives from two places.</li>
   </ul>
 </section>
 
-<section id="calendar"><h2>Calendar and watch</h2>
+<section id="garmin"><h2>Garmin watch</h2>
+  <p>Coachal talks to Garmin Connect, not to the watch: your watch syncs with Garmin Connect through the phone app as usual, and Coachal's sync (every 30 minutes) pulls from and pushes to Garmin Connect.</p>
+  <ul>
+    <li><strong>Set up</strong>: run <code>runcoach garmin login</code> once on the server, then turn on <code>[garmin] enabled</code> and set <code>[export] backend = "garmin"</code>. Settings shows whether it's logged in.</li>
+    <li><strong>Runs in</strong>: new activities and their laps are pulled and matched to your sessions. Garmin's daily resting heart rate fills in your check-ins (a value you typed yourself always wins).</li>
+    <li><strong>Workouts out</strong>: the next 7 days of runs go to your Garmin calendar as structured workouts with warm-up, reps, recoveries and pace ranges. Start a run on the day and the watch offers the workout. When the plan changes, the workout is updated or removed at the next sync. Session pages show <em>On your watch</em> once pushed.</li>
+    <li><strong>How it went</strong>: when you follow the workout on the watch, each step is recorded as a lap, and the session page shows every rep's pace against its target. If your last few quality sessions were all too fast, or all missed, a banner suggests a time trial. Your paces only change when you submit one.</li>
+    <li><strong>Without Garmin Connect</strong>: every run session has a <em>Download as a watch workout (.fit)</em> link. Copy the file to the watch's <code>GARMIN/NewFiles</code> folder over USB.</li>
+    <li>This uses an unofficial Garmin library. If Garmin changes its login, the sync report shows a Garmin error while everything else keeps working.</li>
+  </ul>
+</section>
+
+<section id="calendar"><h2>Calendar</h2>
   <ul>
     <li>With your Google Calendar's private iCal address configured, busy times are respected and a session that a new event clashes with is moved. The address is a secret: keep it in <code>config/local.toml</code> or an environment variable, never in the repository.</li>
     <li>Calendar events that look like a regular commitment appear on Events as proposals for you to confirm.</li>
     <li>Subscribe a calendar app to <code>/export/plan.ics</code> to see your plan there.</li>
-    <li>Sending workouts to a Garmin watch is not built yet.</li>
   </ul>
 </section>
 
@@ -73,6 +85,8 @@
     <li><strong>A plan will not save</strong>: read the rule listed. Try a later race date, fewer runs per week or a lower starting distance.</li>
     <li><strong>A form is refused behind a proxy or Tailscale</strong>: the proxy must forward the original host header.</li>
     <li><strong>Nothing seems to sync</strong>: Settings shows the last sync and each step's result. Use <em>Run sync now</em>.</li>
+    <li><strong>Garmin login failed</strong>: run <code>runcoach garmin login</code> again on the server.</li>
+    <li><strong>No "How it went" table</strong>: the laps must line up with the workout's steps, so follow the workout on the watch and avoid pressing the lap button.</li>
     <li><strong>Health check</strong>: <code>/healthz</code> shows the app and database versions.</li>
   </ul>
 </section>

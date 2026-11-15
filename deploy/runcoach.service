@@ -14,7 +14,7 @@ RestartSec=3
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/lib/runcoach
+ReadWritePaths=/var/lib/runcoach -/home/runcoach/runcoach-inbox -/home/runcoach/.config/runcoach
 
 [Install]
 WantedBy=multi-user.target
