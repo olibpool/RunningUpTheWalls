@@ -125,3 +125,30 @@ def build_session(
         rpe=rpe,
         leg_load=session_load("run", kind, rpe, minutes, cfg.load_factors).leg,
     )
+
+
+def _scaled_step(step: Step, factor: float) -> Step:
+    return step.model_copy(
+        update={
+            "duration_s": max(1, round(step.duration_s * factor)) if step.duration_s else None,
+            "distance_m": max(1, round(step.distance_m * factor)) if step.distance_m else None,
+            "children": [_scaled_step(child, factor) for child in step.children],
+        }
+    )
+
+
+def scale_session[S: PlannedSession](session: S, factor: float) -> S:
+    """Scale a session's time, distance, steps and load by factor (kind and paces unchanged)."""
+    return session.model_copy(
+        update={
+            "duration_min": max(1, round(session.duration_min * factor))
+            if session.duration_min
+            else None,
+            "distance_m": max(1, round(session.distance_m * factor))
+            if session.distance_m
+            else None,
+            "steps": [_scaled_step(step, factor) for step in session.steps],
+            "leg_load": session.leg_load * factor,
+            "finger_load": session.finger_load * factor,
+        }
+    )

@@ -349,3 +349,34 @@ END:VCALENDAR
     )
     assert busy[0][0].isoformat() == "2026-11-15T09:00:00+00:00"
     assert busy[0][1].isoformat() == "2026-11-15T10:30:00+00:00"
+
+
+def test_apply_changes_maps_fields_flags_and_rejects_unknown(tmp_path) -> None:
+    from runcoach.domain.models import Step
+
+    conn = db.connect(tmp_path / "map.db")
+    plan_id = db.save_plan(
+        conn, [PlannedSession(date=date(2027, 1, 4), sport="run", kind="tempo", title="T")]
+    )
+    sid = conn.execute("SELECT id FROM session WHERE plan_id = ?", (plan_id,)).fetchone()[0]
+    db.apply_changes(
+        conn,
+        [
+            Change(
+                sid,
+                "modify",
+                {"kind": "easy", "duration_min": 30, "steps": [Step(kind="steady")]},
+                "r",
+                "why",
+            ),
+            Change(None, "flag", {"value": "retest please"}, "retest_suggested", "fast"),
+        ],
+    )
+    session = db.get_session(conn, sid)
+    assert session is not None and session.kind == "easy" and session.duration_min == 30
+    assert session.steps[0].kind == "steady"
+    assert db.get_kv(conn, "retest_suggested") == "retest please"
+    assert (sid, "r") in db.applied_rules(conn)
+    with pytest.raises(ValueError, match="Unknown session fields"):
+        db.apply_changes(conn, [Change(sid, "modify", {"nonsense": 1}, "r", "")])
+    conn.close()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Sequence
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from runcoach.domain.models import (
     Activity,
     Adjustment,
     CalendarEvent,
+    Checkin,
     Commitment,
     Plan,
     PlannedSession,
@@ -139,90 +141,94 @@ def insert_activity(conn: sqlite3.Connection, activity: Activity) -> int:
         return int(inserted_id)
 
 
-def apply_changes(
-    conn: sqlite3.Connection,
-    changes: list[object],
-) -> list[int]:
-    """Persist rule-based session changes and adjustment log entries in one transaction."""
+# PlannedSession field (as used by Change.updates) -> session column.
+_SESSION_COLUMNS = {
+    "plan_id": "plan_id",
+    "status": "status",
+    "date": "date",
+    "start_time": "start_time",
+    "kind": "kind",
+    "title": "title",
+    "reason": "reason",
+    "steps": "steps_json",
+    "duration_min": "planned_duration_min",
+    "distance_m": "planned_distance_m",
+    "rpe": "planned_rpe",
+    "leg_load": "leg_load",
+    "finger_load": "finger_load",
+}
+
+
+def _column_value(field: str, value: object) -> object:
+    if field == "steps" and isinstance(value, list):
+        return json.dumps(
+            [s.model_dump(mode="json") if hasattr(s, "model_dump") else s for s in value],
+            separators=(",", ":"),
+        )
+    if isinstance(value, date):
+        return value.isoformat()
+    return value
+
+
+def apply_changes(conn: sqlite3.Connection, changes: Sequence[object]) -> list[int]:
+    """Write rule changes and their adjustment-log rows in one transaction.
+
+    Each change has session_id, action (modify | drop | add | flag), updates (PlannedSession
+    field names plus status), rule and reason. Returns the ids of added sessions.
+    """
     stored_ids: list[int] = []
+    now = datetime.now(timezone.utc).isoformat()
     with conn:
         for change in changes:
             action = getattr(change, "action", "modify")
             session_id = getattr(change, "session_id", None)
-            updates = getattr(change, "updates", {}) or {}
+            updates: dict[str, object] = getattr(change, "updates", {}) or {}
             rule = getattr(change, "rule", "unknown")
             reason = getattr(change, "reason", "")
-            if action == "modify" and session_id is not None:
-                if updates:
-                    assignments = ", ".join(f"{key} = ?" for key in updates)
-                    params = [value for value in updates.values()] + [session_id]
-                    conn.execute(f"UPDATE session SET {assignments} WHERE id = ?", params)
+            before: dict[str, object] | None = None
+            after: dict[str, object] | None = None
+            unknown = set(updates) - set(_SESSION_COLUMNS) if action != "flag" else set()
+            if unknown:
+                raise ValueError(f"Unknown session fields in change: {sorted(unknown)}")
+            if action == "modify" and session_id is not None and updates:
+                columns = {_SESSION_COLUMNS[f]: _column_value(f, v) for f, v in updates.items()}
+                row = conn.execute(
+                    f"SELECT {', '.join(columns)} FROM session WHERE id = ?", (session_id,)
+                ).fetchone()
+                before = dict(row) if row is not None else None
+                after = columns
+                assignments = ", ".join(f"{column} = ?" for column in columns)
+                conn.execute(
+                    f"UPDATE session SET {assignments} WHERE id = ?",
+                    [*columns.values(), session_id],
+                )
             elif action == "drop" and session_id is not None:
                 conn.execute("UPDATE session SET status = 'dropped' WHERE id = ?", (session_id,))
+            elif action == "flag":
+                set_kv(conn, rule, str(updates.get("value", reason)), commit=False)
             elif action == "add":
-                row = {
-                    "date": updates.get("date"),
-                    "sport": updates.get("sport", "run"),
-                    "kind": updates.get("kind", "easy"),
-                    "title": updates.get("title", "Added session"),
-                    "steps_json": json.dumps(
-                        updates.get("steps", []),
-                        separators=(",", ":"),
-                    ),
-                    "status": "planned",
-                }
+                columns = {_SESSION_COLUMNS[f]: _column_value(f, v) for f, v in updates.items()}
+                columns.setdefault("steps_json", "[]")
+                columns["reason"] = reason
                 cursor = conn.execute(
-                    """
-                    INSERT INTO session (
-                        plan_id, date, sport, kind, title, steps_json, planned_duration_min,
-                        planned_distance_m, planned_rpe, leg_load, finger_load, status, reason
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        updates.get("plan_id", 1),
-                        row["date"],
-                        row["sport"],
-                        row["kind"],
-                        row["title"],
-                        row["steps_json"],
-                        updates.get("duration_min"),
-                        updates.get("distance_m"),
-                        updates.get("rpe"),
-                        updates.get("leg_load", 0.0),
-                        updates.get("finger_load", 0.0),
-                        row["status"],
-                        reason,
-                    ),
+                    f"INSERT INTO session ({', '.join(columns)}) "
+                    f"VALUES ({', '.join('?' for _ in columns)})",
+                    list(columns.values()),
                 )
                 if cursor.lastrowid is not None:
                     stored_ids.append(int(cursor.lastrowid))
-
             conn.execute(
                 """
-                INSERT INTO adjustment (
-                    created_at, session_id, rule, before_json, after_json, reason
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO adjustment
+                    (created_at, session_id, rule, before_json, after_json, reason)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    datetime.now(timezone.utc).isoformat(),
+                    now,
                     session_id,
                     rule,
-                    (
-                        json.dumps(
-                            getattr(change, "before_json", None),
-                            separators=(",", ":"),
-                        )
-                        if getattr(change, "before_json", None) is not None
-                        else None
-                    ),
-                    (
-                        json.dumps(
-                            getattr(change, "after_json", None),
-                            separators=(",", ":"),
-                        )
-                        if getattr(change, "after_json", None) is not None
-                        else None
-                    ),
+                    json.dumps(before) if before is not None else None,
+                    json.dumps(after) if after is not None else None,
                     reason,
                 ),
             )
@@ -397,8 +403,85 @@ def cache_calendar_events(
 
 
 def get_kv(conn: sqlite3.Connection, key: str) -> str | None:
+    """Return a stored value, or None."""
     row = conn.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()
     return str(row["value"]) if row is not None else None
+
+
+def set_kv(conn: sqlite3.Connection, key: str, value: str, *, commit: bool = True) -> None:
+    """Store a value; commit=False joins the caller's transaction."""
+    sql = "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?"
+    if commit:
+        with conn:
+            conn.execute(sql, (key, value, value))
+    else:
+        conn.execute(sql, (key, value, value))
+
+
+def delete_kv(conn: sqlite3.Connection, key: str) -> None:
+    """Remove a stored value if present."""
+    with conn:
+        conn.execute("DELETE FROM kv WHERE key = ?", (key,))
+
+
+def kv_keys(conn: sqlite3.Connection) -> set[str]:
+    """All stored keys."""
+    return {str(row["key"]) for row in conn.execute("SELECT key FROM kv").fetchall()}
+
+
+def activities(conn: sqlite3.Connection, *, unmatched_only: bool = False) -> list[Activity]:
+    """Stored activities, oldest first."""
+    where = "WHERE session_id IS NULL" if unmatched_only else ""
+    rows = conn.execute(f"SELECT * FROM activity {where} ORDER BY started_at, id").fetchall()
+    return [from_row(row) for row in rows]
+
+
+def link_activity(
+    conn: sqlite3.Connection, activity_id: int, session_id: int, *, rule: str, reason: str
+) -> None:
+    """Attach an activity to its session, mark the session done and log why."""
+    with conn:
+        conn.execute("UPDATE activity SET session_id = ? WHERE id = ?", (session_id, activity_id))
+        conn.execute("UPDATE session SET status = 'done' WHERE id = ?", (session_id,))
+        conn.execute(
+            "INSERT INTO adjustment (created_at, session_id, rule, reason) VALUES (?, ?, ?, ?)",
+            (datetime.now(timezone.utc).isoformat(), session_id, rule, reason),
+        )
+
+
+def checkins(conn: sqlite3.Connection, since: date | None = None) -> list[Checkin]:
+    """Check-ins from a date onwards, oldest first."""
+    rows = conn.execute(
+        "SELECT * FROM checkin WHERE date >= ? ORDER BY date", ((since or date.min).isoformat(),)
+    ).fetchall()
+    return [Checkin.model_validate(dict(row)) for row in rows]
+
+
+def save_checkin(conn: sqlite3.Connection, checkin: Checkin) -> None:
+    """Store the day's check-in, replacing an earlier one for the same date."""
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO checkin (date, feel, niggle, ill, resting_hr, notes)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(date) DO UPDATE SET feel = excluded.feel, niggle = excluded.niggle,
+                ill = excluded.ill, resting_hr = excluded.resting_hr, notes = excluded.notes
+            """,
+            (
+                checkin.date.isoformat(),
+                checkin.feel,
+                checkin.niggle,
+                int(checkin.ill),
+                checkin.resting_hr,
+                checkin.notes,
+            ),
+        )
+
+
+def applied_rules(conn: sqlite3.Connection) -> set[tuple[int | None, str]]:
+    """(session_id, rule) pairs already in the adjustment log, for idempotent rules."""
+    rows = conn.execute("SELECT DISTINCT session_id, rule FROM adjustment").fetchall()
+    return {(row["session_id"], row["rule"]) for row in rows}
 
 
 def _insert_planned_session(
@@ -604,6 +687,14 @@ __all__ = [
     "delete_commitment",
     "cache_calendar_events",
     "get_kv",
+    "set_kv",
+    "delete_kv",
+    "kv_keys",
+    "activities",
+    "link_activity",
+    "checkins",
+    "save_checkin",
+    "applied_rules",
     "active_plan",
     "plan_sessions",
     "get_session",

@@ -1,13 +1,28 @@
+"""Rule-based adaptation. Pure: rules read a PlanState and return Changes; db.apply_changes
+writes them with their adjustment-log rows. Rules run on every sync, so each one must be
+idempotent: load-scaling rules skip sessions the log says they already adjusted."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-from runcoach.domain.models import Activity, Adjustment, Checkin, PlannedSession
+from runcoach.config import SchedulingConfig
+from runcoach.display import monday
+from runcoach.domain.models import Activity, Checkin, PlannedSession, Session, Step
+from runcoach.engine.load import session_load
+from runcoach.engine.templates import scale_session
+
+_QUALITY = {"tempo", "intervals", "time_trial"}
 
 
 @dataclass(frozen=True)
 class Change:
+    """One change to a session. `updates` uses PlannedSession field names plus `status`.
+
+    action: modify | drop | add | flag (flag stores updates["value"] in kv under rule).
+    """
+
     session_id: int | None
     action: str
     updates: dict[str, object] = field(default_factory=dict)
@@ -15,129 +30,186 @@ class Change:
     reason: str = ""
 
 
-@dataclass
+@dataclass(frozen=True)
 class PlanState:
-    sessions: list[PlannedSession]
+    sessions: list[Session]
     activities: list[Activity]
     checkins: list[Checkin]
-    athlete: object
+    applied: frozenset[tuple[int | None, str]] = frozenset()  # (session_id, rule) already logged
+    flags: frozenset[str] = frozenset()  # kv keys already set
 
 
-def _matched_session_ids(state: PlanState) -> set[int]:
-    matched: set[int] = set()
-    for session in state.sessions:
-        for activity in state.activities:
-            if activity.sport != session.sport:
-                continue
-            if activity.started_at.startswith(session.date.isoformat()):
-                matched.add(id(session))
-    return matched
+def _session_fields(session: PlannedSession) -> dict[str, object]:
+    return {
+        "kind": session.kind,
+        "title": session.title,
+        "steps": session.steps,
+        "duration_min": session.duration_min,
+        "distance_m": session.distance_m,
+        "rpe": session.rpe,
+        "leg_load": session.leg_load,
+    }
 
 
-def evaluate(state: PlanState, today: date, cfg: object) -> list[Change]:
-    """Return rule-based session changes for the current plan state."""
+def _scale_week(
+    state: PlanState, week: date, factor: float, rule: str, reason: str
+) -> list[Change]:
+    """Scale the planned runs of one week, skipping any this rule already adjusted."""
+    runs = [
+        s
+        for s in state.sessions
+        if monday(s.date) == week and s.status == "planned" and s.sport == "run"
+    ]
+    if any((s.id, rule) in state.applied for s in runs):
+        return []
+    return [
+        Change(s.id, "modify", _session_fields(scale_session(s, factor)), rule, reason)
+        for s in runs
+    ]
+
+
+def missed_once(state: PlanState, today: date) -> list[Change]:
+    """A planned session whose day has passed unmatched is skipped, never crammed in later."""
+    return [
+        Change(
+            s.id,
+            "modify",
+            {"status": "skipped"},
+            "missed_once",
+            f"Missed on {s.date.isoformat()}; skipped rather than moved into another day.",
+        )
+        for s in state.sessions
+        if s.status == "planned" and s.date < today
+    ]
+
+
+def missed_two_plus(state: PlanState, today: date) -> list[Change]:
+    """Two or more skipped sessions in a week cap next week's runs at that week's planned load."""
+    newly_skipped = {c.session_id for c in missed_once(state, today)}
+    skipped_by_week: dict[date, int] = {}
+    for s in state.sessions:
+        if s.status == "skipped" or s.id in newly_skipped:
+            skipped_by_week[monday(s.date)] = skipped_by_week.get(monday(s.date), 0) + 1
     changes: list[Change] = []
-    matched_ids = _matched_session_ids(state)
-
-    for session in state.sessions:
-        if session.date < today and id(session) not in matched_ids:
-            changes.append(
-                Change(
-                    session_id=None,
-                    action="modify",
-                    updates={"status": "skipped"},
-                    rule="missed_session",
-                    reason=(
-                        f"Session missed on {session.date.isoformat()}. Do not cram the workout "
-                        "into the next day; keep the plan stable."
-                    ),
-                )
+    for week, count in sorted(skipped_by_week.items()):
+        if count < 2:
+            continue
+        cap = sum(s.leg_load for s in state.sessions if monday(s.date) == week and s.sport == "run")
+        following = week + timedelta(days=7)
+        planned = sum(
+            s.leg_load
+            for s in state.sessions
+            if monday(s.date) == following and s.status == "planned" and s.sport == "run"
+        )
+        if planned > cap > 0:
+            changes += _scale_week(
+                state,
+                following,
+                cap / planned,
+                "missed_two_plus",
+                f"{count} sessions missed in the week of {week.isoformat()}; "
+                "this week repeats that week's planned volume instead of increasing it.",
             )
-
-    week_counts: dict[date, int] = {}
-    for session in state.sessions:
-        if session.date < today:
-            week_start = session.date - timedelta(days=session.date.weekday())
-            week_counts[week_start] = week_counts.get(week_start, 0) + 1
-    for week_start, count in week_counts.items():
-        if count >= 2:
-            changes.append(
-                Change(
-                    session_id=None,
-                    action="modify",
-                    updates={
-                        "reason": (
-                            "Repeat prior week volume after missed sessions in "
-                            f"{week_start.isoformat()}"
-                        )
-                    },
-                    rule="missed_two_plus",
-                    reason=(
-                        f"Two or more missed sessions in week {week_start.isoformat()}; "
-                        "repeat the prior week's volume instead of increasing load."
-                    ),
-                )
-            )
-
-    for checkin in state.checkins:
-        if checkin.ill or checkin.niggle:
-            changes.append(
-                Change(
-                    session_id=None,
-                    action="modify",
-                    updates={"reason": "illness or niggle: scale quality down to easy"},
-                    rule="ill_or_niggle",
-                    reason=(
-                        f"Check-in for {checkin.date.isoformat()} flags a niggle or illness; "
-                        "downgrade quality sessions to easy for recovery."
-                    ),
-                )
-            )
-
     return changes
 
 
-def missed_session_adjustment(
-    planned: PlannedSession,
-    *,
-    created_at: str = "1970-01-01T00:00:00+00:00",
-    session_id: int | None = None,
-) -> Adjustment:
-    """Return a deterministic missed-session adjustment record."""
-    return Adjustment(
-        id=None,
-        created_at=created_at,
-        session_id=session_id,
-        rule="missed_session",
-        before_json=None,
-        after_json=None,
-        reason=(
-            "Session missed. Do not cram the workout into the next day; keep the plan stable "
-            f"and re-evaluate the week around {planned.date.isoformat()}."
-        ),
+def ill_or_niggle(state: PlanState, cfg: SchedulingConfig) -> list[Change]:
+    """Illness or a niggle: run by feel and downgrade quality for a window, then ramp back."""
+    changes: list[Change] = []
+    for checkin in state.checkins:
+        if not (checkin.ill or checkin.niggle):
+            continue
+        what = "illness" if checkin.ill else f"a niggle ({checkin.niggle})"
+        days = cfg.illness.ill_days if checkin.ill else cfg.illness.niggle_days
+        end = checkin.date + timedelta(days=days)
+        for s in state.sessions:
+            if not (
+                checkin.date <= s.date < end
+                and s.status == "planned"
+                and s.sport == "run"
+                and (s.id, "ill_or_niggle") not in state.applied
+            ):
+                continue
+            kind = "easy" if s.kind in _QUALITY else s.kind
+            rpe = cfg.rpe.easy if kind == "easy" else (s.rpe or cfg.rpe.easy)
+            minutes = s.duration_min or 0
+            by_feel = s.model_copy(
+                update={
+                    "kind": kind,
+                    "title": f"{'Easy run' if kind != s.kind else s.title} (by feel)",
+                    "steps": [Step(kind="steady", duration_s=minutes * 60, rpe=rpe)],
+                    "rpe": rpe,
+                    "leg_load": session_load("run", kind, rpe, minutes, cfg.load_factors).leg,
+                }
+            )
+            changes.append(
+                Change(
+                    s.id,
+                    "modify",
+                    _session_fields(by_feel),
+                    "ill_or_niggle",
+                    f"Check-in on {checkin.date.isoformat()} reported {what}: no pace targets "
+                    f"and no quality for {days} days.",
+                )
+            )
+        first_week = monday(end + timedelta(days=6))  # first full week after the window
+        for offset, factor in enumerate(cfg.illness.return_ramp):
+            changes += _scale_week(
+                state,
+                first_week + timedelta(weeks=offset),
+                factor,
+                "illness_ramp",
+                f"Returning after {what}: runs at {factor:.0%} of planned load.",
+            )
+    return changes
+
+
+def _pace(seconds: float, metres: float) -> float:
+    return seconds / (metres / 1000)
+
+
+def retest_suggested(state: PlanState, cfg: SchedulingConfig) -> list[Change]:
+    """Suggest a re-test when recent quality runs were all faster than target at no extra effort.
+
+    VDOT is never changed here; the human confirms a time trial first.
+    """
+    if "retest_suggested" in state.flags:
+        return []
+    by_session = {a.session_id: a for a in state.activities if a.session_id is not None}
+    quality = sorted(
+        (s for s in state.sessions if s.status == "done" and s.kind in {"tempo", "intervals"}),
+        key=lambda s: s.date,
+    )[-cfg.retest.quality_runs :]
+    if len(quality) < cfg.retest.quality_runs:
+        return []
+    for s in quality:
+        activity = by_session.get(s.id)
+        if not (
+            activity
+            and activity.distance_m
+            and activity.rpe is not None
+            and s.rpe is not None
+            and s.distance_m
+            and s.duration_min
+        ):
+            return []
+        planned = _pace(s.duration_min * 60, s.distance_m)
+        actual = _pace(activity.duration_s, activity.distance_m)
+        if actual > planned * (1 - cfg.retest.faster_by) or activity.rpe > s.rpe:
+            return []
+    reason = (
+        f"Your last {len(quality)} quality runs were all over "
+        f"{cfg.retest.faster_by:.0%} faster than target at or below the planned effort. "
+        "Consider a 5 km time trial to update your paces."
     )
+    return [Change(None, "flag", {"value": reason}, "retest_suggested", reason)]
 
 
-def repeat_week_volume_adjustment(
-    planned: PlannedSession,
-    *,
-    created_at: str = "1970-01-01T00:00:00+00:00",
-    session_id: int | None = None,
-) -> Adjustment:
-    """Return the rule-based adjustment for repeated-volume weeks after missed sessions."""
-    return Adjustment(
-        id=None,
-        created_at=created_at,
-        session_id=session_id,
-        rule="repeat_week_volume",
-        before_json=None,
-        after_json=None,
-        reason=(
-            f"Two or more sessions were missed in week {planned.date.isoformat()}; "
-            "repeat the previous week's volume instead of increasing load."
-        ),
-    )
-
-
-def _session_date(session: PlannedSession) -> date:
-    return session.date
+def evaluate(state: PlanState, today: date, cfg: SchedulingConfig) -> list[Change]:
+    """Every rule's changes for the current state, in a stable order."""
+    return [
+        *missed_once(state, today),
+        *missed_two_plus(state, today),
+        *ill_or_niggle(state, cfg),
+        *retest_suggested(state, cfg),
+    ]
