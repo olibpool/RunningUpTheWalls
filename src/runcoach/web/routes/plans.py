@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -10,9 +10,10 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field, model_validator
 
 from runcoach import db
-from runcoach.config import ConfigNode
+from runcoach.config import ConfigNode, load_scheduling_config
 from runcoach.display import monday
 from runcoach.domain.models import DISTANCE_METRES, Distance, PlanInput, PlannedSession
+from runcoach.engine.continuous import ContinuousPlanResult, generate_continuous_plan_result
 from runcoach.engine.plan import (
     InfeasibleGoal,
     PlanGenerationResult,
@@ -20,6 +21,7 @@ from runcoach.engine.plan import (
     plan_snapshot,
 )
 from runcoach.engine.vdot import vdot_from_race
+from runcoach.sync import history_from_activities
 from runcoach.web.deps import get_cfg, get_conn, parse_form, redirect, render, today
 
 router = APIRouter(prefix="/plan")
@@ -193,4 +195,77 @@ async def save(
         goal_date=inp.goal_date,
         config_snapshot=plan_snapshot(inp, db.list_commitments(conn)),
     )
+    return redirect(request, f"/week?start={monday(result.sessions[0].date).isoformat()}")
+
+
+def _continuous(
+    conn: sqlite3.Connection, cfg: ConfigNode
+) -> tuple[ContinuousPlanResult | None, list[str]]:
+    """Generate a continuous plan from the athlete profile and recent activities."""
+    athlete = db.get_athlete(conn)
+    if athlete is None:
+        return None, ["Save your athlete profile in Settings first."]
+    try:
+        history = history_from_activities(conn, load_scheduling_config(cfg), today())
+        result = generate_continuous_plan_result(
+            athlete, history, today(), db.list_commitments(conn), cfg
+        )
+    except (RuntimeError, ValueError) as exc:
+        return None, [f"{exc}. Upload a few recent runs first."]
+    return result, []
+
+
+def _continuous_page(
+    request: Request,
+    result: ContinuousPlanResult | None,
+    errors: list[str],
+    status_code: int = 200,
+) -> HTMLResponse:
+    return render(
+        request,
+        "plan_continuous.html",
+        {
+            "active": "plan",
+            "result": result,
+            "errors": errors,
+            "weeks": by_week(result.sessions) if result else [],
+        },
+        status_code=status_code,
+    )
+
+
+@router.get("/continuous", response_class=HTMLResponse)
+def continuous_preview(
+    request: Request,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+) -> HTMLResponse:
+    """Preview the next weeks of a goal-free plan built from recent load."""
+    result, errors = _continuous(conn, cfg)
+    return _continuous_page(request, result, errors)
+
+
+@router.post("/continuous/save", response_model=None)
+def continuous_save(
+    request: Request,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+) -> Response:
+    """Store the continuous plan; sync re-plans it weekly from then on."""
+    result, errors = _continuous(conn, cfg)
+    if result is None or result.violations or not result.sessions:
+        reasons = errors or ["Not saved: the plan fails the safety checks below."]
+        return _continuous_page(request, result, reasons, status_code=400)
+    commitments = db.list_commitments(conn)
+    db.save_plan(
+        conn,
+        result.sessions,
+        mode="continuous",
+        config_snapshot={
+            "mode": "continuous",
+            "event_ids": [c.id for c in commitments if c.kind != "fixed" and c.id is not None],
+        },
+    )
+    # Generated just now, so the next sync shouldn't immediately re-plan it.
+    db.set_kv(conn, "last_replanned_at", datetime.now(timezone.utc).isoformat())
     return redirect(request, f"/week?start={monday(result.sessions[0].date).isoformat()}")

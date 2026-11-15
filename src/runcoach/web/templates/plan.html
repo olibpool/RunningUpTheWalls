@@ -8,10 +8,10 @@
   {% if plan.goal_distance_m %}· {{ plan.goal_distance_m | km }}{% endif %}
   · from {{ plan.start_date }}
 </p>
-<p><a class="button secondary" href="/plan/new">Replace with a new plan</a></p>
+<p><a class="button secondary" href="/plan/new">New race plan</a> <a class="button secondary" href="/plan/continuous">Continuous mode</a></p>
 {% include "_week_table.html" %}
 {% else %}
 <p>No active plan yet.</p>
-<p><a class="button" href="/plan/new">Create a plan</a></p>
+<p><a class="button" href="/plan/new">Plan for a race</a> <a class="button secondary" href="/plan/continuous">Continuous improvement</a></p>
 {% endif %}
 {% endblock %}

@@ -183,7 +183,9 @@ def adapt_plan(conn: sqlite3.Connection, cfg: SchedulingConfig, today: date) -> 
     return changes
 
 
-def _history(conn: sqlite3.Connection, cfg: SchedulingConfig, today: date) -> History:
+def history_from_activities(
+    conn: sqlite3.Connection, cfg: SchedulingConfig, today: date
+) -> History:
     """Recent weekly leg load from stored activities, for the continuous re-plan."""
     this_week = monday(today)
     weeks = [
@@ -226,7 +228,7 @@ def _replan(
     if athlete is None:
         raise RuntimeError("continuous re-plan needs an athlete profile")
     result = replan_continuous_if_due(
-        conn, plan.id, athlete, _history(conn, typed, today), today, now,
+        conn, plan.id, athlete, history_from_activities(conn, typed, today), today, now,
         db.list_commitments(conn), cfg,
     )  # fmt: skip
     return "ok: not due" if result is None else f"ok: {len(result.sessions)} sessions planned"

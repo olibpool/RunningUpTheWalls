@@ -372,3 +372,31 @@ def test_calendar_proposals_are_confirmed_not_assumed(client: TestClient, db_pat
     conn.close()
     assert drinks.kind == "penalty" and drinks.active and drinks.source == "gcal"
     assert "From your calendar" not in client.get("/events").text
+
+
+def test_continuous_mode_needs_a_profile_and_history_then_saves(
+    client: TestClient, db_path: Path
+) -> None:
+    assert "athlete profile" in client.get("/plan/continuous").text
+    client.post(
+        "/settings/athlete",
+        data={"vdot": "45", "runs_per_week": "3", "climbing_target_per_week": "0"},
+    )
+    assert "Upload a few recent runs" in client.get("/plan/continuous").text
+
+    four_weeks_ago = date.today() - timedelta(days=20)
+    for offset in range(0, 18, 3):  # a run every third day for the last few weeks
+        day = four_weeks_ago + timedelta(days=offset)
+        gpx = _gpx_for(day, "07:00", 40 + offset)
+        client.post(
+            "/activities/upload", files={"file": (f"r{offset}.gpx", gpx, "application/gpx+xml")}
+        )
+
+    preview = client.get("/plan/continuous")
+    assert "Start this plan" in preview.text, preview.text
+    saved = client.post("/plan/continuous/save", follow_redirects=False)
+    assert saved.status_code == 303
+    conn = db.connect(db_path)
+    plan = db.active_plan(conn)
+    conn.close()
+    assert plan is not None and plan.mode == "continuous"
