@@ -10,3 +10,4 @@ config/local.toml
 .data/
 *.egg-info/
 .hypothesis/
+.garmin-spike/
