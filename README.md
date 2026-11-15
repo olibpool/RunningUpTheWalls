@@ -4,12 +4,15 @@ Coachal is a self-hosted training planner for runners and multi-sport athletes. 
 
 ## What it does
 
-- Builds training plans from a goal distance, date, and current fitness profile
-- Models session load, progression, and pace/zone calculations
-- Stores plan data in SQLite; numbered `.sql` files in `migrations/` are applied at startup
-- Accepts activity ingestion from GPX and other structured sources
-- Supports commitment and calendar-style blocking data
-- Exposes a FastAPI API for local web usage and automation
+- Builds race plans (5K to marathon) and a goal-free continuous mode, scheduled around fixed
+  commitments such as football and suggested climbing sessions, with a reason for every placement
+- Refuses any plan that fails its safety checks (load rises, long-run share, hard-day spacing,
+  pace order, taper)
+- Ingests GPX runs (upload, or drop files in the inbox folder), matches them to sessions and
+  adapts the plan: missed sessions, illness and niggles, drinks nights, holidays, heat
+- Reads your Google Calendar (private iCal address) and moves sessions that clash with it
+- Mobile-first web app, installable on the phone home screen; an ICS feed of the plan
+- Runs on a Raspberry Pi: SQLite, one process, a 30-minute `runcoach sync` timer, nightly backups
 
 ## Project layout
 
@@ -80,6 +83,15 @@ uv run python -m runcoach commitment add \
   --rpe 6
 ```
 
+Store an activity file, run a sync (inbox, calendar, weather, matching, adaptation, re-plan),
+or back up the database:
+
+```bash
+uv run python -m runcoach ingest ~/Downloads/morning-run.gpx
+uv run python -m runcoach sync
+uv run python -m runcoach backup
+```
+
 List commitments:
 
 ```bash
@@ -109,6 +121,12 @@ uv run ruff check .
 uv run mypy src
 uv run pytest -q
 ```
+
+## Deploying
+
+See `deploy/README.md` for the Raspberry Pi set-up (systemd units, Tailscale, backups and
+restore). Settings go in `config/local.toml` or `RUNCOACH_SECTION__KEY` environment variables; the
+Google Calendar address is a secret and belongs only there.
 
 ## Local data
 
