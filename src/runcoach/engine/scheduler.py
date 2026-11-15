@@ -265,11 +265,12 @@ def _can_place(
     return True
 
 
-def _soft_cost(
+def _day_cost(
     candidate: _Placement,
     placements: list[_Placement],
     cfg: SchedulingConfig,
 ) -> float:
+    """The part of the soft cost that depends only on the candidate's day."""
     cost = 0.0
     if candidate.kind == "long" and candidate.start.weekday() < 5:
         cost += cfg.scheduler.long_run_weekday_cost
@@ -315,6 +316,15 @@ def _soft_cost(
                     days=1 + cfg.scheduler.climbing_spacing_days
                 )
                 cost += abs((candidate.start.date() - preferred_day).days)
+    return cost
+
+
+def _soft_cost(
+    candidate: _Placement,
+    placements: list[_Placement],
+    cfg: SchedulingConfig,
+) -> float:
+    cost = _day_cost(candidate, placements, cfg)
     if candidate.kind in _QUALITY_KINDS:
         target = cfg.scheduler.quality_gap_target_hours
         for other in placements:
@@ -371,26 +381,29 @@ def _candidate_starts(
             gap = buffer if other.is_fixed else same_day_gap
             window_candidates.add(other.end + gap)
             window_candidates.add(other.start - duration - gap)
+        # Spacing offsets only matter to a session that the spacing rule applies to.
+        hard_leg = session.sport == "football" or session.kind in _HARD_LEG_KINDS
+        limit_climb = session.kind == "climb_power"
         for other in placements:
-            if _is_hard_leg(other):
+            if hard_leg and _is_hard_leg(other):
                 window_candidates.add(other.start + timedelta(hours=minimum_hard_hours))
                 window_candidates.add(other.start - timedelta(hours=minimum_hard_hours))
-            if _is_limit_climb(other):
+            if limit_climb and _is_limit_climb(other):
                 separation = timedelta(hours=cfg.scheduler.min_hours_between_limit_climbs)
                 window_candidates.add(other.start + separation)
                 window_candidates.add(other.start - separation)
         for previous in prior_tail:
-            if previous.start_time is None:
+            if previous.start_time is None or not (hard_leg or limit_climb):
                 continue
             previous_start = datetime.combine(
                 previous.date,
                 time.fromisoformat(previous.start_time),
                 tzinfo=tz,
             )
-            if previous.kind in _HARD_LEG_KINDS or previous.sport == "football":
+            if hard_leg and (previous.kind in _HARD_LEG_KINDS or previous.sport == "football"):
                 separation = timedelta(hours=minimum_hard_hours)
                 window_candidates.add(previous_start + separation)
-            if previous.kind == "climb_power":
+            if limit_climb and previous.kind == "climb_power":
                 separation = timedelta(hours=cfg.scheduler.min_hours_between_limit_climbs)
                 window_candidates.add(previous_start + separation)
 
@@ -528,6 +541,50 @@ def _make_candidates(
     )
 
 
+def _cost_bound(
+    remaining: list[PlannedSession],
+    placements: list[_Placement],
+    soft_cost: float,
+    week_days: list[datetime],
+    cfg: SchedulingConfig,
+) -> float:
+    """Lower bound on the soft cost of any schedule that places every remaining session.
+
+    Day costs only grow as placements are added, so each session costs at least its cheapest
+    day now. At most one session per day without a flexible session (fixed-only or, within
+    the six-day cap, empty) escapes the same-day cost; the rest pay it.
+    """
+    occupied = {placement.start.date() for placement in placements}
+    shared = {placement.start.date() for placement in placements if not placement.is_fixed}
+    days = [day for day in week_days if len(occupied) < 6 or day.date() in occupied]
+    empty = sum(day.date() not in occupied for day in days)
+    alone_slots = sum(day.date() not in shared for day in days) - empty
+    alone_slots += min(empty, max(0, 6 - len(occupied)))
+    inf = float("inf")
+    cheapest: dict[tuple[str, str], tuple[float, float]] = {}
+    savings: list[float] = []
+    for session in remaining:
+        key = (session.kind, session.sport)
+        if key not in cheapest:
+            alone, together = inf, inf
+            for day in days:
+                placement = _Placement(None, None, day, day, session.kind, session.sport, "")
+                cost = _day_cost(placement, placements, cfg)
+                if day.date() in shared:
+                    together = min(together, cost)
+                else:
+                    alone = min(alone, cost)
+            together = min(together, alone + cfg.scheduler.same_day_session_cost)
+            if together == inf:
+                return inf
+            cheapest[key] = (alone, together)
+        alone, together = cheapest[key]
+        soft_cost += together
+        savings.append(together - alone)
+    savings.sort(reverse=True)
+    return soft_cost - sum(saving for saving in savings[:alone_slots] if saving > 0)
+
+
 def _attempt_schedule(
     sessions: list[PlannedSession],
     fixed_placements: list[_Placement],
@@ -541,6 +598,11 @@ def _attempt_schedule(
     day_constraints: dict[date, DayConstraint],
 ) -> _Attempt:
     best: _Attempt | None = None
+    week_days = [
+        datetime.combine(week_start + timedelta(days=offset), time(), tzinfo=tz)
+        for offset in range(7)
+        if not_before is None or week_start + timedelta(days=offset) >= not_before
+    ]
 
     def search(
         index: int,
@@ -556,12 +618,16 @@ def _attempt_schedule(
                 return
             if int(missing_long) == best.objective[0] and len(dropped) > best.objective[1]:
                 return
-            if (
-                int(missing_long) == best.objective[0]
-                and len(dropped) == best.objective[1]
-                and drop_cost + soft_cost > best.objective[2] + best.objective[3]
-            ):
-                return
+            if int(missing_long) == best.objective[0] and len(dropped) == best.objective[1]:
+                limit = best.objective[2] + best.objective[3]
+                # The tolerance keeps float noise in the bound from pruning an exact tie.
+                if drop_cost + soft_cost > limit or (
+                    index < len(sessions)
+                    and drop_cost
+                    + _cost_bound(sessions[index:], placements, soft_cost, week_days, cfg)
+                    > limit + 1e-9
+                ):
+                    return
 
         if index == len(sessions):
             objective = (int(missing_long), len(dropped), float(drop_cost), soft_cost)

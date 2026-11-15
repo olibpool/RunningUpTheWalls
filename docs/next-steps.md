@@ -14,7 +14,7 @@ decision the human already made. Don't reopen it without asking.
 - `pytest --update-golden` rewrites `tests/fixtures/golden_half_plan.json`. Only run it after
   reading the diff and agreeing the plan change is intended.
 - `HYPOTHESIS_PROFILE=ci` gives 200 property examples, `pi` gives 50, and the default gives 25.
-  The 200-example race-plan run takes about 5 minutes (see "Scheduler speed" below).
+  The 200-example race-plan run takes a few minutes (see "Scheduler speed" below).
 - Commit once per task with the task ID in the message (`P2-T4: ...`). Never bundle work into
   a "WIP" commit. The commit that built most of Phase 2c was one undifferentiated "WIP".
 - Ask the human when the plans are ambiguous. Several defaults below are flagged as
@@ -105,18 +105,26 @@ can start using the plan. See "Web UI conventions" below.
 
 ## Known bugs and gaps (fix as part of the step that touches them)
 
-1. **Scheduler speed (do first in Step 2b work).** `schedule_week`'s depth-first search runs
-   in full whenever the strict 48 h hard-leg spacing is impossible. Example: 5–6 runs a week
-   give two quality sessions, plus the long run plus football, which is four hard sessions.
-   The search then runs the relaxed pass. Measured on the desktop: a 30-week marathon plan with
-   6 runs, 2 climbs and football takes **about 107 s** (about 2–7 s per week; the pre-Phase-1
-   code took 33 s for the same input, with one quality session). A 12-week plan with 4 runs
-   takes 0.2 s, which meets the "under 1 s" success criterion. On a Pi expect about 5× slower.
-   Ideas: a cheap infeasibility pre-check that skips the strict pass, tighter branch-and-bound
-   (the current prune compares `drop_cost + soft_cost` sums while the objective is
-   lexicographic, so it is both inexact and weak), or memoising candidates per day.
-   The result must stay deterministic. It also slows the test suite: the default run takes
-   about 3 minutes (93 tests), and the 200-example race-plan property run about 5.
+1. **Scheduler speed** 🟡 (P2b-T6, mostly fixed). The slow part was proving a schedule optimal,
+   not finding it: in dense weeks (5–6 runs give two quality sessions, plus the long run and
+   football, so the strict 48 h pass fails and the relaxed pass runs) the first leaf is already
+   optimal, then thousands of nodes are spent ruling out cheaper ones. Two changes, same output:
+   - `_cost_bound` prunes a branch when its soft cost plus a lower bound for the remaining
+     sessions exceeds the best. Each remaining session costs at least its cheapest day now
+     (`_day_cost`, the time-independent part of `_soft_cost`; costs only grow as placements
+     are added), and only one session per day without a flexible session escapes the same-day
+     cost. Any leaf it cuts would have been pruned by the old sum check, so results are
+     unchanged (a unit test compares against the search without the bound).
+   - `_candidate_starts` adds the ±48 h hard-leg and limit-climb offsets only for sessions
+     those rules apply to. Easy runs and volume climbs had copies on every day.
+   Measured side by side on a loaded desktop (old → new; this desktop ran ~6× slower than when
+   the 107 s figure was taken): 30-week marathon, 6 runs, 2 climbs, football 634 s → 12 s
+   (about 2 s unloaded); 30 weeks, 6 runs, no climbs 11.7 s → 1.9 s; 12 weeks, 4 runs
+   0.16 → 0.10 s, with climbs and football 0.24 → 0.11 s. Default suite (fixed Hypothesis
+   seed) 61 s → 17 s; the 200-example race-plan run took 157 s on the loaded machine.
+   Left: the strict pass still searches about 400 nodes a week before the relaxed pass in
+   four-hard-session weeks (a hard-leg count pre-check could skip it), and the bound ignores
+   adjacent-run costs between unplaced sessions. On a Pi expect a dense 30-week plan in ~10 s.
 2. `engine/replan.should_replan` returns True **on every sync on a Monday** (48 times with a
    30-minute timer). It should check that `last_replanned_at` is before this Monday.
 3. `adapt/rules.py`: every `Change` has `session_id=None`, so `apply_changes` never edits a

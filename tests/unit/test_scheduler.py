@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from runcoach.config import load_config, load_scheduling_config
 from runcoach.domain.models import PlannedSession, Step
+from runcoach.engine import scheduler
 from runcoach.engine.events import DayConstraint
 from runcoach.engine.safety import check_plan
 from runcoach.engine.scheduler import Busy, FixedInstance, compose_week, schedule_week
@@ -151,6 +152,21 @@ def test_scheduler_relaxes_hard_spacing_to_24_hours_once(tmp_path) -> None:
     assert result.relaxed
     assert tempo.date == date(2026, 11, 12)
     assert any("relaxed to 24 hours" in warning for warning in result.warnings)
+
+
+def test_cost_bound_prunes_without_changing_a_dense_week(tmp_path, monkeypatch) -> None:
+    sessions = [
+        *_example_sessions(),
+        _session(date(2026, 11, 10), "intervals", 40),
+    ]
+
+    def week():
+        return schedule_week(date(2026, 11, 9), sessions, 2, _football(), [], [], _config(tmp_path))
+
+    pruned = week()
+    monkeypatch.setattr(scheduler, "_cost_bound", lambda remaining, placements, soft, *_: soft)
+    assert pruned == week()
+    assert pruned.relaxed and not pruned.dropped
 
 
 def test_prior_tail_start_time_preserves_hard_session_spacing(tmp_path) -> None:
