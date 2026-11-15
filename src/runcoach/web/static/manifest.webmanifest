@@ -1,0 +1,14 @@
+{
+  "name": "Coachal",
+  "short_name": "Coachal",
+  "description": "Running plans built around football and climbing",
+  "start_url": "/week",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f5",
+  "theme_color": "#1d6b57",
+  "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

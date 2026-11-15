@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from runcoach.config import load_config
 from runcoach.domain.models import (
     Activity,
     Adjustment,
@@ -63,9 +64,28 @@ def from_row(row: sqlite3.Row) -> Activity:
     )
 
 
+def default_db_path() -> Path:
+    """The configured database file ([storage] db_path, relative to the project root)."""
+    return ROOT / str(load_config().storage.db_path)  # an absolute path replaces ROOT
+
+
+def backup(conn: sqlite3.Connection, directory: Path, keep: int, stamp: str) -> Path:
+    """Copy the live database with SQLite's online backup and keep the newest `keep` copies."""
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / f"runcoach-{stamp}.db"
+    copy = sqlite3.connect(str(target))
+    try:
+        conn.backup(copy)
+    finally:
+        copy.close()
+    for old in sorted(directory.glob("runcoach-*.db"))[:-keep]:
+        old.unlink()
+    return target
+
+
 def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
     """Open the database with the required pragmas and apply pending migrations."""
-    path = Path(db_path) if db_path is not None else ROOT / "runcoach.db"
+    path = Path(db_path) if db_path is not None else default_db_path()
     # Each connection serves one request or command; the web layer may open it in one worker
     # thread and use it in another, never concurrently.
     conn = sqlite3.connect(str(path), check_same_thread=False)
@@ -721,6 +741,8 @@ def save_plan(
 
 __all__ = [
     "connect",
+    "default_db_path",
+    "backup",
     "migrate",
     "schema_version",
     "save_plan",

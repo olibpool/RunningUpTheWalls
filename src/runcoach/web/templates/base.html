@@ -6,6 +6,9 @@
   <meta name="theme-color" content="#1d6b57">
   <title>{% block title %}Coachal{% endblock %} · Coachal</title>
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
   <script src="/static/vendor/htmx.min.js" defer></script>
 </head>
 <body>
@@ -20,5 +23,8 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+  </script>
 </body>
 </html>

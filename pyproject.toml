@@ -35,7 +35,14 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-runcoach = ["web/templates/*.html", "web/static/*.css", "web/static/vendor/*"]
+runcoach = [
+  "web/templates/*.html",
+  "web/static/*.css",
+  "web/static/*.js",
+  "web/static/*.png",
+  "web/static/*.webmanifest",
+  "web/static/vendor/*",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -380,3 +380,17 @@ def test_apply_changes_maps_fields_flags_and_rejects_unknown(tmp_path) -> None:
     with pytest.raises(ValueError, match="Unknown session fields"):
         db.apply_changes(conn, [Change(sid, "modify", {"nonsense": 1}, "r", "")])
     conn.close()
+
+
+def test_backup_copies_the_live_database_and_keeps_the_newest(tmp_path) -> None:
+    conn = db.connect(tmp_path / "live.db")
+    db.set_kv(conn, "marker", "present")
+    for stamp in ("20270101T000000Z", "20270102T000000Z", "20270103T000000Z"):
+        db.backup(conn, tmp_path / "backups", keep=2, stamp=stamp)
+    conn.close()
+
+    kept = sorted(p.name for p in (tmp_path / "backups").iterdir())
+    assert kept == ["runcoach-20270102T000000Z.db", "runcoach-20270103T000000Z.db"]
+    copy = db.connect(tmp_path / "backups" / kept[-1])
+    assert db.get_kv(copy, "marker") == "present"
+    copy.close()

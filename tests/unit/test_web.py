@@ -400,3 +400,14 @@ def test_continuous_mode_needs_a_profile_and_history_then_saves(
     plan = db.active_plan(conn)
     conn.close()
     assert plan is not None and plan.mode == "continuous"
+
+
+def test_pwa_manifest_and_service_worker_are_served_with_their_types(client: TestClient) -> None:
+    manifest = client.get("/manifest.webmanifest")
+    assert manifest.headers["content-type"].startswith("application/manifest+json")
+    assert manifest.json()["start_url"] == "/week"
+    worker = client.get("/sw.js")
+    assert worker.headers["content-type"].startswith("text/javascript")
+    assert worker.headers["cache-control"] == "no-cache"
+    assert client.get("/static/icon-512.png").status_code == 200
+    assert 'rel="manifest"' in client.get("/week").text

@@ -319,6 +319,14 @@ class GcalConfig(BaseModel):
     reschedule_days: int = Field(gt=0)
 
 
+class StorageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    db_path: str
+    backup_dir: str
+    backup_keep: int = Field(gt=0)
+
+
 class SchedulingConfig(BaseModel):
     """Typed view of the whole config; unknown sections or keys raise."""
 
@@ -352,6 +360,7 @@ class SchedulingConfig(BaseModel):
     weather: WeatherConfig
     inbox: InboxConfig
     gcal: GcalConfig
+    storage: StorageConfig
 
 
 def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

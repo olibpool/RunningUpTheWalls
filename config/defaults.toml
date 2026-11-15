@@ -197,3 +197,8 @@ ics_url = ""                  # secret: set RUNCOACH_GCAL__ICS_URL or config/loc
 days_back = 7
 days_ahead = 28
 reschedule_days = 14
+
+[storage]
+db_path = "runcoach.db"       # relative to the project root, or absolute (e.g. /var/lib/runcoach/runcoach.db)
+backup_dir = "backups"
+backup_keep = 14

@@ -200,6 +200,18 @@ def _sync(_args: argparse.Namespace) -> int:
     return 1 if any(outcome.startswith("error") for outcome in report.values()) else 0
 
 
+def _backup(_args: argparse.Namespace) -> int:
+    storage = load_config().storage
+    directory = db.ROOT / str(storage.backup_dir)  # an absolute backup_dir replaces ROOT
+    conn = db.connect()
+    try:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        print(f"Backed up to {db.backup(conn, directory, int(storage.backup_keep), stamp)}")
+    finally:
+        conn.close()
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="RunCoach CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -272,6 +284,8 @@ def main() -> None:
     ingest_parser.set_defaults(func=_ingest)
     sync_parser = subparsers.add_parser("sync", help="Inbox, calendar, weather, matching, rules")
     sync_parser.set_defaults(func=_sync)
+    backup_parser = subparsers.add_parser("backup", help="Copy the database to [storage]")
+    backup_parser.set_defaults(func=_backup)
     args = parser.parse_args()
     raise SystemExit(args.func(args))
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=Coachal sync (inbox, calendar, weather, matching, adaptation, re-plan)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=runcoach
+WorkingDirectory=/opt/runcoach
+EnvironmentFile=/etc/runcoach.env
+ExecStart=/opt/runcoach/.venv/bin/python -m runcoach sync
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/runcoach /home/runcoach/runcoach-inbox
