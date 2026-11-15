@@ -187,3 +187,45 @@ def test_evaluate_combines_rules() -> None:
     )
     rules = [c.rule for c in evaluate(state, MONDAY + timedelta(days=1), CFG)]
     assert rules == ["missed_once", "ill_or_niggle"]
+
+
+def test_events_logged_after_the_plan_ease_drop_and_ramp() -> None:
+    from runcoach.engine.events import CommitmentOccurrence, day_constraints
+
+    drinks_day = MONDAY  # severity 2: that day and the next are easy
+    sessions = [
+        _session(1, MONDAY + timedelta(days=1), kind="tempo", load=240),
+        _session(2, MONDAY + timedelta(days=1), sport="climb", kind="climb_power", minutes=75),
+        _session(3, MONDAY + timedelta(days=9), kind="easy"),  # inside the holiday
+        _session(4, MONDAY + timedelta(days=14), kind="easy", load=100),  # week we come back
+    ]
+
+    def occurrence(kind: str, day: date, severity: int | None = None) -> CommitmentOccurrence:
+        return CommitmentOccurrence(None, kind, None, kind, day, None, None, None, severity)
+
+    occurrences = [occurrence("penalty", drinks_day, 2)] + [
+        occurrence("block", MONDAY + timedelta(days=d)) for d in range(7, 14)
+    ]
+    state = PlanState(
+        sessions=sessions,
+        activities=[],
+        checkins=[],
+        constraints=day_constraints(occurrences, [], CFG),
+        blocks=[(MONDAY + timedelta(days=7), MONDAY + timedelta(days=13))],
+    )
+
+    changes = {c.session_id: c for c in evaluate(state, MONDAY, CFG)}
+
+    assert changes[1].updates["kind"] == "easy" and changes[1].rule == "event_constraint"
+    assert changes[2].updates["kind"] == "climb_technique"
+    assert changes[3].updates == {"status": "dropped"}
+    assert changes[4].rule == "holiday_ramp" and changes[4].updates["leg_load"] == 80
+    applied = frozenset(
+        {
+            (1, "event_constraint"),
+            (2, "event_constraint"),
+            (3, "event_constraint"),
+            (4, "holiday_ramp"),
+        }
+    )
+    assert evaluate(PlanState(**{**state.__dict__, "applied": applied}), MONDAY, CFG) == []

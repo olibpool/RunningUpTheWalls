@@ -19,7 +19,7 @@ from runcoach.domain.models import (
     PlannedSession,
     commitment_problem,
 )
-from runcoach.engine.plan import InfeasibleGoal, generate_race_plan_result
+from runcoach.engine.plan import InfeasibleGoal, generate_race_plan_result, plan_snapshot
 from runcoach.ingest.inbox import ingest_file
 from runcoach.sync import run_sync
 
@@ -130,8 +130,15 @@ def _plan_generate(args: argparse.Namespace) -> int:
         current_weekly_km=float(args.current_km),
         race_name=args.distance,
     )
+    conn = db.connect()
     try:
-        result = generate_race_plan_result(inp, today=date.today(), cfg=load_config())
+        commitments = db.list_commitments(conn)
+    finally:
+        conn.close()
+    try:
+        result = generate_race_plan_result(
+            inp, today=date.today(), cfg=load_config(), commitments=commitments
+        )
     except InfeasibleGoal as exc:
         print(str(exc))
         return 1
@@ -156,7 +163,7 @@ def _plan_generate(args: argparse.Namespace) -> int:
             mode="race",
             goal_distance_m=DISTANCE_METRES[inp.distance],
             goal_date=inp.goal_date,
-            config_snapshot=inp.model_dump(mode="json"),
+            config_snapshot=plan_snapshot(inp, commitments),
         )
         print(f"Saved plan to database with id={plan_id}")
     finally:

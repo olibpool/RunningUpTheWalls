@@ -26,6 +26,7 @@ from runcoach.engine.continuous import (
     ContinuousPlanResult,
     History,
     WeekLoad,
+    block_intervals,
     generate_continuous_plan_result,
 )
 from runcoach.engine.events import day_constraints, expand_commitments
@@ -145,18 +146,27 @@ def _matching(conn: sqlite3.Connection, cfg: SchedulingConfig) -> str:
     return f"ok: {len(matches)} matched, {len(unmatched) - len(matches)} unmatched"
 
 
-def _adaptation(conn: sqlite3.Connection, cfg: SchedulingConfig, today: date) -> str:
+def adapt_plan(conn: sqlite3.Connection, cfg: SchedulingConfig, today: date) -> str:
+    """Run the adaptation rules and heat check on the active plan; also used by the web app."""
     plan = db.active_plan(conn)
     if plan is None or plan.id is None:
         return "skipped: no active plan"
     sessions = db.plan_sessions(conn, plan.id)
     applied = frozenset(db.applied_rules(conn))
+    # Only events the plan wasn't generated with; it already accounts for the rest.
+    known = set(json.loads(plan.config_snapshot or "{}").get("event_ids", []))
+    new_events = [c for c in db.list_commitments(conn) if c.kind != "fixed" and c.id not in known]
+    horizon = max((s.date for s in sessions), default=today)
+    occurrences = expand_commitments(new_events, today - timedelta(days=7), horizon)
     state = PlanState(
         sessions=sessions,
         activities=db.activities(conn),
         checkins=db.checkins(conn, today - timedelta(days=28)),
         applied=applied,
         flags=frozenset(db.kv_keys(conn)),
+        constraints=day_constraints(occurrences, [], cfg),
+        # Continuous plans rebuild their own return ramp at each weekly re-plan.
+        blocks=block_intervals(new_events) if plan.mode == "race" else [],
     )
     changes: list[Change] = evaluate(state, today, cfg)
     forecast_json = db.get_kv(conn, "forecast")
@@ -238,7 +248,7 @@ def run_sync(
         "calendar": lambda: _calendar(conn, typed, today, client),
         "forecast": lambda: _forecast(conn, typed, client),
         "matching": lambda: _matching(conn, typed),
-        "adaptation": lambda: _adaptation(conn, typed, today),
+        "adaptation": lambda: adapt_plan(conn, typed, today),
         "replan": lambda: _replan(conn, cfg, typed, today, now_utc),
     }
     report: dict[str, str] = {}

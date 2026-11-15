@@ -8,8 +8,10 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from runcoach import db
+from runcoach.config import ConfigNode, load_scheduling_config
 from runcoach.domain.models import Commitment, commitment_problem
-from runcoach.web.deps import get_conn, parse_form, redirect, render
+from runcoach.sync import adapt_plan
+from runcoach.web.deps import get_cfg, get_conn, parse_form, redirect, render, today
 
 router = APIRouter(prefix="/events")
 
@@ -87,7 +89,11 @@ def events(
 
 
 @router.post("", response_model=None)
-async def add(request: Request, conn: Annotated[sqlite3.Connection, Depends(get_conn)]) -> Response:
+async def add(
+    request: Request,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+) -> Response:
     """Validate and store one commitment or event."""
     form, errors = parse_form(EventForm, await request.form())
     if form is not None:
@@ -99,6 +105,7 @@ async def add(request: Request, conn: Annotated[sqlite3.Connection, Depends(get_
             problem = commitment_problem(commitment)
             if problem is None:
                 db.save_commitment(conn, commitment)
+                adapt_plan(conn, load_scheduling_config(cfg), today())  # apply it straight away
                 return redirect(request, "/events")
             errors = [problem]
     return _page(request, conn, errors, status_code=400)

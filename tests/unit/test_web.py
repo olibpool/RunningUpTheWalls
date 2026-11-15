@@ -173,3 +173,22 @@ def test_cross_site_posts_are_blocked(client: TestClient) -> None:
         follow_redirects=False,
     )
     assert same_site.status_code == 303
+
+
+def test_logging_drinks_eases_the_next_hard_session_straight_away(
+    client: TestClient, db_path: Path
+) -> None:
+    _save_plan(client)
+    conn = db.connect(db_path)
+    plan = db.active_plan(conn)
+    assert plan is not None and plan.id is not None
+    hard = next(s for s in db.plan_sessions(conn, plan.id) if s.kind in {"tempo", "intervals"})
+    conn.close()
+
+    night_before = (hard.date - timedelta(days=1)).isoformat()
+    client.post("/events", data={"form": "drinks", "date": night_before, "severity": "2"})
+
+    conn = db.connect(db_path)
+    eased = db.get_session(conn, hard.id)
+    conn.close()
+    assert eased is not None and eased.kind == "easy" and "by feel" in eased.title

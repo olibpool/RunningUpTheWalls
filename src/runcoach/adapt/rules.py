@@ -10,7 +10,9 @@ from datetime import date, timedelta
 from runcoach.config import SchedulingConfig
 from runcoach.display import monday
 from runcoach.domain.models import Activity, Checkin, PlannedSession, Session, Step
+from runcoach.engine.events import DayConstraint
 from runcoach.engine.load import session_load
+from runcoach.engine.ramp import ramp_for_block
 from runcoach.engine.templates import scale_session
 
 _QUALITY = {"tempo", "intervals", "time_trial"}
@@ -37,6 +39,9 @@ class PlanState:
     checkins: list[Checkin]
     applied: frozenset[tuple[int | None, str]] = frozenset()  # (session_id, rule) already logged
     flags: frozenset[str] = frozenset()  # kv keys already set
+    # Day limits from events the plan was not generated with (drinks, holidays, active trips).
+    constraints: dict[date, DayConstraint] = field(default_factory=dict)
+    blocks: list[tuple[date, date]] = field(default_factory=list)  # holidays needing a ramp
 
 
 def _session_fields(session: PlannedSession) -> dict[str, object]:
@@ -205,11 +210,91 @@ def retest_suggested(state: PlanState, cfg: SchedulingConfig) -> list[Change]:
     return [Change(None, "flag", {"value": reason}, "retest_suggested", reason)]
 
 
+_HARD_KINDS = {"tempo", "intervals", "long", "time_trial", "climb_power"}
+
+
+def _within_limit(session: Session, constraint: DayConstraint) -> bool:
+    if constraint.max_intensity == "blocked":
+        return constraint.travel_allowed and session.sport == "run" and session.kind == "easy"
+    limited = constraint.max_intensity == "easy" and (
+        constraint.easy_sports is None or session.sport in constraint.easy_sports
+    )
+    too_hard = constraint.max_rpe is not None and (session.rpe or 0) > constraint.max_rpe
+    return not (limited and (session.kind in _HARD_KINDS or too_hard))
+
+
+def event_constraints(state: PlanState, cfg: SchedulingConfig) -> list[Change]:
+    """Events logged after the plan was made: drop sessions on blocked days, ease hard ones."""
+    changes: list[Change] = []
+    for s in state.sessions:
+        constraint = state.constraints.get(s.date)
+        if (
+            constraint is None
+            or s.status != "planned"
+            or (s.id, "event_constraint") in state.applied
+            or _within_limit(s, constraint)
+        ):
+            continue
+        if constraint.max_intensity == "blocked":
+            changes.append(
+                Change(
+                    s.id,
+                    "modify",
+                    {"status": "dropped"},
+                    "event_constraint",
+                    f"{constraint.reason}: dropped.",
+                )
+            )
+            continue
+        cap = constraint.max_rpe if constraint.max_rpe is not None else cfg.rpe.easy
+        if s.sport == "climb":
+            rpe, minutes = cfg.climbing_defaults.technique
+            kind, title = "climb_technique", "Technique climb"
+        else:
+            rpe, minutes, kind, title = (
+                min(cfg.rpe.easy, cap),
+                s.duration_min or 0,
+                "easy",
+                "Easy run (by feel)",
+            )
+        load = session_load(s.sport, kind, rpe, minutes, cfg.load_factors)
+        steps = [Step(kind="steady", duration_s=minutes * 60, rpe=rpe)] if s.sport == "run" else []
+        changes.append(
+            Change(
+                s.id,
+                "modify",
+                {
+                    "kind": kind,
+                    "title": title,
+                    "steps": steps,
+                    "duration_min": minutes,
+                    "rpe": rpe,
+                    "leg_load": load.leg,
+                    "finger_load": load.finger,
+                },
+                "event_constraint",
+                f"{constraint.reason}: eased to {title.lower()}.",
+            )  # fmt: skip
+        )
+    for start, end in state.blocks:
+        ramp = ramp_for_block((end - start).days + 1, cfg)
+        first = monday(end + timedelta(days=1))  # the week you come back in is ramp week 0
+        for offset, factor in enumerate(ramp.weekly_multipliers):
+            if factor < 1:
+                changes += _scale_week(
+                    state, first + timedelta(weeks=offset), factor, "holiday_ramp",
+                    f"Back from a {(end - start).days + 1}-day break: "
+                    f"runs at {factor:.0%} of plan.",
+                )  # fmt: skip
+    return changes
+
+
 def evaluate(state: PlanState, today: date, cfg: SchedulingConfig) -> list[Change]:
     """Every rule's changes for the current state, in a stable order."""
     return [
         *missed_once(state, today),
         *missed_two_plus(state, today),
         *ill_or_niggle(state, cfg),
+        *event_constraints(state, cfg),
         *retest_suggested(state, cfg),
     ]

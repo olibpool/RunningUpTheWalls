@@ -277,3 +277,27 @@ def test_two_run_weeks_keep_a_full_long_run() -> None:
     long_runs = [s for s in result.sessions if s.kind == "long"]
     others = [s for s in result.sessions if s.kind != "long"]
     assert max(s.duration_min or 0 for s in long_runs) > max(s.duration_min or 0 for s in others)
+
+
+def test_race_plan_honours_drinks_and_holidays() -> None:
+    inp = PlanInput(
+        distance="half", goal_date=date(2027, 3, 14), vdot=49.8, runs_per_week=4,
+        climbing_target_per_week=0, current_weekly_km=30,
+    )  # fmt: skip
+    events = [
+        Commitment(
+            kind="penalty", title="Drinks", start_date="2026-12-03", end_date="2026-12-03",
+            severity=2,
+        ),
+        Commitment(kind="block", title="Holiday", start_date="2026-12-19", end_date="2026-12-28"),
+    ]  # fmt: skip
+    result = generate_race_plan_result(inp, MONDAY, CFG, commitments=events)
+
+    assert not result.violations
+    assert not [s for s in result.sessions if date(2026, 12, 19) <= s.date <= date(2026, 12, 28)]
+    hard = {"tempo", "intervals", "long"}
+    assert not [
+        s
+        for s in result.sessions
+        if s.date in {date(2026, 12, 3), date(2026, 12, 4)} and s.kind in hard
+    ]

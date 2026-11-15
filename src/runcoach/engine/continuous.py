@@ -130,7 +130,7 @@ def _fixed_instances(
     return fixed, warnings
 
 
-def _block_intervals(events: list[Commitment]) -> list[tuple[date, date]]:
+def block_intervals(events: list[Commitment]) -> list[tuple[date, date]]:
     intervals: list[tuple[date, date]] = []
     for event in events:
         if event.kind != "block" or event.start_date is None or event.end_date is None:
@@ -150,7 +150,7 @@ def _block_intervals(events: list[Commitment]) -> list[tuple[date, date]]:
     return merged
 
 
-def _ramp_for_week(
+def ramp_for_week(
     week_start: date,
     intervals: list[tuple[date, date]],
     cfg: SchedulingConfig,
@@ -334,7 +334,7 @@ def generate_continuous_plan_result(
     fixed_instances, warnings = _fixed_instances(occurrences)
     constraints = day_constraints(occurrences, history.checkins, typed_cfg)
     all_constraints = dict(constraints)
-    blocks = _block_intervals(events)
+    blocks = block_intervals(events)
     prior_tail = list(history.prior_tail)
     sessions_out: list[PlannedSession] = []
     dropped: list[DroppedSession] = []
@@ -383,7 +383,7 @@ def generate_continuous_plan_result(
             (program_week // typed_cfg.continuous.weeks_per_block)
             % len(typed_cfg.continuous.block_cycle)
         ]
-        ramp_factor, no_quality, returning = _ramp_for_week(week_start, blocks, typed_cfg)
+        ramp_factor, no_quality, returning = ramp_for_week(week_start, blocks, typed_cfg)
         if returning:
             exempt_weeks.add(week_start)
         progress = (program_week % typed_cfg.continuous.weeks_per_block) / max(

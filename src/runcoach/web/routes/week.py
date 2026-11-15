@@ -47,9 +47,6 @@ def build_week(
     warnings: list[str] = []
     if plan is None:
         warnings.append("No active plan yet.")
-    # Race plans don't read drinks or holidays yet; say so rather than imply they adapted.
-    elif any(day.notes for day in days) and plan.mode == "race":
-        warnings.append("Events this week are shown but race plans don't adapt to them yet.")
     return days, warnings
 
 

@@ -5,7 +5,8 @@ from datetime import date, timedelta
 
 from runcoach.config import ConfigNode, SchedulingConfig, load_scheduling_config
 from runcoach.domain.models import Commitment, PlanInput, PlannedSession
-from runcoach.engine.events import DayConstraint, expand_commitments
+from runcoach.engine.continuous import block_intervals, ramp_for_week
+from runcoach.engine.events import DayConstraint, day_constraints, expand_commitments
 from runcoach.engine.progression import is_cutback_week, split_blocks, weekly_targets
 from runcoach.engine.safety import Violation, check_plan
 from runcoach.engine.scheduler import (
@@ -244,6 +245,13 @@ def generate_race_plan_result(
         )
         for offset in range((inp.goal_date - start).days, (end - start).days)
     }
+    # Drinks nights, holidays and active trips constrain days like they do in continuous mode.
+    occurrences = expand_commitments(commitments or [], start, end - timedelta(days=1))
+    constraints = {
+        **day_constraints([o for o in occurrences if o.kind != "fixed"], [], typed_cfg),
+        **race_days,
+    }
+    blocks = block_intervals(commitments or [])
     busy_events = busy or []
     tail = list(prior_tail or [])
     output: list[PlannedSession] = []
@@ -281,9 +289,19 @@ def generate_race_plan_result(
         else:
             ceiling = achieved_km * growth
         week = replace(week, target_km=min(week.target_km, ceiling))
-        sessions = _week_sessions(week, index, roles, zones, typed_cfg)
+        # Judged from the week's Sunday, so a holiday ending mid-week makes this week ramp week 0.
+        ramp, no_quality, returning = ramp_for_week(
+            week.start + timedelta(days=6), blocks, typed_cfg
+        )
+        week_roles = [("easy" if r == "quality" else r) for r in roles] if no_quality else roles
+        sessions = _week_sessions(week, index, week_roles, zones, typed_cfg)
         week_end = week.start + timedelta(days=7)
         fixed_this_week = [i for i in plan_fixed if week.start <= i.date < week_end]
+        credited = sum(
+            c.credit_leg_load for d, c in constraints.items() if week.start <= d < week_end
+        )
+        if returning:
+            reduced_weeks.add(week.start)  # the return ramp climbs back faster than the weekly cap
 
         # Runs alone must fit the week's allowance; that trim is the generator's own overshoot
         # (e.g. tempo/interval load swings), so it ignores the floor protecting runs from
@@ -297,6 +315,7 @@ def generate_race_plan_result(
             0,
             week.cutback,
             unfloored_cfg,
+            ramp_factor=ramp,
             weekly_growth_factor=taper_growth,
         ).sessions
         composition = compose_week(
@@ -307,7 +326,9 @@ def generate_race_plan_result(
             inp.climbing_target_per_week,
             week.cutback,
             typed_cfg,
+            ramp_factor=ramp,
             weekly_growth_factor=taper_growth,
+            credited_leg_load=credited,
         )
         schedule = schedule_week(
             week.start,
@@ -318,7 +339,7 @@ def generate_race_plan_result(
             tail,
             typed_cfg,
             timezone_name=timezone_name,
-            day_constraints=race_days,
+            day_constraints=constraints,
         )
         placed = [p.session for p in schedule.placed if p.session is not None]
         output.extend(placed)
@@ -349,7 +370,7 @@ def generate_race_plan_result(
         busy=busy_events,
         timezone_name=timezone_name,
         relaxed_weeks=relaxed_weeks,
-        day_constraints=race_days,
+        day_constraints=constraints,
         plan_start=start,
         taper_start=taper_weeks[0] if taper_weeks else None,
         exempt_load_weeks=reduced_weeks,
@@ -381,3 +402,11 @@ def generate_race_plan(
         prior_tail=prior_tail,
         timezone_name=timezone_name,
     ).sessions
+
+
+def plan_snapshot(inp: PlanInput, commitments: list[Commitment]) -> dict[str, object]:
+    """What a saved plan was built from, including which events it already accounts for."""
+    return {
+        **inp.model_dump(mode="json"),
+        "event_ids": [c.id for c in commitments if c.kind != "fixed" and c.id is not None],
+    }

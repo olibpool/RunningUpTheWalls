@@ -13,7 +13,12 @@ from runcoach import db
 from runcoach.config import ConfigNode
 from runcoach.display import monday
 from runcoach.domain.models import DISTANCE_METRES, Distance, PlanInput, PlannedSession
-from runcoach.engine.plan import InfeasibleGoal, PlanGenerationResult, generate_race_plan_result
+from runcoach.engine.plan import (
+    InfeasibleGoal,
+    PlanGenerationResult,
+    generate_race_plan_result,
+    plan_snapshot,
+)
 from runcoach.engine.vdot import vdot_from_race
 from runcoach.web.deps import get_cfg, get_conn, parse_form, redirect, render, today
 
@@ -187,6 +192,6 @@ async def save(
         mode="race",
         goal_distance_m=DISTANCE_METRES[inp.distance],
         goal_date=inp.goal_date,
-        config_snapshot=inp.model_dump(mode="json"),
+        config_snapshot=plan_snapshot(inp, db.list_commitments(conn)),
     )
     return redirect(request, f"/week?start={monday(result.sessions[0].date).isoformat()}")
