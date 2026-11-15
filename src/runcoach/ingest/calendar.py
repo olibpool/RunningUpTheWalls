@@ -9,6 +9,7 @@ from icalendar import Calendar
 
 from runcoach.config import CalendarKeywordsConfig
 from runcoach.domain.models import CalendarEvent, Commitment, EventKind
+from runcoach.engine.scheduler import Busy
 
 
 def _window_datetime(value: date | datetime, tz: ZoneInfo, *, end: bool) -> datetime:
@@ -220,3 +221,16 @@ def detect_commitments(
             )
         )
     return proposals
+
+
+def to_busy(events: list[CalendarEvent]) -> list[Busy]:
+    """Timed calendar events as scheduler busy slots; all-day events never block a slot."""
+    return [
+        Busy(
+            start=datetime.fromisoformat(event.starts_at),
+            end=datetime.fromisoformat(event.ends_at),
+            title=event.title or "Busy",
+        )
+        for event in events
+        if not event.all_day and event.ends_at > event.starts_at
+    ]

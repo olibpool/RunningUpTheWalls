@@ -9,6 +9,7 @@ from pathlib import Path
 from runcoach.domain.models import (
     Activity,
     Adjustment,
+    Athlete,
     CalendarEvent,
     Checkin,
     Commitment,
@@ -439,13 +440,58 @@ def activities(conn: sqlite3.Connection, *, unmatched_only: bool = False) -> lis
 def link_activity(
     conn: sqlite3.Connection, activity_id: int, session_id: int, *, rule: str, reason: str
 ) -> None:
-    """Attach an activity to its session, mark the session done and log why."""
+    """Attach an activity to its session, mark the session done and log why.
+
+    An activity without its own RPE takes the session's planned RPE for its load.
+    """
     with conn:
-        conn.execute("UPDATE activity SET session_id = ? WHERE id = ?", (session_id, activity_id))
+        conn.execute(
+            """
+            UPDATE activity SET session_id = ?,
+                load = COALESCE(rpe, (SELECT planned_rpe FROM session WHERE id = ?), load * 60.0
+                    / NULLIF(duration_s, 0)) * duration_s / 60.0
+            WHERE id = ?
+            """,
+            (session_id, session_id, activity_id),
+        )
         conn.execute("UPDATE session SET status = 'done' WHERE id = ?", (session_id,))
         conn.execute(
             "INSERT INTO adjustment (created_at, session_id, rule, reason) VALUES (?, ?, ?, ?)",
             (datetime.now(timezone.utc).isoformat(), session_id, rule, reason),
+        )
+
+
+def find_activity(conn: sqlite3.Connection, source: str, external_id: str) -> int | None:
+    """Id of an already-stored activity, for idempotent ingest."""
+    row = conn.execute(
+        "SELECT id FROM activity WHERE source = ? AND external_id = ?", (source, external_id)
+    ).fetchone()
+    return int(row["id"]) if row is not None else None
+
+
+def calendar_events(conn: sqlite3.Connection) -> list[CalendarEvent]:
+    """Every cached calendar occurrence, in start order."""
+    rows = conn.execute("SELECT * FROM calendar_event ORDER BY starts_at").fetchall()
+    return [
+        CalendarEvent.model_validate({**dict(row), "all_day": bool(row["all_day"])}) for row in rows
+    ]
+
+
+def get_athlete(conn: sqlite3.Connection) -> Athlete | None:
+    """The single athlete profile, if one has been saved."""
+    row = conn.execute("SELECT * FROM athlete WHERE id = 1").fetchone()
+    return Athlete.model_validate(dict(row)) if row is not None else None
+
+
+def save_athlete(conn: sqlite3.Connection, athlete: Athlete) -> None:
+    """Create or replace the single athlete profile."""
+    data = athlete.model_dump(exclude={"id"})
+    columns = ", ".join(data)
+    with conn:
+        conn.execute(
+            f"INSERT INTO athlete (id, {columns}) VALUES (1, {', '.join('?' for _ in data)}) "
+            f"ON CONFLICT(id) DO UPDATE SET {', '.join(f'{c} = excluded.{c}' for c in data)}",
+            list(data.values()),
         )
 
 
@@ -692,6 +738,10 @@ __all__ = [
     "kv_keys",
     "activities",
     "link_activity",
+    "find_activity",
+    "calendar_events",
+    "get_athlete",
+    "save_athlete",
     "checkins",
     "save_checkin",
     "applied_rules",

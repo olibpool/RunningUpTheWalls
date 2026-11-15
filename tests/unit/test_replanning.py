@@ -34,6 +34,13 @@ def test_replan_gate_runs_on_mondays_or_after_interval() -> None:
         last_replanned,
         config,
     )
+    # Already re-planned this Monday: later syncs the same day must not re-plan again.
+    assert not should_replan(
+        date(2026, 11, 9),
+        datetime(2026, 11, 9, 10, 30, tzinfo=timezone.utc),
+        "2026-11-09T10:00:00+00:00",
+        config,
+    )
 
 
 def test_replan_gate_requires_valid_utc_timestamp() -> None:
@@ -53,19 +60,26 @@ def test_replan_gate_requires_valid_utc_timestamp() -> None:
 
 def test_replan_gate_honors_configured_interval() -> None:
     config = load_config(env={})
-    config.continuous.replan_interval_days = 10
-    last = datetime(2026, 11, 1, 10, tzinfo=timezone.utc)
+    config.continuous.replan_interval_days = 3
+    last = datetime(2026, 11, 9, 10, tzinfo=timezone.utc)  # a Monday re-plan
 
     assert not should_replan(
-        date(2026, 11, 10),
-        last + timedelta(days=9, hours=23),
+        date(2026, 11, 12),
+        last + timedelta(days=2, hours=23),
         last.isoformat(),
         config,
     )
     assert should_replan(
-        date(2026, 11, 11),
-        last + timedelta(days=10),
+        date(2026, 11, 12),
+        last + timedelta(days=3),
         last.isoformat(),
+        config,
+    )
+    # A missed Monday is caught by the first sync later that week.
+    assert should_replan(
+        date(2026, 11, 18),
+        datetime(2026, 11, 18, 9, tzinfo=timezone.utc),
+        "2026-11-12T10:00:00+00:00",
         config,
     )
 

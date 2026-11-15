@@ -310,6 +310,15 @@ class InboxConfig(BaseModel):
     path: str
 
 
+class GcalConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ics_url: str = Field(repr=False)  # a secret; keep it out of reprs and logs
+    days_back: int = Field(ge=0)
+    days_ahead: int = Field(gt=0)
+    reschedule_days: int = Field(gt=0)
+
+
 class SchedulingConfig(BaseModel):
     """Typed view of the whole config; unknown sections or keys raise."""
 
@@ -342,6 +351,7 @@ class SchedulingConfig(BaseModel):
     heat_pace_penalty_pct: HeatConfig
     weather: WeatherConfig
     inbox: InboxConfig
+    gcal: GcalConfig
 
 
 def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

@@ -191,3 +191,9 @@ timeout_s = 10.0
 
 [inbox]
 path = "~/runcoach-inbox"
+
+[gcal]
+ics_url = ""                  # secret: set RUNCOACH_GCAL__ICS_URL or config/local.toml; never logged
+days_back = 7
+days_ahead = 28
+reschedule_days = 14

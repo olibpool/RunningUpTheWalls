@@ -17,8 +17,9 @@ from starlette.datastructures import FormData
 
 from runcoach import db, display
 from runcoach.config import ConfigNode
+from runcoach.domain.models import LOCAL_TIMEZONE
 
-TIMEZONE = ZoneInfo("Europe/London")  # planned sessions are local dates (working rule 8)
+TIMEZONE = ZoneInfo(LOCAL_TIMEZONE)
 
 # One entry per top-level page; add new pages here so the navigation stays in one place.
 NAV = [("week", "Week", "/week"), ("plan", "Plan", "/plan"), ("events", "Events", "/events")]

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from collections.abc import Callable
-from datetime import date
+from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import get_args
 
 from runcoach import db
-from runcoach.config import load_config
+from runcoach.config import load_config, load_scheduling_config
 from runcoach.display import main_pace, monday, structure
 from runcoach.domain.models import (
     DISTANCE_METRES,
@@ -18,6 +20,8 @@ from runcoach.domain.models import (
     commitment_problem,
 )
 from runcoach.engine.plan import InfeasibleGoal, generate_race_plan_result
+from runcoach.ingest.inbox import ingest_file
+from runcoach.sync import run_sync
 
 
 def _save_commitment(build: Callable[[], Commitment], label: str) -> int:
@@ -160,6 +164,35 @@ def _plan_generate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ingest(args: argparse.Namespace) -> int:
+    path = Path(args.file)
+    conn = db.connect()
+    try:
+        result = ingest_file(
+            conn, path.read_bytes(), path.name, load_scheduling_config(load_config())
+        )
+    except (OSError, ValueError) as exc:
+        print(f"Could not ingest {path.name}: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        conn.close()
+    state = "stored" if result.added else "already stored"
+    print(f"{path.name}: {state} as activity {result.activity_id}")
+    return 0
+
+
+def _sync(_args: argparse.Namespace) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    conn = db.connect()
+    try:
+        report = run_sync(conn, load_config(), datetime.now(timezone.utc))
+    finally:
+        conn.close()
+    for step, outcome in report.items():
+        print(f"{step:<11} {outcome}")
+    return 1 if any(outcome.startswith("error") for outcome in report.values()) else 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="RunCoach CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -227,6 +260,11 @@ def main() -> None:
         help="Persist the generated plan to SQLite",
     )
     plan_generate.set_defaults(func=_plan_generate)
+    ingest_parser = subparsers.add_parser("ingest", help="Store a GPX activity file")
+    ingest_parser.add_argument("file")
+    ingest_parser.set_defaults(func=_ingest)
+    sync_parser = subparsers.add_parser("sync", help="Inbox, calendar, weather, matching, rules")
+    sync_parser.set_defaults(func=_sync)
     args = parser.parse_args()
     raise SystemExit(args.func(args))
 

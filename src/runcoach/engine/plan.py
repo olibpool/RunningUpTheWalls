@@ -179,9 +179,10 @@ def _week_sessions(
     return [s.model_copy(update={"reason": note}) for s in sessions]
 
 
-def _fixed_instances(
+def fixed_instances(
     commitments: list[Commitment], start: date, end: date
 ) -> tuple[list[FixedInstance], list[str]]:
+    """Fixed commitments in [start, end] as scheduler instances, plus skip warnings."""
     fixed: list[FixedInstance] = []
     warnings: list[str] = []
     for occurrence in expand_commitments(commitments, start, end):
@@ -233,7 +234,7 @@ def generate_race_plan_result(
     roles = ROLES[inp.runs_per_week]
     end = start + timedelta(weeks=n_weeks)
 
-    plan_fixed, warnings = _fixed_instances(commitments or [], start, end - timedelta(days=1))
+    plan_fixed, warnings = fixed_instances(commitments or [], start, end - timedelta(days=1))
     plan_fixed = [*(i for i in fixed or [] if start <= i.date < end), *plan_fixed]
     race_days = {
         start + timedelta(days=offset): DayConstraint(

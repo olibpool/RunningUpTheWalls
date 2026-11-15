@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+LOCAL_TIMEZONE = "Europe/London"  # planned sessions are local dates (working rule 8)
+
 Sport = Literal["run", "climb", "football", "rest", "other"]
 EventKind = Literal["fixed", "penalty", "block", "credit"]
 Distance = Literal["5k", "10k", "half", "marathon"]
