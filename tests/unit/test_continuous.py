@@ -68,7 +68,11 @@ def test_continuous_targets_follow_cutback_and_ceiling() -> None:
         _config(),
     )
 
-    assert result.targets == [325.5, 330.0, 330.0, 264.0, 277.2, 291.06]
+    # A cut-back week dips, then training resumes from the level before it.
+    targets = result.targets
+    assert targets[0] == 325.5 and targets[1] == 330.0
+    assert 0.75 * targets[2] < targets[3] < 0.85 * targets[2]
+    assert targets[4] >= targets[2]
     assert all(target <= 330.0 for target in result.targets)
     assert result.allowed_loads[0] == 325.5
     assert not any(session.kind == "time_trial" for session in result.sessions)
@@ -307,3 +311,56 @@ def test_without_a_ceiling_growth_stops_at_the_default_and_never_cuts_current_lo
     result = generate_continuous_plan_result(athlete, near, date(2026, 11, 9), [], cfg)
     assert max(result.targets) <= ceiling + 1e-6  # holds at the ceiling instead of growing
     assert default_ceiling(athlete, zones, [], date(2026, 11, 9), 5 * ceiling, typed) == 5 * ceiling
+
+
+def test_week_builder_costs_quality_first_and_keeps_the_long_run_longest() -> None:
+    from runcoach.engine.continuous import _sessions_for_week
+    from runcoach.engine.zones import zones_from_vdot
+
+    typed = load_scheduling_config(_config())
+    zones = zones_from_vdot(48.5, typed.zones)
+    week = date(2026, 11, 16)
+    for budget, profile in [(500, "speed"), (700, "threshold"), (1000, "speed"), (450, "aerobic")]:
+        sessions = _sessions_for_week(week, budget, 4, profile, False, zones, typed, 0.5)
+        long_run = next(s for s in sessions if s.kind == "long")
+        easy = [s for s in sessions if s.kind == "easy"]
+        assert sum(s.leg_load for s in sessions) <= budget * 1.05  # quality's real cost counted
+        assert all(e.duration_min <= long_run.duration_min for e in easy)
+        assert all(e.duration_min >= typed.templates.min_easy_minutes for e in easy)
+        quality = [s for s in sessions if s.kind in {"tempo", "intervals"}]
+        run_minutes = sum(s.duration_min or 0 for s in sessions)
+        assert all(
+            q.duration_min <= run_minutes * typed.templates.max_quality_share * 1.6 for q in quality
+        )
+    # Tiny budgets give fewer runs rather than several too-short ones.
+    small = _sessions_for_week(week, 200, 5, "aerobic", False, zones, typed)
+    assert 1 <= len(small) < 5
+
+
+def test_football_week_and_time_trial_week_shapes() -> None:
+    football = Commitment(
+        kind="fixed", sport="football", title="Football", weekday=1,
+        start_time="19:30", duration_min=60, rpe=7.5,
+    )  # fmt: skip
+    cfg = _config(weeks_ahead=6)
+    cfg.continuous.retest_every_weeks = 4
+    result = generate_continuous_plan_result(
+        _athlete(vdot_updated_at="2026-10-31T00:00:00+00:00"),
+        History(
+            weekly_loads=[
+                WeekLoad(date(2026, 10, 12) + timedelta(weeks=n), 1100.0) for n in range(4)
+            ],
+            typical_easy_duration_min=50,
+        ),
+        date(2026, 11, 9),
+        [football],
+        cfg,
+    )
+    assert not result.violations
+    trial_week = [
+        s
+        for s in result.sessions
+        if date(2026, 11, 30) <= s.date < date(2026, 12, 7) and s.sport == "run"
+    ]
+    assert any(s.kind == "time_trial" for s in trial_week)
+    assert sum(s.kind == "easy" for s in trial_week) >= 2  # the trial doesn't empty the week

@@ -21,6 +21,7 @@ from runcoach.engine.templates import (
     WeekContext,
     build_session,
     longest_in_window,
+    quality_cap_minutes,
     quality_minutes,
     race_session,
     within_spike_limit,
@@ -179,20 +180,6 @@ def _rotation(week: _Week, distance: Distance) -> tuple[str, ...]:
     return _PEAK_ROTATION[distance]
 
 
-def _share_cap_minutes(kind: str, week_km: float, zones: Zones, cfg: SchedulingConfig) -> int:
-    """Session minutes that keep its fast work within Daniels' share of weekly volume."""
-    t = cfg.templates
-    if kind == "tempo":
-        work = week_km * t.tempo_max_share_of_week_km * zones.threshold.max_s_per_km / 60
-        rest = (
-            work / 5 * t.cruise_recovery_s_per_5min / 60 if work > t.tempo_continuous_max_min else 0
-        )
-        minutes = work + rest
-    else:  # intervals: recoveries as long as the reps
-        minutes = 2 * week_km * t.interval_max_share_of_week_km * zones.interval.max_s_per_km / 60
-    return t.warmup_min + t.cooldown_min + round(minutes)
-
-
 def _week_sessions(
     week: _Week,
     index: int,
@@ -220,7 +207,7 @@ def _week_sessions(
             round(quality_cap),
             max(
                 quality_minutes(kind, 0.0, cfg),
-                _share_cap_minutes(kind, week.target_km, zones, cfg),
+                quality_cap_minutes(kind, week.target_km, zones, cfg),
             ),
         )
         if minutes < quality_minutes(kind, 0.0, cfg):

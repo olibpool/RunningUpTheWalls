@@ -145,7 +145,6 @@ retest_distance_m = 5000
 acr_low = 0.8
 acr_high = 1.3
 acr_hold = 1.5
-quality_load_share = 0.2
 # With no ceiling set, weekly load stops growing at max_weekly_km_per_run x runs of mostly easy
 # running at this average effort, plus a usual week's football and climbing.
 ceiling_run_rpe = 3.5

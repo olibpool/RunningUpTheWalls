@@ -80,6 +80,20 @@ def quality_minutes(kind: str, progress: float, cfg: SchedulingConfig) -> int:
     return t.warmup_min + work + t.cooldown_min
 
 
+def quality_cap_minutes(kind: str, week_km: float, zones: Zones, cfg: SchedulingConfig) -> int:
+    """Session minutes that keep its fast work within Daniels' share of weekly volume."""
+    t = cfg.templates
+    if kind == "tempo":
+        work = week_km * t.tempo_max_share_of_week_km * zones.threshold.max_s_per_km / 60
+        rest = (
+            work / 5 * t.cruise_recovery_s_per_5min / 60 if work > t.tempo_continuous_max_min else 0
+        )
+        minutes = work + rest
+    else:  # intervals: recoveries as long as the reps
+        minutes = 2 * week_km * t.interval_max_share_of_week_km * zones.interval.max_s_per_km / 60
+    return t.warmup_min + t.cooldown_min + round(minutes)
+
+
 def build_session(
     kind: str, ctx: WeekContext, zones: Zones, cfg: SchedulingConfig
 ) -> PlannedSession:

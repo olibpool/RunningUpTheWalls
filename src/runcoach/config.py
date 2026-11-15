@@ -120,7 +120,6 @@ class ContinuousConfig(BaseModel):
     acr_low: float = Field(gt=0)
     acr_high: float = Field(gt=0)
     acr_hold: float = Field(gt=0)
-    quality_load_share: float = Field(ge=0, le=1)
 
     @model_validator(mode="after")
     def validate_acr_thresholds(self) -> ContinuousConfig:
