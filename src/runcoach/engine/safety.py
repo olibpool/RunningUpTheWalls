@@ -47,14 +47,6 @@ def _week_start(day: date) -> date:
     return day - timedelta(days=day.weekday())
 
 
-def _typed_config(cfg: ConfigNode | SchedulingConfig) -> SchedulingConfig:
-    if isinstance(cfg, SchedulingConfig):
-        return cfg
-    if isinstance(cfg, ConfigNode):
-        return load_scheduling_config(cfg)
-    raise TypeError("cfg must be a ConfigNode or SchedulingConfig")
-
-
 def _work_paces(steps: list[Step], kind: str) -> list[float]:
     paces: list[float] = []
     for step in steps:
@@ -115,7 +107,6 @@ def _load_violations(
     violations: list[Violation] = []
     cap = 1.0 + cfg.progression.max_weekly_increase
     reference: float | None = None
-    previous: float | None = None
     for week in weeks:
         load = loads.get(week, 0.0)
         # Compare against the last non-dip week, so cut-backs and tapers don't reset the base.
@@ -127,9 +118,10 @@ def _load_violations(
                     f"{cfg.progression.max_weekly_increase:.0%} over {reference:.0f}.",
                 )
             )
-        if previous is None or load >= previous:
+        # A week below the base is a dip (cut-back, trip, the week back from one), even when it
+        # rises on the dip before it; growth stays measured from the base.
+        if reference is None or load >= reference:
             reference = load
-        previous = load
 
         runs = run_minutes.get(week, [])
         total = sum(s.duration_min or 0 for s in runs)
@@ -233,7 +225,7 @@ def check_plan(
     exempt_load_weeks: Mondays of weeks exempt from the rise and long-run-share checks
     (return ramps, or weeks where the scheduler had to drop sessions).
     """
-    typed_cfg = _typed_config(cfg)
+    typed_cfg = load_scheduling_config(cfg)
     fixed_instances = fixed or []
     busy_events = busy or []
     constraints = day_constraints or {}
@@ -247,6 +239,13 @@ def check_plan(
             occupied_by_week.setdefault(_week_start(session.date), set()).add(session.date)
     for instance in fixed_instances:
         occupied_by_week.setdefault(_week_start(instance.date), set()).add(instance.date)
+    runs_by_day: dict[date, int] = {}
+    for session in sessions:
+        if session.sport == "run" and session.kind != "rest":
+            runs_by_day[session.date] = runs_by_day.get(session.date, 0) + 1
+    for day, count in sorted(runs_by_day.items()):
+        if count > typed_cfg.scheduler.max_runs_per_day:
+            violations.append(Violation("runs-per-day", f"{count} runs on {day:%a %d %b}."))
     for days in occupied_by_week.values():
         if len(days) > 7 - typed_cfg.progression.min_rest_days_per_week:
             violations.append(Violation("no-rest-day", "No rest day in the week"))
@@ -280,6 +279,9 @@ def check_plan(
             if week in (relaxed_weeks or set())
             else minimum_hard_hours
         )
+        chosen = {left.fixed or left.kind == "race", right.fixed or right.kind == "race"}
+        if chosen == {True}:
+            continue  # both are your own dates (a commitment, the race): a warning, not a refusal
         if right.start - left.start < timedelta(hours=minimum):
             violations.append(
                 Violation(

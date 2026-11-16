@@ -26,6 +26,11 @@ def minimal_travel_plan(
         if index == 0:
             title = "Easy travel run with strides"
             reason = "Minimal run during travel; strides maintain speed."
+            strides_s = minimal.strides_repeats * (
+                minimal.stride_duration_s + minimal.stride_recovery_s
+            )
+            # The easy running is a step too, so scaling the session keeps it (not just strides).
+            steps.append(Step(kind="steady", duration_s=max(60, duration_min * 60 - strides_s)))
             steps.append(
                 Step(
                     kind="repeat",

@@ -44,6 +44,7 @@ templates.env.filters.update(
     clock=display.clock,
     km=display.km,
     why=display.why,
+    plain=display.plain,
     phase=display.phase,
 )
 templates.env.globals.update(

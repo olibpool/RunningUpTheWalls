@@ -29,7 +29,7 @@
     {% if ratio < low %}{{ icon("rest") }} Lighter than your usual week: recovery time, so the next build lands.
     {% elif ratio <= 1.1 %}{{ icon("check") }} About your usual week, spread so no day piles up on your legs.
     {% elif ratio <= high %}{{ icon("flame") }} A step up of {{ ((ratio - 1) * 100) | round | int }}% on your usual week: the build, at a safe pace.
-    {% else %}{{ icon("alert") }} {{ ((ratio - 1) * 100) | round | int }}% more than your usual week, above the safe step of {{ ((high - 1) * 100) | round | int }}%. If you feel flat, drop an easy run.{% endif %}
+    {% else %}{{ icon("alert") }} {{ ((ratio - 1) * 100) | round | int }}% more than your usual week, above the safe step of {{ ((high - 1) * 100) | round | int }}%. {% if balance.parts | selectattr('sport', 'equalto', 'run') | selectattr('ahead') | list %}If you feel flat, drop an easy run.{% else %}Keep the rest of the week gentle.{% endif %}{% endif %}
   </p>
   {% endif %}
   {% if balance.parts | selectattr("sport", "equalto", "climb") | list %}

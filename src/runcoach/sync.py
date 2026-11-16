@@ -36,9 +36,11 @@ from runcoach.engine.continuous import (
     generate_continuous_plan_result,
 )
 from runcoach.engine.events import day_constraints, expand_commitments
+from runcoach.engine.habits import Habit, learn_habits
 from runcoach.engine.load import leg_factor
 from runcoach.engine.plan import fixed_instances
 from runcoach.engine.replan import should_replan
+from runcoach.engine.scheduler import first_open_day
 from runcoach.ingest.calendar import fetch_ical_events, to_busy
 from runcoach.ingest.inbox import ingest_inbox
 from runcoach.ingest.matcher import local_day, match
@@ -76,7 +78,10 @@ def replan_continuous_if_due(
             current_history,
             plan_start_date=date.fromisoformat(plan["start_date"]),
         )
-    result = generate_continuous_plan_result(athlete, current_history, today, events, cfg)
+    result = generate_continuous_plan_result(
+        athlete, current_history, today, events, cfg,
+        not_before=first_open_day(now_utc.astimezone(TZ), load_scheduling_config(cfg)),
+    )  # fmt: skip
     if result.violations:
         details = "; ".join(f"{v.kind}: {v.message}" for v in result.violations)
         raise ValueError(f"Re-plan not saved; it fails the safety checks: {details}")
@@ -216,6 +221,14 @@ def weekly_leg_loads(
     return loads
 
 
+def activity_habits(
+    activities: list[Activity], today: date, cfg: SchedulingConfig
+) -> dict[str, Habit]:
+    """When you usually do each sport, from your stored activities."""
+    starts = [(a.sport, datetime.fromisoformat(a.started_at).astimezone(TZ)) for a in activities]
+    return learn_habits(starts, today, cfg.habits)
+
+
 def first_record_week(activities: list[Activity], default: date) -> date:
     """Monday of the first stored activity: weeks before it are unknown, not rest, and counting
     them as zero load would plan far below what you actually do."""
@@ -259,6 +272,7 @@ def history_from_activities(
         -cfg.continuous.chronic_load_weeks :
     ]
     return History(
+        habits=activity_habits(stored, today, cfg),
         weekly_loads=weekly_loads,
         weekly_run_minutes=sum(week_run_minutes[w] for w in known) / len(known) if known else 0.0,
         typical_easy_duration_min=round(median(run_minutes)),

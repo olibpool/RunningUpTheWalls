@@ -116,7 +116,7 @@
   <h2 id="history-title">History</h2>
   {% if history %}
   <ol class="timeline">
-    {% for a in history %}<li><time>{{ a.created_at | local_time }}</time><span>{{ a.reason }}</span></li>{% endfor %}
+    {% for a in history %}<li><time>{{ a.created_at | local_time }}</time><span>{{ a.reason | plain }}</span></li>{% endfor %}
   </ol>
   {% else %}<p class="muted">No changes yet.</p>{% endif %}
 </section>

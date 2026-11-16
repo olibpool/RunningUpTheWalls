@@ -119,6 +119,22 @@ def why(reason: str | None) -> list[str]:
     return out
 
 
+_PLAIN = [
+    (r"Easy day after penalty (.+?)(?=[:;.]|$)", r"The day after \1"),
+    (r"Penalty (.+?) \(severity \d\)", r"\1"),
+    (r"Check-in reports ", "You reported "),
+    (r"Blocked by (.+?)(?=[:;.]|$)", r"Away (\1)"),
+]
+
+
+def plain(reason: str | None) -> str:
+    """An adjustment's reason with the planner's terms for events said plainly."""
+    text = reason or ""
+    for pattern, repl in _PLAIN:
+        text = re.sub(pattern, repl, text)
+    return text
+
+
 def phase(reason: str | None) -> str | None:
     """The training phase named in a reason ("Base", "Build", "Aerobic"...), if any."""
     found = re.search(r"(\w+) (?:block|emphasis)", reason or "", flags=re.IGNORECASE)

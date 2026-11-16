@@ -7,6 +7,7 @@ from runcoach.config import ConfigNode, SchedulingConfig, load_scheduling_config
 from runcoach.domain.models import DISTANCE_METRES, Commitment, Distance, PlanInput, PlannedSession
 from runcoach.engine.continuous import block_intervals, ramp_for_week
 from runcoach.engine.events import DayConstraint, day_constraints, expand_commitments
+from runcoach.engine.habits import Habit
 from runcoach.engine.progression import is_cutback_week, split_blocks, weekly_targets
 from runcoach.engine.safety import Violation, check_plan
 from runcoach.engine.scheduler import (
@@ -24,8 +25,10 @@ from runcoach.engine.templates import (
     quality_cap_minutes,
     quality_minutes,
     race_session,
+    within_long_share,
     within_spike_limit,
 )
+from runcoach.engine.travel import minimal_travel_plan
 from runcoach.engine.zones import Zones, zones_from_vdot
 
 ROLES: dict[int, list[str]] = {
@@ -308,6 +311,8 @@ def generate_race_plan_result(
     busy: list[Busy] | None = None,
     prior_tail: list[PlannedSession] | None = None,
     timezone_name: str = "Europe/London",
+    habits: dict[str, Habit] | None = None,
+    not_before: date | None = None,
 ) -> PlanGenerationResult:
     """Generate, load-compose and schedule a race plan; violations are returned, not raised."""
     typed_cfg = _capped_by_runs(inp, load_scheduling_config(cfg))
@@ -319,8 +324,9 @@ def generate_race_plan_result(
     roles = ROLES[inp.runs_per_week]
     end = start + timedelta(weeks=n_weeks)
 
-    plan_fixed, warnings = fixed_instances(commitments or [], start, end - timedelta(days=1))
-    plan_fixed = [*(i for i in fixed or [] if start <= i.date < end), *plan_fixed]
+    # The plan ends at the race, so commitments after it are outside the plan.
+    plan_fixed, warnings = fixed_instances(commitments or [], start, inp.goal_date)
+    plan_fixed = [*(i for i in fixed or [] if start <= i.date <= inp.goal_date), *plan_fixed]
     race_days = {
         start + timedelta(days=offset): DayConstraint(
             date=start + timedelta(days=offset),
@@ -417,7 +423,17 @@ def generate_race_plan_result(
         ))  # fmt: skip
         sessions = _week_sessions(week, index, week_roles, zones, typed_cfg, inp.distance)
         longest = longest_in_window(recent_runs, week.start, typed_cfg)
-        sessions = [within_spike_limit(s, longest, typed_cfg) for s in sessions]
+        sessions = within_long_share(
+            [within_spike_limit(s, longest, typed_cfg) for s in sessions], typed_cfg
+        )
+        travel_days = {
+            o.date for o in occurrences
+            if o.kind == "block" and o.minimal_plan and week.start <= o.date < week_end
+        }  # fmt: skip
+        if travel_days:  # a short run a day while away, sized from the week's easy runs
+            easy = [s.duration_min or 0 for s in sessions if s.kind == "easy"]
+            typical = round(sum(easy) / len(easy)) if easy else typed_cfg.templates.min_easy_minutes
+            sessions += minimal_travel_plan(week.start, typical, typed_cfg)[: len(travel_days)]
         credited = sum(
             c.credit_leg_load for d, c in constraints.items() if week.start <= d < week_end
         )
@@ -455,12 +471,14 @@ def generate_race_plan_result(
             week.start,
             composition.sessions,
             0,
-            [*fixed_this_week, race_fixed] if week.race_week else fixed_this_week,
+            [*plan_fixed, race_fixed] if week.race_week else plan_fixed,
             busy_events,
             tail,
             typed_cfg,
             timezone_name=timezone_name,
+            not_before=not_before,
             day_constraints=constraints,
+            habits=habits,
         )
         placed = [p.session for p in schedule.placed if p.session is not None]
         output.extend(placed)
@@ -497,7 +515,7 @@ def generate_race_plan_result(
         timezone_name=timezone_name,
         relaxed_weeks=relaxed_weeks,
         day_constraints=check_constraints,
-        plan_start=start,
+        plan_start=max(start, not_before or start),
         taper_start=taper_weeks[0] if taper_weeks else None,
         exempt_load_weeks=reduced_weeks,
     )

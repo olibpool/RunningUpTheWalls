@@ -73,7 +73,7 @@
       <h2 id="week-title">This week so far</h2>
       <a class="small" href="/progress">All your progress</a>
     </div>
-    {% include "_week_stats.html" %}
+    {% if plan %}{% include "_week_stats.html" %}{% endif %}
     <ul class="mini-stats">
       <li>{{ icon("flame") }}<span><strong>{{ streak }}</strong> week{{ "" if streak == 1 else "s" }} in a row with {{ streak_per_week }}+ sessions</span></li>
       <li>{{ icon("run") }}<span><strong>{{ "%.1f" | format(recent.run_km) }} km</strong> run in the last 30 days, {{ recent.hours }} h training in all</span></li>

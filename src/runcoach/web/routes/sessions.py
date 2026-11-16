@@ -190,8 +190,6 @@ async def move(
     form, errors = parse_form(MoveForm, await request.form())
     if form is None:
         return _detail(request, conn, session, errors=errors, status_code=400)
-    start_time = form.start_time or session.start_time
-    moved = session.model_copy(update={"date": form.date, "start_time": start_time})
     typed = load_scheduling_config(cfg)
     neighbours = [
         s
@@ -209,9 +207,17 @@ async def move(
         found = check_plan(sessions, typed, fixed=fixed, busy=busy, day_constraints=limits)
         return {v.message for v in found}
 
-    # Only problems the move itself introduces block it.
+    # Only problems the move itself introduces block it. Without a time, try the session's own
+    # time and then each availability window that day, and take the first that works.
     others: list[PlannedSession] = [s for s in neighbours if s.id != session_id]
-    new = sorted(problems([*others, moved]) - problems(list[PlannedSession](neighbours)))
+    before = problems(list[PlannedSession](neighbours))
+    windows = typed.availability.weekend if form.date.weekday() >= 5 else typed.availability.weekday
+    times = [form.start_time] if form.start_time else [session.start_time, *(w[0] for w in windows)]
+    for start_time in dict.fromkeys(times):
+        moved = session.model_copy(update={"date": form.date, "start_time": start_time})
+        new = sorted(problems([*others, moved]) - before)
+        if not new:
+            break
     if new:
         return _detail(
             request, conn, session,
@@ -222,7 +228,8 @@ async def move(
         [
             Change(
                 session_id, "modify", {"date": form.date, "start_time": start_time}, "manual_move",
-                f"Moved from {session.date:%a %d %b} to {form.date:%a %d %b}.",
+                f"Moved from {session.date:%a %d %b} to {form.date:%a %d %b}"
+                + (f" at {start_time}." if start_time else "."),
             )
         ],
     )  # fmt: skip

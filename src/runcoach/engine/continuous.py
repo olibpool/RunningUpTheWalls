@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
+from math import ceil
 
 from runcoach.config import ConfigNode, SchedulingConfig, load_scheduling_config
 from runcoach.domain.models import Athlete, Checkin, Commitment, PlannedSession
@@ -12,6 +13,7 @@ from runcoach.engine.events import (
     expand_commitments,
     merge_constraint,
 )
+from runcoach.engine.habits import Habit
 from runcoach.engine.ramp import RampPlan, ramp_for_block
 from runcoach.engine.safety import Violation, check_plan
 from runcoach.engine.scheduler import (
@@ -28,6 +30,7 @@ from runcoach.engine.templates import (
     longest_in_window,
     quality_cap_minutes,
     quality_minutes,
+    within_long_share,
     within_spike_limit,
 )
 from runcoach.engine.time_trial import time_trial_session
@@ -52,6 +55,7 @@ class History:
     plan_start_date: date | None = None
     longest_recent_run_km: float | None = None  # longest run in the spike window
     weekly_run_minutes: float = 0.0  # recent running time a week, the floor for planned running
+    habits: dict[str, Habit] = field(default_factory=dict)  # usual days and times by sport
 
 
 @dataclass(frozen=True)
@@ -318,7 +322,10 @@ def generate_continuous_plan_result(
     today: date,
     events: list[Commitment],
     cfg: ConfigNode,
+    *,
+    not_before: date | None = None,
 ) -> ContinuousPlanResult:
+    """`not_before` is the first day sessions may use (default `today`)."""
     typed_cfg = load_scheduling_config(cfg)
     zones = zones_from_vdot(athlete.vdot, typed_cfg.zones)
     baseline = chronic_load(
@@ -460,11 +467,18 @@ def generate_continuous_plan_result(
         run_budget = max(0.0, effective_load - non_run_load - credit_load)
         # Football and climbing as entered can fill the whole target; running never drops below
         # your recent running time (as easy minutes), scaled like the target by ramps and cut-backs.
+        # ... and never below a couple of short easy runs, so someone back from a break, or
+        # whose football fills the week, still has running to build on.
+        # The smallest week with that many runs: easy runs of the minimum length, and a long run
+        # they are the allowed share of.
+        runs = min(athlete.runs_per_week, typed_cfg.continuous.min_runs_per_week)
+        shortest = typed_cfg.templates.min_easy_minutes
+        long_min = ceil(shortest / typed_cfg.templates.easy_max_share_of_long)
+        fewest_runs = (runs - 1) * shortest * typed_cfg.rpe.easy + long_min * typed_cfg.rpe.long
         run_floor = (
             0.0
             if minimal_week
-            else history.weekly_run_minutes
-            * typed_cfg.rpe.easy
+            else max(history.weekly_run_minutes * typed_cfg.rpe.easy, fewest_runs if runs else 0)
             * typed_cfg.load_factors.run_leg
             * ramp_factor
             * (typed_cfg.progression.cutback_factor if cutback else 1.0)
@@ -502,7 +516,9 @@ def generate_continuous_plan_result(
                 week_start, run_budget, athlete.runs_per_week, profile, at_ceiling, zones,
                 typed_cfg, progress, quality_allowed, longest,
             )  # fmt: skip
-        week_sessions = [within_spike_limit(s, longest, typed_cfg) for s in week_sessions]
+        week_sessions = within_long_share(
+            [within_spike_limit(s, longest, typed_cfg) for s in week_sessions], typed_cfg
+        )
         composition = compose_week(
             week_start,
             week_sessions,
@@ -519,13 +535,14 @@ def generate_continuous_plan_result(
             week_start,
             composition.sessions,
             0,
-            week_fixed,
+            [i for i in fixed_instances if i.date >= today],
             history.busy,
             prior_tail,
             typed_cfg,
             timezone_name=athlete.timezone,
-            not_before=today if week_index == 0 else None,
+            not_before=(not_before or today) if week_index == 0 else None,
             day_constraints=week_constraints,
+            habits=history.habits,
         )
         sessions_out.extend(
             placement.session for placement in schedule.placed if placement.session is not None
@@ -560,7 +577,7 @@ def generate_continuous_plan_result(
         timezone_name=athlete.timezone,
         relaxed_weeks=relaxed_weeks,
         day_constraints=all_constraints,
-        plan_start=today,
+        plan_start=not_before or today,
         exempt_load_weeks=exempt_weeks,
     )
     return ContinuousPlanResult(

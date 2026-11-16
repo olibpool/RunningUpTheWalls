@@ -188,6 +188,22 @@ def within_spike_limit[S: PlannedSession](
     return capped.model_copy(update={"reason": f"{session.reason}; {note}".strip("; ")})
 
 
+def within_long_share[S: PlannedSession](sessions: list[S], cfg: SchedulingConfig) -> list[S]:
+    """Shorten the long run to its share of the week's run time. Run after anything else that
+    shortens runs (such as the spike limit), which raises the long run's share; weeks with two
+    runs are exempt."""
+    runs = [s for s in sessions if s.sport == "run"]
+    long = next((s for s in runs if s.kind == "long" and s.duration_min), None)
+    if long is None or len(runs) < 3:
+        return sessions
+    share = cfg.progression.max_long_run_share
+    cap = int(share / (1 - share) * sum(s.duration_min or 0 for s in runs if s is not long))
+    if (long.duration_min or 0) <= cap:
+        return sessions
+    shorter = scale_session(long, cap / (long.duration_min or 1))
+    return [shorter if s is long else s for s in sessions]
+
+
 def longest_in_window(
     runs: list[tuple[date, float]], day: date, cfg: SchedulingConfig
 ) -> float | None:

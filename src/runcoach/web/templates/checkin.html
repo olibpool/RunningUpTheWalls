@@ -12,7 +12,7 @@
 <div class="banner warning" role="status">
   <p><strong>Saved.</strong>
   {% if changes %}The plan changed:{% else %}No changes to the plan.{% endif %}</p>
-  {% if changes %}<ul>{% for c in changes %}<li>{{ c.reason }}{% if c.session_id %} (<a href="/session/{{ c.session_id }}">session</a>){% endif %}</li>{% endfor %}</ul>{% endif %}
+  {% if changes %}<ul>{% for c in changes %}<li>{{ c.reason | plain }}{% if c.session_id %} (<a href="/session/{{ c.session_id }}">session</a>){% endif %}</li>{% endfor %}</ul>{% endif %}
 </div>
 {% endif %}
 

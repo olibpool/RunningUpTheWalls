@@ -113,6 +113,7 @@ min_hours_between_hard_leg = 48
 max_hard_leg_days_per_week = 3  # long run + quality + football: football counts as a hard session
 relaxed_hours_between_hard_leg = 24
 min_hours_between_limit_climbs = 48
+max_runs_per_day = 1           # doubles are for elites; a squeezed week drops a run instead
 min_hours_same_day_gap = 6
 max_run_volume_reduction = 0.40
 quality_gap_target_hours = 72
@@ -135,6 +136,7 @@ block = ["holiday", "annual leave", "ooo"]
 
 [continuous]
 weekly_increase = 0.05
+min_runs_per_week = 2         # never fewer short easy runs than this (or than you asked for)
 weeks_ahead = 4
 replan_interval_days = 7
 chronic_load_weeks = 4
@@ -255,6 +257,15 @@ backup_keep = 14
 [export]
 backend = "none"              # none | garmin (push runs to Garmin Connect each sync) | fit (download only)
 push_horizon_days = 7         # watches hold few workouts; push this many days ahead
+
+[habits]                      # learned from your activities: plans prefer your usual days and times
+window_weeks = 8
+min_sessions = 4              # a sport needs this many recent sessions before it has habits
+weekday_share = 0.4           # a weekday is usual when the sport happened on it in this share of weeks
+round_minutes = 15
+off_day_cost = 1.5            # scheduler soft cost for an unusual day (same_day_session_cost is 3)
+per_hour_cost = 0.25          # and per hour away from the usual start, up to max_hours
+max_hours = 6
 
 [progress]
 streak_per_week = 3           # activities in a week that keep your streak going

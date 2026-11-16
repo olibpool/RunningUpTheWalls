@@ -53,7 +53,7 @@ def reschedule_for_calendar(
             week,
             list[PlannedSession](movable),
             0,
-            [f for f in fixed if monday(f.date) == week],
+            fixed,
             busy,
             prior,
             cfg,

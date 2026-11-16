@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from runcoach.config import SchedulingConfig
 from runcoach.domain.models import PlannedSession
 from runcoach.engine.events import DayConstraint
+from runcoach.engine.habits import Habit
 from runcoach.engine.load import session_load
 from runcoach.engine.templates import scale_session
 
@@ -205,6 +206,12 @@ def _can_place(
             minutes=buffer_minutes
         ) and candidate.end > busy_start - timedelta(minutes=buffer_minutes):
             return False
+
+    same_day_runs = sum(
+        p.sport == "run" and p.start.date() == candidate.start.date() for p in placements
+    )
+    if candidate.sport == "run" and same_day_runs >= cfg.scheduler.max_runs_per_day:
+        return False
 
     for other in placements:
         if candidate.start.date() == other.start.date():
@@ -461,7 +468,9 @@ def _make_candidates(
     tz: ZoneInfo,
     not_before: date | None,
     day_constraints: dict[date, DayConstraint],
+    habits: dict[str, Habit],
 ) -> list[_Candidate]:
+    habit = habits.get(session.sport)
     candidates: list[_Candidate] = []
     for offset in range(7):
         day = week_start + timedelta(days=offset)
@@ -479,6 +488,9 @@ def _make_candidates(
             minimum_hard_hours,
             tz,
         )
+        if habit is not None:  # when you usually do it, even outside the availability windows
+            usual = datetime.combine(day, time.fromisoformat(habit.start_time), tzinfo=tz)
+            starts = sorted({*starts, usual})
         for start in starts:
             placement = _Placement(
                 session=session,
@@ -527,7 +539,7 @@ def _make_candidates(
                 cfg.availability.buffer_minutes,
             ):
                 continue
-            cost = _soft_cost(placement, placements, cfg)
+            cost = _soft_cost(placement, placements, cfg) + _habit_cost(placement, habit, cfg)
             preference = 0
             if placement.kind == "long" and day.weekday() != 6:
                 preference += 1
@@ -545,6 +557,19 @@ def _make_candidates(
             item.placement.start,
         ),
     )
+
+
+def _habit_cost(placement: _Placement, habit: Habit | None, cfg: SchedulingConfig) -> float:
+    """Soft cost of a slot away from when you usually do this sport. Never negative, so the
+    search's lower bound (which ignores habits) stays valid."""
+    if habit is None:
+        return 0.0
+    h = cfg.habits
+    usual = time.fromisoformat(habit.start_time)
+    start = placement.start.time()
+    hours = abs((start.hour * 60 + start.minute) - (usual.hour * 60 + usual.minute)) / 60
+    off_day = bool(habit.weekdays) and placement.start.weekday() not in habit.weekdays
+    return (h.off_day_cost if off_day else 0.0) + min(hours, h.max_hours) * h.per_hour_cost
 
 
 def _cost_bound(
@@ -603,6 +628,7 @@ def _attempt_schedule(
     tz: ZoneInfo,
     not_before: date | None,
     day_constraints: dict[date, DayConstraint],
+    habits: dict[str, Habit],
 ) -> _Attempt:
     best: _Attempt | None = None
     week_days = [
@@ -654,6 +680,7 @@ def _attempt_schedule(
             tz,
             not_before,
             day_constraints,
+            habits,
         )
         for candidate in candidates:
             search(
@@ -755,6 +782,17 @@ def _fixed_conflict_warnings(
     return warnings
 
 
+def first_open_day(now: datetime, cfg: SchedulingConfig) -> date:
+    """The first day a new plan can use: today, unless its last availability window has closed
+    (too late for even a short session), so nothing lands in the past."""
+    windows = cfg.availability.weekend if now.weekday() >= 5 else cfg.availability.weekday
+    last_end = max((time.fromisoformat(end) for _, end in windows), default=time(23, 59))
+    latest = datetime.combine(now.date(), last_end, tzinfo=now.tzinfo) - timedelta(
+        minutes=cfg.templates.min_easy_minutes
+    )
+    return now.date() if now < latest else now.date() + timedelta(days=1)
+
+
 def schedule_week(
     week_start: date,
     unplaced: list[PlannedSession],
@@ -767,8 +805,12 @@ def schedule_week(
     timezone_name: str = "Europe/London",
     not_before: date | None = None,
     day_constraints: dict[date, DayConstraint] | None = None,
+    habits: dict[str, Habit] | None = None,
 ) -> ScheduleResult:
-    """Place one week's sessions deterministically while enforcing hard scheduling constraints."""
+    """Place one week's sessions deterministically while enforcing hard scheduling constraints.
+
+    `fixed` may hold commitments outside the week: the last few days before it count as recent
+    history, so Monday's long run is spaced from Sunday's football."""
     if week_start.weekday() != 0:
         raise ValueError("week_start must be a Monday")
     if any(instance.duration_min <= 0 for instance in fixed):
@@ -787,6 +829,20 @@ def schedule_week(
         if week_start <= instance.date < week_start + timedelta(days=7)
     ]
     fixed_placements.sort(key=lambda item: item.start)
+    # As far back as the longest spacing rule reaches.
+    spacing = max(
+        cfg.scheduler.min_hours_between_hard_leg, cfg.scheduler.min_hours_between_limit_climbs
+    )
+    lookback_days = -(-spacing // 24)
+    recent_fixed = [
+        PlannedSession(
+            date=i.date, start_time=i.start_time, title=i.title, duration_min=i.duration_min,
+            sport="football" if i.sport == "football" else "other", kind=i.kind,
+        )
+        for i in fixed
+        if week_start - timedelta(days=lookback_days) <= i.date < week_start
+    ]  # fmt: skip
+    prior_tail = [*prior_tail, *recent_fixed]
     week_busy = [
         event
         for event in busy
@@ -803,6 +859,7 @@ def schedule_week(
         tz,
         not_before,
         constraints,
+        habits or {},
     )
     chosen = strict
     relaxed = False
@@ -818,6 +875,7 @@ def schedule_week(
             tz,
             not_before,
             constraints,
+            habits or {},
         )
         if relaxed_attempt.objective < strict.objective:
             chosen = relaxed_attempt

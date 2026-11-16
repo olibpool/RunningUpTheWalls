@@ -22,10 +22,10 @@ from runcoach.engine.plan import (
     generate_race_plan_result,
     plan_snapshot,
 )
-from runcoach.engine.scheduler import FixedInstance, fixed_leg_load
+from runcoach.engine.scheduler import FixedInstance, first_open_day, fixed_leg_load
 from runcoach.engine.vdot import vdot_from_race
-from runcoach.sync import history_from_activities
-from runcoach.web.deps import get_cfg, get_conn, parse_form, redirect, render, today
+from runcoach.sync import activity_habits, history_from_activities
+from runcoach.web.deps import TIMEZONE, get_cfg, get_conn, parse_form, redirect, render, today
 from runcoach.web.stats import stack_bars
 
 router = APIRouter(prefix="/plan")
@@ -121,13 +121,15 @@ def by_week(
 def _generate(
     conn: sqlite3.Connection, cfg: ConfigNode, inp: PlanInput
 ) -> tuple[PlanGenerationResult | None, str | None]:
-    window = load_scheduling_config(cfg).progression.spike_window_days
-    since = datetime.now(timezone.utc) - timedelta(days=window)
+    typed = load_scheduling_config(cfg)
+    since = datetime.now(timezone.utc) - timedelta(days=typed.progression.spike_window_days)
     inp = inp.model_copy(update={"longest_recent_run_km": db.longest_run_km_since(conn, since)})
     try:
         return generate_race_plan_result(
-            inp, today(), cfg, commitments=db.list_commitments(conn)
-        ), None
+            inp, today(), cfg, commitments=db.list_commitments(conn),
+            habits=activity_habits(db.activities(conn), today(), typed),
+            not_before=first_open_day(datetime.now(TIMEZONE), typed),
+        ), None  # fmt: skip
     except InfeasibleGoal as exc:
         return None, exc.message
 
@@ -256,10 +258,12 @@ def _continuous(
     if athlete is None:
         return None, ["Save your athlete profile in Settings first."]
     try:
-        history = history_from_activities(conn, load_scheduling_config(cfg), today())
+        typed = load_scheduling_config(cfg)
+        history = history_from_activities(conn, typed, today())
         result = generate_continuous_plan_result(
-            athlete, history, today(), db.list_commitments(conn), cfg
-        )
+            athlete, history, today(), db.list_commitments(conn), cfg,
+            not_before=first_open_day(datetime.now(TIMEZONE), typed),
+        )  # fmt: skip
     except (RuntimeError, ValueError) as exc:
         return None, [f"{exc}. Connect Garmin in Settings, or upload a few recent runs."]
     return result, []

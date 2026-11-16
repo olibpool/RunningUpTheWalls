@@ -6,7 +6,7 @@
   {% if changes %}
   <ul>
     {% for s, reason in changes %}
-    <li>{% if s %}<a href="/session/{{ s.id }}">{{ s.date.strftime("%a") }} · {{ s.title }}</a>: {% endif %}{{ reason }}</li>
+    <li>{% if s %}<a href="/session/{{ s.id }}">{{ s.date.strftime("%a") }} · {{ s.title }}</a>: {% endif %}{{ reason | plain }}</li>
     {% endfor %}
   </ul>
   {% endif %}

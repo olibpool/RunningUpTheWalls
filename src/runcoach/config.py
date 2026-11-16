@@ -64,6 +64,7 @@ class SchedulerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     min_hours_between_hard_leg: int
+    max_runs_per_day: int = Field(ge=1)
     max_hard_leg_days_per_week: int = Field(ge=1)
     relaxed_hours_between_hard_leg: int
     min_hours_between_limit_climbs: int
@@ -110,6 +111,7 @@ class ContinuousConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     weekly_increase: float = Field(ge=0)
+    min_runs_per_week: int = Field(ge=0)
     ceiling_run_rpe: float = Field(gt=0, le=10)
     weeks_ahead: int = Field(gt=0)
     replan_interval_days: int = Field(gt=0)
@@ -386,6 +388,18 @@ class ExportConfig(BaseModel):
     push_horizon_days: int = Field(gt=0)
 
 
+class HabitsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    window_weeks: int = Field(gt=0)
+    min_sessions: int = Field(gt=0)
+    weekday_share: float = Field(gt=0, le=1)
+    round_minutes: int = Field(gt=0)
+    off_day_cost: float = Field(ge=0)
+    per_hour_cost: float = Field(ge=0)
+    max_hours: float = Field(ge=0)
+
+
 class ProgressConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -462,6 +476,7 @@ class SchedulingConfig(BaseModel):
     export: ExportConfig
     sync: SyncConfig
     progress: ProgressConfig
+    habits: HabitsConfig
     garmin: GarminConfig
     compliance: ComplianceConfig
 

@@ -11,11 +11,14 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from runcoach.config import ConfigNode, load_config
+from runcoach.web.deps import templates
 from runcoach.web.routes import router
 from runcoach.web.routes.settings import _sync_in_background, begin_sync, sync_due
 
@@ -63,6 +66,22 @@ async def _auto_sync(app: FastAPI) -> AsyncIterator[None]:
     task.cancel()
 
 
+async def friendly_errors(request: Request, exc: Exception) -> Response:
+    """A page, not JSON, when a person hits a missing session or a bad link."""
+    status = getattr(exc, "status_code", 422)
+    if "text/html" not in request.headers.get("accept", ""):
+        detail = getattr(exc, "detail", None) or "Invalid request"
+        return JSONResponse({"detail": detail}, status_code=status)
+    title = "Not found" if status == 404 else "That link didn't work"
+    message = (
+        "It may have been moved or removed when the plan changed."
+        if status == 404
+        else "Part of the address isn't valid. Head back and try again from the app."
+    )
+    context = {"status": status, "title": title, "message": message}
+    return templates.TemplateResponse(request, "error.html", context, status_code=status)
+
+
 def create_app(db_path: Path | str | None = None, cfg: ConfigNode | None = None) -> FastAPI:
     """Build the web app; tests pass their own database path and config."""
     app = FastAPI(title="Coachal", lifespan=_auto_sync)
@@ -75,6 +94,8 @@ def create_app(db_path: Path | str | None = None, cfg: ConfigNode | None = None)
     static = CachedStaticFiles(directory=Path(__file__).parent / "static")
     app.mount("/static", static, name="static")
     app.include_router(router)
+    app.add_exception_handler(StarletteHTTPException, friendly_errors)
+    app.add_exception_handler(RequestValidationError, friendly_errors)
     return app
 
 
