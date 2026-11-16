@@ -9,12 +9,12 @@ from fastapi.responses import HTMLResponse
 
 from runcoach import db
 from runcoach.config import ConfigNode, load_scheduling_config
-from runcoach.display import monday
+from runcoach.display import monday, phase
 from runcoach.engine.readiness import resting_heart_rate_hint, sleep_hint
-from runcoach.engine.zones import zones_from_vdot
+from runcoach.integrations import garmin
 from runcoach.web import stats
 from runcoach.web.deps import get_cfg, get_conn, render, today
-from runcoach.web.routes.week import build_week, week_stats
+from runcoach.web.routes.week import build_week, week_balance, week_stats
 
 router = APIRouter()
 
@@ -25,57 +25,50 @@ def home(
     conn: Annotated[sqlite3.Connection, Depends(get_conn)],
     cfg: Annotated[ConfigNode, Depends(get_cfg)],
 ) -> HTMLResponse:
-    """Today at a glance, the plan's headline and what needs attention."""
+    """Today: what to do, how you are, what's coming and how the week balances."""
     current = today()
     typed = load_scheduling_config(cfg)
     plan = db.active_plan(conn)
-    days, _ = build_week(conn, cfg, monday(current))
-    sessions = db.plan_sessions(conn, plan.id) if plan and plan.id else []
-    upcoming = [s for s in sessions if s.status == "planned" and s.date > current]
+    days, _ = build_week(conn, cfg, current, typed.progress.upcoming_days + 1)
+    sessions = db.active_sessions(conn)
     goal = date.fromisoformat(plan.goal_date) if plan and plan.goal_date else None
     plan_start = date.fromisoformat(plan.start_date) if plan else None
+    this_week = [s for s in sessions if monday(s.date) == monday(current)]
     activities = db.activities(conn)
-    weeks = stats.weekly(activities, monday(current), 12)
-    athlete = db.get_athlete(conn)
     recent_checkins = db.checkins(conn, current - timedelta(days=27))
-    resting = [c for c in recent_checkins if c.resting_hr]
-    slept = [c for c in recent_checkins if c.sleep_hours is not None]
     return render(
         request,
         "home.html",
         {
             "active": "home",
-            "day": next(d for d in days if d.date == current),
             "today": current,
+            "day": days[0],
+            "upcoming": days[1:],
             "plan": plan,
+            "phase": next((p for s in this_week if (p := phase(s.reason))), None),
+            "plan_week": (monday(current) - monday(plan_start)).days // 7 + 1
+            if plan_start
+            else None,
+            "plan_weeks": (monday(goal) - monday(plan_start)).days // 7 + 1
+            if goal and plan_start
+            else None,
             "days_to_go": max((goal - current).days, 0) if goal else None,
-            "weeks_to_go": max((goal - current).days, 0) // 7 if goal else None,
-            "plan_share": (
-                min(max((current - plan_start).days / ((goal - plan_start).days or 1), 0), 1)
-                if goal and plan_start
-                else None
-            ),
-            "next_session": upcoming[0] if upcoming else None,
             "progress": week_stats(conn, monday(current)),
-            "weeks": weeks,
-            "ratio": stats.load_ratio(weeks, typed.continuous.chronic_load_weeks),
-            "ratio_band": (typed.continuous.acr_low, typed.continuous.acr_high),
-            "recent": stats.recent(activities, current, 30),
-            "completion": stats.completion(sessions, current),
-            "athlete": athlete,
-            "zones": zones_from_vdot(athlete.vdot, typed.zones) if athlete else None,
-            "resting": [(c.date, c.resting_hr) for c in resting],
-            "slept": [(c.date, c.sleep_hours) for c in slept],
+            "balance": week_balance(conn, cfg, monday(current), current),
+            "athlete": db.get_athlete(conn),
+            "checkin": next((c for c in recent_checkins if c.date == current), None),
             "hint": resting_heart_rate_hint(recent_checkins, current, typed),
             "sleep": sleep_hint(recent_checkins, current, typed),
             "sleep_cfg": typed.readiness,
-            "unmatched": sum(a.session_id is None for a in activities),
+            "streak": stats.streak(activities, current, typed.progress.streak_per_week),
+            "streak_per_week": typed.progress.streak_per_week,
+            "recent": stats.recent(activities, current, 30),
             "unrated": db.unrated_activities(
                 conn, datetime.now(timezone.utc) - timedelta(days=7), 5
             ),
             "retest": db.get_kv(conn, "retest_suggested"),
             "has_events": bool(db.list_commitments(conn)),
-            "last_sync": db.get_kv(conn, "sync.last_run"),
+            "garmin_connected": garmin.logged_in(typed.garmin),
         },
     )
 

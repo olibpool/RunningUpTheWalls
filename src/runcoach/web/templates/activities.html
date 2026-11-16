@@ -1,15 +1,71 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block title %}Activities{% endblock %}
+{% set names = {"run": "Run", "football": "Football", "climb": "Climbing", "other": "Activity"} %}
+{% block title %}Log{% endblock %}
 {% block content %}
 <header class="page-head">
-  <p class="eyebrow">Runs in</p>
-  <h1>Activities</h1>
+  <p class="eyebrow">What you did</p>
+  <h1>Log</h1>
+  <p class="muted">Everything from Garmin lands here by itself and is matched to your plan.</p>
 </header>
 {% include "_messages.html" %}
 
-<section class="panel" aria-labelledby="upload-title">
-  <h2 id="upload-title">Upload a run</h2>
+{% for start, entries in weeks %}
+{% set km = entries | selectattr("activity.sport", "equalto", "run") | map(attribute="activity.distance_m") | select | sum / 1000 %}
+<section class="log-week" aria-labelledby="w-{{ start }}">
+  <div class="log-week-head">
+    <h2 id="w-{{ start }}">Week of {{ start.strftime("%d %b") }}</h2>
+    <span class="muted small">{{ entries | length }} session{{ "" if entries | length == 1 else "s" }}{% if km %} · {{ "%.1f" | format(km) }} km run{% endif %}</span>
+  </div>
+  <ul class="log-list">
+    {% for e in entries %}
+    {% set a = e.activity %}
+    <li class="log-item sport-{{ a.sport }}">
+      <span class="sport-icon">{{ icon(a.sport) }}</span>
+      <div class="log-main">
+        <p class="log-title">{% if e.session %}<a href="/session/{{ e.session.id }}">{{ e.session.title }}</a>{% else %}{{ names.get(a.sport, "Activity") }}{% endif %}
+          {% if a.source == "manual" %}<span class="badge">logged by hand</span>{% endif %}</p>
+        <p class="log-meta">{{ a.started_at | local_time }} · {{ a.duration_s // 60 }} min{% if a.distance_m %} · {{ a.distance_m | km }}{% endif %}{% if a.sport == "run" and a.distance_m and a.duration_s %} · {{ (a.duration_s / a.distance_m * 1000) | pace }}/km{% endif %}{% if a.avg_hr %} · {{ a.avg_hr }} bpm{% endif %}{% if a.rpe %} · effort {{ a.rpe | round | int }}/10{% endif %}</p>
+        {% if e.candidates %}
+        <form method="post" action="/activities/{{ a.id }}/assign" class="inline-form">
+          <label class="small">Which session was it?
+            <select name="session_id">
+              {% for s in e.candidates %}<option value="{{ s.id }}">{{ s.date.strftime("%a %d %b") }} · {{ s.title }} ({{ s.duration_min }} min)</option>{% endfor %}
+            </select>
+          </label>
+          <button type="submit" class="small">Assign</button>
+        </form>
+        {% elif e.session and e.session.date != (a.started_at | local_date) %}
+        <form method="post" action="/activities/{{ a.id }}/unassign" class="inline-form">
+          <span class="log-meta">Matched to {{ e.session.date.strftime("%A") }}'s session.</span>
+          <button type="submit" class="small ghost">Not this session</button>
+        </form>
+        {% elif not e.session and plan_start and start >= plan_start %}
+        <p class="log-meta">Not in the plan; still counted in your training load.</p>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% else %}
+<section class="panel empty-state">
+  <p>Nothing logged yet. <a href="/settings#garmin-title">Connect Garmin</a> and your activities arrive by themselves.</p>
+</section>
+{% endfor %}
+
+{% if unrated %}
+<section class="panel" aria-labelledby="rate-title">
+  <div class="panel-head">
+    <h2 id="rate-title">How hard did it feel?</h2>
+    <span class="muted small">1 easy · 10 all-out</span>
+  </div>
+  <ul class="rate-list">{% for a in unrated %}{% include "_rate.html" %}{% endfor %}</ul>
+</section>
+{% endif %}
+
+<details class="panel" id="upload"{% if errors %} open{% endif %}>
+  <summary>{{ icon("upload") }}No Garmin? Upload a file {{ icon("right", "chev") }}</summary>
   <form method="post" action="/activities/upload" enctype="multipart/form-data" class="stack">
     <label class="dropzone">
       {{ icon("upload", "big") }}
@@ -20,64 +76,6 @@
     <progress max="100" value="0" hidden></progress>
     <div class="actions"><button type="submit">{{ icon("upload") }}Upload</button></div>
   </form>
-  <p class="muted small">Uploads are matched to your planned sessions automatically. The same file twice is ignored.</p>
-</section>
-
-{% if unrated %}
-<section class="panel" aria-labelledby="rate-title">
-  <div class="panel-head">
-    <h2 id="rate-title">How hard was it?</h2>
-    <span class="muted">1 = very easy, 10 = all-out</span>
-  </div>
-  <p class="muted small">Your rating replaces an estimate, so training load and the safety checks use your real effort.</p>
-  <ul class="rate-list">{% for a in unrated %}{% include "_rate.html" %}{% endfor %}</ul>
-</section>
-{% endif %}
-
-<section class="panel" aria-labelledby="unmatched-title">
-  <h2 id="unmatched-title">Needs a session</h2>
-  {% for a, options in unmatched %}
-  <article class="card sport-{{ a.sport }}">
-    <header>
-      <span class="sport-icon">{{ icon(a.sport) }}</span>
-      <div class="card-title">
-        <span class="title">{{ a.started_at | local_time }}</span>
-        <span class="time">{{ (a.duration_s // 60) }} min{% if a.distance_m %} · {{ a.distance_m | km }}{% endif %}</span>
-      </div>
-      <span class="badge">{{ a.sport }}</span>
-    </header>
-    {% if options %}
-    <form method="post" action="/activities/{{ a.id }}/assign" class="inline-form">
-      <label>Was this
-        <select name="session_id">
-          {% for s in options %}<option value="{{ s.id }}">{{ s.date.strftime("%a %d %b") }} · {{ s.title }} ({{ s.duration_min }} min)</option>{% endfor %}
-        </select>
-      </label>
-      <button type="submit" class="small">Assign</button>
-    </form>
-    {% else %}
-    <p class="muted small">No planned session nearby. It still counts towards your training load.</p>
-    {% endif %}
-  </article>
-  {% else %}
-  <p class="empty">{{ icon("check") }}Everything is matched.</p>
-  {% endfor %}
-</section>
-
-<section class="panel" aria-labelledby="recent-title">
-  <h2 id="recent-title">Recently matched</h2>
-  {% if recent %}
-  <ul class="feed">
-    {% for a in recent %}
-    <li class="sport-{{ a.sport }}">
-      <span class="sport-icon">{{ icon(a.sport) }}</span>
-      <a href="/session/{{ a.session_id }}">{{ a.started_at | local_time }}</a>
-      <span class="feed-stats"><span>{{ (a.duration_s // 60) }} min</span>{% if a.distance_m %}<span>{{ a.distance_m | km }}</span>{% endif %}{% if a.distance_m and a.duration_s and a.sport == "run" %}<span>{{ (a.duration_s / a.distance_m * 1000) | pace }}/km</span>{% endif %}</span>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="muted">None yet.</p>
-  {% endif %}
-</section>
+  <p class="muted small">Matched to your plan automatically. The same file twice is ignored.</p>
+</details>
 {% endblock %}

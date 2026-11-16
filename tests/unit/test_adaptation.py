@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from pathlib import Path
+
+from configs import typed
 
 from runcoach.adapt.rules import (
     PlanState,
@@ -11,11 +12,10 @@ from runcoach.adapt.rules import (
     missed_two_plus,
     retest_suggested,
 )
-from runcoach.config import load_config, load_scheduling_config
 from runcoach.domain.models import Activity, Checkin, Session, Step
 from runcoach.ingest.matcher import match
 
-CFG = load_scheduling_config(load_config(local_path=Path("does-not-exist.toml"), env={}))
+CFG = typed()
 MONDAY = date(2026, 11, 2)
 
 

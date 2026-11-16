@@ -2,6 +2,10 @@
 {% from "_icons.html" import icon %}
 {% block title %}Week of {{ week_start.strftime("%d %b") }}{% endblock %}
 {% block content %}
+<nav class="switch-tabs" aria-label="Plan views">
+  <a href="/week" aria-current="page">Week</a>
+  <a href="/plan">Whole plan</a>
+</nav>
 <header class="page-head pager">
   <a class="icon-button" href="/week?start={{ previous }}" aria-label="Previous week">{{ icon("left") }}</a>
   <div>
@@ -12,8 +16,16 @@
   <a class="icon-button" href="/week?start={{ next }}" aria-label="Next week">{{ icon("right") }}</a>
 </header>
 {% include "_messages.html" %}
-{% if "No active plan yet." in warnings %}<p><a class="button" href="/plan/new">Create a plan</a></p>{% else %}
-<div class="panel compact">{% include "_week_stats.html" %}</div>
+{% if "No active plan yet." in warnings %}
+<section class="panel empty-state">
+  <p>No plan yet. Pick a race, or just get fitter around everything else you do.</p>
+  <div class="actions"><a class="button" href="/plan/new">Plan for a race</a> <a class="button ghost" href="/plan/continuous">Just get fitter</a></div>
+</section>
+{% else %}
+<div class="week-top">
+  <div class="panel compact">{% include "_week_stats.html" %}</div>
+  {% with current_week=(ahead == 0) %}{% include "_balance.html" %}{% endwith %}
+</div>
 {% endif %}
 <div class="week">
   {% for day in days %}{% include "_day.html" %}{% endfor %}

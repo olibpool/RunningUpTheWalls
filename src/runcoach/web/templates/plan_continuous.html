@@ -13,10 +13,11 @@
   {% else %}
   <form method="post" action="/plan/continuous/save" class="actions">
     <button type="submit">Start this plan</button>
+    {% if current and current.mode == "race" %}<span class="muted small">This replaces your race plan for {{ current.goal_date }}.</span>{% endif %}
   </form>
   {% endif %}
   {% with errors=[], warnings=result.warnings %}{% include "_messages.html" %}{% endwith %}
-  <p>Weekly load targets: {% for t in result.targets %}{{ "%.0f" | format(t) }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+  <p class="muted">Weekly load targets: {% for t in result.targets %}{{ "%.0f" | format(t) }}{% if not loop.last %}, {% endif %}{% endfor %}. Running never drops below your recent running time.</p>
   {% include "_week_table.html" %}
 {% endif %}
 <p><a href="/plan/new">Plan for a race instead</a></p>

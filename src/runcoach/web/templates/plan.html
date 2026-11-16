@@ -1,18 +1,47 @@
 {% extends "base.html" %}
-{% block title %}Plan{% endblock %}
+{% from "_icons.html" import icon %}
+{% from "_charts.html" import stacked, sport_legend %}
+{% block title %}Whole plan{% endblock %}
 {% block content %}
+<nav class="switch-tabs" aria-label="Plan views">
+  <a href="/week">Week</a>
+  <a href="/plan" aria-current="page">Whole plan</a>
+</nav>
 <header class="page-head">
-  <p class="eyebrow">{% if plan %}{{ plan.mode | title }} plan{% else %}Plan{% endif %}</p>
-  <h1>{% if plan and plan.goal_date %}Race on {{ plan.goal_date }}{% elif plan %}Continuous improvement{% else %}Plan{% endif %}</h1>
-  {% if plan %}<p class="muted">{% if plan.goal_distance_m %}{{ plan.goal_distance_m | km }} · {% endif %}from {{ plan.start_date }}</p>{% endif %}
+  <p class="eyebrow">{% if plan and plan.goal_date %}Race plan{% elif plan %}Continuous improvement{% else %}Plan{% endif %}</p>
+  <h1>{% if plan and plan.goal_date %}{{ plan.goal_distance_m | km }} on {{ plan.goal_date }}{% elif plan %}Getting fitter, week by week{% else %}No plan yet{% endif %}</h1>
+  {% if plan %}<p class="muted">{% if plan.goal_date %}Base builds your engine, build adds speed, peak sharpens it and the taper lets you arrive fresh.{% else %}Each week builds a little on what you actually did, with lighter weeks to absorb it. It re-plans itself every Monday.{% endif %}</p>{% endif %}
 </header>
 {% if plan %}
-<div class="actions"><a class="button ghost" href="/plan/new">New race plan</a> <a class="button ghost" href="/plan/continuous">Continuous mode</a></div>
-{% with link_weeks=True %}{% include "_week_table.html" %}{% endwith %}
+{% if bars %}
+<section class="panel" aria-labelledby="season-title">
+  <div class="panel-head">
+    <h2 id="season-title">Load, week by week</h2>
+    {{ sport_legend(["run", "football", "climb"]) }}
+  </div>
+  {{ stacked(bars, "leg load", "Planned leg load per week by sport") }}
+  <p class="muted small">Running grows while football and climbing stay put. Dips are cut-back weeks. Tap a week to open it.</p>
+</section>
+{% endif %}
+<ol class="season">
+  {% for w in weeks %}
+  <li class="season-week">
+    <a href="/week?start={{ w.start }}">
+      <span class="season-when"><strong>{{ w.start.strftime("%d %b") }}</strong>{% if w.phase %}<span class="pill{% if loop.first or loop.previtem.phase != w.phase %} accent{% endif %}">{{ w.phase }}</span>{% endif %}</span>
+      <span class="season-days" aria-hidden="true">
+        {% for s in w.sessions %}<span class="dot-day sport-{{ s.sport }}{% if s.kind in ('tempo', 'intervals', 'long', 'race', 'time_trial') %} key{% endif %} status-{{ s.status }}" title="{{ s.date.strftime('%a') }} {{ s.title }}"></span>{% endfor %}
+      </span>
+      <span class="season-km">{{ "%.0f" | format(w.run_km) }} km</span>
+      {{ icon("right", "chev") }}
+    </a>
+  </li>
+  {% endfor %}
+</ol>
+<div class="actions"><a class="button ghost" href="/plan/new">New race plan</a> <a class="button ghost" href="/plan/continuous">Switch to continuous</a></div>
 {% else %}
 <section class="panel empty-state">
-  <p>No active plan yet.</p>
-  <div class="actions"><a class="button" href="/plan/new">Plan for a race</a> <a class="button ghost" href="/plan/continuous">Continuous improvement</a></div>
+  <p>Pick a race, or just get fitter around everything else you do.</p>
+  <div class="actions"><a class="button" href="/plan/new">Plan for a race</a> <a class="button ghost" href="/plan/continuous">Just get fitter</a></div>
 </section>
 {% endif %}
 {% endblock %}

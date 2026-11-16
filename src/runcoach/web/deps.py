@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterator
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -23,15 +23,13 @@ from runcoach.web import stats
 
 TIMEZONE = ZoneInfo(LOCAL_TIMEZONE)
 
-# One entry per top-level page (key, label, href, icon); add new pages here so the navigation
-# stays in one place. The first five also form the phone's bottom tab bar.
+# Top-level pages (key, label, href, icon); the first five are the phone's tab bar.
 NAV = [
-    ("home", "Home", "/", "home"),
-    ("week", "Week", "/week", "calendar"),
-    ("plan", "Plan", "/plan", "chart"),
-    ("activities", "Activities", "/activities", "pulse"),
-    ("checkin", "Check-in", "/checkin", "heart"),
-    ("events", "Events", "/events", "flag"),
+    ("home", "Today", "/", "home"),
+    ("week", "Plan", "/week", "calendar"),
+    ("progress", "Progress", "/progress", "chart"),
+    ("events", "Life", "/events", "flag"),
+    ("activities", "Log", "/activities", "pulse"),
     ("settings", "Settings", "/settings", "cog"),
     ("guide", "Guide", "/guide", "book"),
 ]
@@ -45,8 +43,16 @@ templates.env.filters.update(
     structure=display.structure,
     clock=display.clock,
     km=display.km,
+    why=display.why,
+    phase=display.phase,
 )
-templates.env.globals.update(nav=NAV, tabs=TABS, executed_steps=executed_steps)
+templates.env.globals.update(
+    nav=NAV,
+    tabs=TABS,
+    executed_steps=executed_steps,
+    timedelta=timedelta,
+    sport_names={"run": "Running", "football": "Football", "climb": "Climbing", "other": "Other"},
+)
 
 
 def _km_bars(weeks: list[stats.HasWeekKm], link: bool = False) -> list[stats.Bar]:
@@ -56,11 +62,16 @@ def _km_bars(weeks: list[stats.HasWeekKm], link: bool = False) -> list[stats.Bar
 templates.env.globals["km_bars"] = _km_bars
 
 
+def _local(utc_iso: str) -> datetime:
+    return datetime.fromisoformat(utc_iso).astimezone(TIMEZONE)
+
+
 def _local_time(utc_iso: str) -> str:
     return datetime.fromisoformat(utc_iso).astimezone(TIMEZONE).strftime("%a %d %b %H:%M")
 
 
 templates.env.filters["local_time"] = _local_time
+templates.env.filters["local_date"] = lambda utc_iso: _local(utc_iso).date()
 
 
 def get_conn(request: Request) -> Iterator[sqlite3.Connection]:

@@ -30,4 +30,22 @@ document.addEventListener("change", (event) => {
   }
 });
 
+// After a background sync the header chip raises `synced`: reload to show the new data, unless
+// you have started filling in a form.
+let typing = false;
+document.addEventListener("input", () => { typing = true; });
+document.addEventListener("synced", () => {
+  if (typing) document.dispatchEvent(new CustomEvent("toast", { detail: { value: "Synced. Refresh to see new data." } }));
+  else location.reload();
+});
+
+// A link to /page#form-id opens that collapsed form.
+function openTarget() {
+  const target = location.hash && document.getElementById(location.hash.slice(1));
+  if (target && target.tagName === "DETAILS") target.open = true;
+}
+window.addEventListener("hashchange", openTarget);
+document.addEventListener("DOMContentLoaded", openTarget);
+document.addEventListener("htmx:afterSettle", openTarget);
+
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");

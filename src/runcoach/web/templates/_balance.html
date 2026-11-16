@@ -1,0 +1,41 @@
+{% from "_icons.html" import icon %}
+{# How the week's sports fit together: leg load done (solid) and still planned (faded) by sport,
+   against a usual recent week (the marker). `balance` is week.Balance. #}
+{% set avg = balance.recent_average %}
+{% set scale = [balance.total, avg or 0] | max * 1.08 %}
+<section class="panel balance" aria-labelledby="balance-title">
+  <div class="panel-head">
+    <h2 id="balance-title">How {{ "this" if current_week | default(True) else "the" }} week fits together</h2>
+    <span class="muted small" title="Effort x minutes, weighted by how much each sport tires your legs">leg load</span>
+  </div>
+  {% if balance.parts %}
+  <div class="balance-track" role="img" aria-label="{% for p in balance.parts %}{{ sport_names[p.sport] }} {{ p.done }} done, {{ p.ahead }} to come. {% endfor %}{% if avg %}A usual week is {{ avg | round | int }}.{% endif %}">
+    <div class="balance-bar" style="width: {{ (balance.total / scale * 100) if scale else 0 }}%">
+      {% for p in balance.parts if p.done %}<span class="seg-{{ p.sport }}" style="flex-grow: {{ p.done }}"></span>{% endfor %}
+      {% for p in balance.parts if p.ahead %}<span class="seg-{{ p.sport }} ahead" style="flex-grow: {{ p.ahead }}"></span>{% endfor %}
+    </div>
+    {% if avg %}<span class="usual" style="left: {{ avg / scale * 100 }}%"><span>usual</span></span>{% endif %}
+  </div>
+  <ul class="balance-legend">
+    {% for p in balance.parts %}
+    <li class="sport-{{ p.sport }}"><span class="swatch seg-{{ p.sport }}"></span><strong>{{ sport_names[p.sport] }}</strong>
+      <span class="muted">{% if p.done %}{{ p.done }} done{% endif %}{% if p.done and p.ahead %} · {% endif %}{% if p.ahead %}{{ p.ahead }} to come{% endif %}</span></li>
+    {% endfor %}
+  </ul>
+  {% if avg %}
+  {% set ratio = balance.total / avg %}
+  <p class="balance-verdict">
+    {% set low, high = balance.band %}
+    {% if ratio < low %}{{ icon("rest") }} Lighter than your usual week: recovery time, so the next build lands.
+    {% elif ratio <= 1.1 %}{{ icon("check") }} About your usual week, spread so no day piles up on your legs.
+    {% elif ratio <= high %}{{ icon("flame") }} A step up of {{ ((ratio - 1) * 100) | round | int }}% on your usual week: the build, at a safe pace.
+    {% else %}{{ icon("alert") }} {{ ((ratio - 1) * 100) | round | int }}% more than your usual week, above the safe step of {{ ((high - 1) * 100) | round | int }}%. If you feel flat, drop an easy run.{% endif %}
+  </p>
+  {% endif %}
+  {% if balance.parts | selectattr("sport", "equalto", "climb") | list %}
+  <p class="muted small">Climbing is light on the legs, so it barely eats into your running.</p>
+  {% endif %}
+  {% else %}
+  <p class="empty">{{ icon("pulse") }}Nothing logged or planned this week yet.</p>
+  {% endif %}
+</section>

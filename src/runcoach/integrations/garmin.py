@@ -20,7 +20,7 @@ from typing import Any, Protocol
 from runcoach import db
 from runcoach.config import GarminConfig, SchedulingConfig
 from runcoach.display import monday
-from runcoach.domain.models import Checkin, GarminPush, Session
+from runcoach.domain.models import Checkin, GarminPush, Session, Sport
 from runcoach.ingest.fit import parse_fit_file
 from runcoach.ingest.inbox import store_activity
 from runcoach.integrations.watch import (
@@ -69,6 +69,46 @@ def login(cfg: GarminConfig, email: str, password: str, prompt_mfa: Callable[[],
     Garmin(email, password, prompt_mfa=prompt_mfa).login(_token_dir(cfg))
 
 
+def logged_in(cfg: GarminConfig) -> bool:
+    """True once a session token has been saved."""
+    return Path(_token_dir(cfg)).expanduser().exists()
+
+
+def start_login(cfg: GarminConfig, email: str, password: str) -> tuple[Any, Any] | None:
+    """Log in from the web app: saves the token and returns None, or returns the pending
+    login (client, state) when Garmin wants a one-time code. The pending login holds session
+    cookies, so it is kept in memory only."""
+    from garminconnect import Garmin
+
+    api = Garmin(email, password, return_on_mfa=True)
+    status, state = api.login()
+    if status == "needs_mfa":
+        return api, state
+    api.client.dump(_token_dir(cfg))
+    return None
+
+
+def finish_login(cfg: GarminConfig, pending: tuple[Any, Any], code: str) -> None:
+    """Finish a login that was waiting for its one-time code, and save the token."""
+    api, state = pending
+    api.resume_login(state, code)
+    api.client.dump(_token_dir(cfg))
+
+
+def login_problem(exc: Exception) -> str:
+    """A safe message for a failed login; library messages may echo account details."""
+    from garminconnect import (
+        GarminConnectAuthenticationError,
+        GarminConnectTooManyRequestsError,
+    )
+
+    if isinstance(exc, GarminConnectTooManyRequestsError):
+        return "Garmin is limiting logins right now. Wait a few minutes and try again."
+    if isinstance(exc, GarminConnectAuthenticationError):
+        return "Garmin didn't accept that email, password or code."
+    return f"Couldn't reach Garmin ({type(exc).__name__}). Try again in a moment."
+
+
 def connect(cfg: GarminConfig) -> GarminClient:
     """A client from the saved session token; never prompts and never uses a password."""
     from garminconnect import Garmin
@@ -79,22 +119,34 @@ def connect(cfg: GarminConfig) -> GarminClient:
     except Exception as exc:
         # Report only the type: library messages may echo account details.
         raise RuntimeError(
-            f"Garmin login failed ({type(exc).__name__}); run `runcoach garmin login`"
+            f"Garmin login failed ({type(exc).__name__}); log in again in Settings"
         ) from None
     return api
+
+
+def garmin_sport(item: dict[str, Any], keywords: dict[Sport, list[str]]) -> Sport | None:
+    """Climb or football from Garmin's activity type or the activity's name, else None."""
+    text = f"{(item.get('activityType') or {}).get('typeKey', '')} {item.get('activityName') or ''}"
+    text = text.lower().replace("_", " ")
+    return next((sport for sport, words in keywords.items() if any(w in text for w in words)), None)
 
 
 def pull_activities(
     conn: sqlite3.Connection, client: GarminClient, cfg: SchedulingConfig, today: date
 ) -> str:
-    """Store new Garmin activities from their original FIT files."""
+    """Store new Garmin activities from their original FIT files; climbing and football that
+    Garmin files as "other" get their sport from the activity's type or name."""
     from garminconnect import Garmin
 
     start = today - timedelta(days=cfg.garmin.pull_days_back)
-    added = failed = 0
+    added = failed = relabelled = 0
     for item in client.get_activities_by_date(start.isoformat(), today.isoformat()):
         activity_id = str(item.get("activityId", ""))
-        if not activity_id or db.find_activity(conn, "garmin", activity_id) is not None:
+        sport = garmin_sport(item, cfg.garmin.sport_keywords)
+        stored = db.find_activity(conn, "garmin", activity_id) if activity_id else None
+        if stored is not None and sport:  # also fixes rows stored before the sport was known
+            relabelled += db.relabel_activity(conn, stored, sport, cfg.default_rpe[sport])
+        if not activity_id or stored is not None:
             continue
         gmt = item.get("startTimeGMT")  # "YYYY-MM-DD HH:MM:SS"; skips runs already uploaded
         if gmt and db.activity_starting_at(conn, f"{gmt.replace(' ', 'T')}+00:00") is not None:
@@ -106,9 +158,16 @@ def pull_activities(
             log.warning("Garmin activity %s skipped: %s", activity_id, type(exc).__name__)
             failed += 1
             continue
-        result = store_activity(conn, activity.model_copy(update={"external_id": activity_id}), cfg)
+        update: dict[str, Any] = {"external_id": activity_id}
+        if activity.sport == "other" and sport:
+            update["sport"] = sport
+        result = store_activity(conn, activity.model_copy(update=update), cfg)
         added += result.added
-    return f"{added} activities added" + (f", {failed} skipped" if failed else "")
+    return (
+        f"{added} activities added"
+        + (f", {relabelled} relabelled" if relabelled else "")
+        + (f", {failed} skipped" if failed else "")
+    )
 
 
 def pull_resting_hr(

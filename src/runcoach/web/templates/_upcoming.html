@@ -1,0 +1,24 @@
+{% from "_icons.html" import icon %}
+{# The coming days at a glance: every session, game, night out and trip, colour by sport.
+   `upcoming` is a list of week.Day. #}
+<section class="upcoming" aria-labelledby="upcoming-title">
+  <div class="panel-head">
+    <h2 id="upcoming-title">Coming up</h2>
+    <a class="small" href="/week">Full plan</a>
+  </div>
+  <ol class="strip">
+    {% for d in upcoming %}
+    <li class="strip-day{% if d.events %} has-event{% endif %}">
+      <a href="/week?start={{ d.date }}#day-{{ d.date }}">
+        <span class="strip-date"><span class="dow">{{ "Tomorrow" if loop.first else d.date.strftime("%a") }}</span><span class="dom">{{ d.date.day }}</span></span>
+        <span class="strip-items">
+          {% for e in d.events %}<span class="item event kind-{{ e.kind }}">{{ icon(e.kind) }}<span>{{ e.title }}</span></span>{% endfor %}
+          {% for f in d.fixed %}<span class="item sport-{{ f.sport or 'other' }}">{{ icon(f.sport or "other") }}<span>{{ f.title }}</span></span>{% endfor %}
+          {% for s in d.sessions if s.status in ("planned", "done") %}<span class="item sport-{{ s.sport }}{% if s.status == 'done' %} done{% endif %}">{{ icon(s.sport) }}<span>{{ s.title }}{% if s.duration_min %} <small>{{ s.duration_min }}′</small>{% endif %}</span></span>{% endfor %}
+          {% if not d.sessions and not d.fixed and not d.events %}<span class="item rest">{{ icon("rest") }}<span>Rest</span></span>{% endif %}
+        </span>
+      </a>
+    </li>
+    {% endfor %}
+  </ol>
+</section>

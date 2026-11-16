@@ -15,7 +15,7 @@
     {% set p = s.steps | main_pace %}{% if p %}<li>{{ icon("target") }}{{ p }}</li>{% endif %}
   </ul>
   {{ profile(s.steps, "mini") }}
-  {% if s.reason %}<p class="reason">{{ s.reason }}</p>{% endif %}
+  {% set lines = s.reason | why %}{% if lines %}<p class="reason">{{ lines[0] }}</p>{% endif %}
   {% if s.status == "planned" %}
   <div class="actions">
     <form method="post" action="/session/{{ s.id }}/done"

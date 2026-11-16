@@ -14,13 +14,19 @@
       {% if s.duration_min %}<li>{{ icon("clock") }}{{ s.duration_min }} min</li>{% endif %}
       {% if s.distance_m %}<li>{{ s.distance_m | km }}</li>{% endif %}
       {% set p = s.steps | main_pace %}{% if p %}<li>{{ icon("target") }}{{ p }}</li>{% endif %}
-      {% if s.rpe %}<li>RPE {{ s.rpe }}</li>{% endif %}
+      {% if s.rpe %}<li title="Planned effort, 1 to 10">Effort {{ s.rpe | round | int }}/10</li>{% endif %}
       <li class="status">{{ s.status }}</li>
       {% if on_watch %}<li class="accent">{{ icon("watch") }}On your watch</li>{% endif %}
     </ul>
   </div>
 </header>
-{% if s.reason %}<p class="reason lead">{{ s.reason }}</p>{% endif %}
+{% set lines = s.reason | why %}
+{% if lines or (s.reason | phase) %}
+<section class="why" aria-labelledby="why-title">
+  <h2 id="why-title" class="eyebrow">Why this session{% if s.reason | phase %} · <span class="pill accent">{{ s.reason | phase }} phase</span>{% endif %}</h2>
+  <ul class="list">{% for line in lines %}<li>{{ icon("check") }}<span>{{ line }}</span></li>{% endfor %}</ul>
+</section>
+{% endif %}
 {% include "_messages.html" %}
 
 {% if s.steps %}
@@ -70,7 +76,7 @@
     <h2 id="log-title">Log it</h2>
     <form method="post" action="/session/{{ s.id }}/done" class="stack">
       <fieldset class="rpe">
-        <legend>How hard did it feel? (RPE 1–10)</legend>
+        <legend>How hard did it feel? (1 easy, 10 all-out)</legend>
         <div class="segmented">
           {% for n in range(1, 11) %}<label><input type="radio" name="rpe" value="{{ n }}"><span>{{ n }}</span></label>{% endfor %}
         </div>
@@ -84,13 +90,24 @@
   </section>
 
   <section class="panel" aria-labelledby="move-title">
-    <h2 id="move-title">Move it</h2>
+    <h2 id="move-title">Can't make it?</h2>
+    <div class="actions">
+      {% for offset, label in [(1, "Tomorrow"), (2, "In 2 days")] %}
+      <form method="post" action="/session/{{ s.id }}/move">
+        <input type="hidden" name="date" value="{{ s.date + timedelta(days=offset) }}">
+        <button type="submit" class="ghost small">{{ label }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    <details>
+    <summary class="small">Another day or time {{ icon("right", "chev") }}</summary>
     <form method="post" action="/session/{{ s.id }}/move" class="stack">
       <label>New date <input type="date" name="date" value="{{ s.date }}" required></label>
       <label>Start time <input type="time" name="start_time" value="{{ s.start_time or '' }}"></label>
       <div class="actions"><button type="submit" class="ghost">Move</button></div>
     </form>
-    <p class="muted small">A move that breaks a safety rule (such as two hard days in a row) is refused, with the reason.</p>
+    </details>
+    <p class="muted small">If a move would put two hard days together or overload a week, it's refused and you're told why. Skipping is fine too: the plan carries on.</p>
   </section>
 </div>
 {% endif %}
@@ -99,7 +116,7 @@
   <h2 id="history-title">History</h2>
   {% if history %}
   <ol class="timeline">
-    {% for a in history %}<li><time>{{ a.created_at[:16] | replace("T", " ") }}</time><span>{{ a.reason }} <span class="muted">({{ a.rule }})</span></span></li>{% endfor %}
+    {% for a in history %}<li><time>{{ a.created_at | local_time }}</time><span>{{ a.reason }}</span></li>{% endfor %}
   </ol>
   {% else %}<p class="muted">No changes yet.</p>{% endif %}
 </section>

@@ -22,9 +22,8 @@ def plan_ics(conn: Annotated[sqlite3.Connection, Depends(get_conn)]) -> Response
     calendar.add("prodid", "-//Coachal//runcoach//EN")
     calendar.add("version", "2.0")
     calendar.add("x-wr-calname", "Coachal")
-    plan = db.active_plan(conn)
     stamp = datetime.now(timezone.utc).replace(microsecond=0)
-    for s in db.plan_sessions(conn, plan.id) if plan and plan.id else []:
+    for s in db.active_sessions(conn):
         if s.status in {"skipped", "dropped"}:
             continue
         event = Event()

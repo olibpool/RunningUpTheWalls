@@ -10,11 +10,24 @@ from runcoach.web.routes import (
     health,
     home,
     plans,
+    progress,
     sessions,
     settings,
     week,
 )
 
 router = APIRouter()
-for module in (health, home, week, sessions, plans, events, activities, checkin, settings, export):
+for module in (
+    health,
+    home,
+    week,
+    sessions,
+    plans,
+    progress,
+    events,
+    activities,
+    checkin,
+    settings,
+    export,
+):
     router.include_router(module.router)

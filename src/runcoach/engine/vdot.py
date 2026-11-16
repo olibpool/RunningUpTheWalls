@@ -34,9 +34,3 @@ def race_time_s(distance_m: float, vdot: float) -> float:
         # A faster time means a higher VDOT, so a too-high VDOT means the guess is too fast.
         low, high = (mid, high) if vdot_from_race(distance_m, mid) > vdot else (low, mid)
     return (low + high) / 2
-
-
-def riegel_time(t1_s: float, d1_m: float, d2_m: float, exponent: float = 1.06) -> float:
-    if d1_m <= 0:
-        raise ValueError("d1_m must be positive")
-    return float(t1_s * (d2_m / d1_m) ** exponent)

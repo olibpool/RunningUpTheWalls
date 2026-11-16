@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_charts.html" import columns, spark, stacked, heatmap, sport_legend %}
+{% block title %}Progress{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">How it's going</p>
+  <h1>Progress</h1>
+</header>
+
+<section class="tiles" aria-label="Headlines">
+  <article class="tile streak-tile">
+    <h2>{{ icon("flame") }}Streak</h2>
+    <p class="figure">{{ streak }}<small> week{{ "" if streak == 1 else "s" }}</small></p>
+    <p class="muted">in a row with {{ streak_per_week }} or more sessions{% if not streak %}. This week can start one.{% endif %}</p>
+  </article>
+  <article class="tile">
+    <h2>{{ icon("run") }}Last 30 days</h2>
+    <p class="figure">{{ "%.1f" | format(recent.run_km) }}<small> km</small></p>
+    <p class="muted">{{ recent.runs }} run{{ "" if recent.runs == 1 else "s" }} · {{ recent.hours }} h of training in all</p>
+  </article>
+  <article class="tile">
+    <h2>{{ icon("target") }}On plan</h2>
+    {% set done, due = completion %}
+    {% if due %}
+    <p class="figure">{{ (done / due * 100) | round | int }}<small>%</small></p>
+    <p class="muted">{{ done }} of {{ due }} planned sessions done</p>
+    {% else %}
+    <p class="figure">–</p><p class="muted">Counts once your first sessions pass</p>
+    {% endif %}
+  </article>
+  <article class="tile">
+    <h2>{{ icon("trophy") }}Fitness</h2>
+    {% if athlete %}
+    <p class="figure">{{ athlete.vdot }}</p>
+    <p class="muted">{% if trend %}Your runs say {{ trend[-1][1] }}{% else %}Fitness score (VDOT), from a race or time trial{% endif %}</p>
+    {% else %}
+    <p class="figure">–</p><p class="muted"><a href="/settings">Set your fitness score</a></p>
+    {% endif %}
+  </article>
+</section>
+
+<section class="panel" aria-labelledby="grid-title">
+  <div class="panel-head">
+    <h2 id="grid-title">Every day, last {{ grid | length }} weeks</h2>
+    {{ sport_legend(["run", "football", "climb", "other"]) }}
+  </div>
+  {{ heatmap(grid, "Training days over the last weeks, darker for heavier days") }}
+  <p class="muted small">Darker squares are bigger days. Gaps are rest: you want some.</p>
+</section>
+
+<div class="grid-2">
+  <section class="panel" aria-labelledby="load-title">
+    <div class="panel-head">
+      <h2 id="load-title">How the sports add up</h2>
+      <span class="muted small">leg load per week</span>
+    </div>
+    {% if load_bars | map(attribute="value") | sum %}
+    {{ stacked(load_bars, "leg load", "Leg load per week by sport, last 12 weeks") }}
+    <p class="muted small">Steady growth with the odd lighter week is the goal. Climbing barely shows: it's light on the legs.</p>
+    {% else %}
+    <p class="empty">{{ icon("pulse") }}Nothing logged yet.</p>
+    {% endif %}
+  </section>
+  <section class="panel" aria-labelledby="km-title">
+    <div class="panel-head">
+      <h2 id="km-title">Running</h2>
+      <span class="muted small">km per week</span>
+    </div>
+    {% if km_weeks | map(attribute="run_km") | sum %}
+    {{ columns(km_bars(km_weeks, link=True), "km", "Run kilometres per week over the last 12 weeks") }}
+    {% else %}
+    <p class="empty">{{ icon("run") }}No runs logged yet.</p>
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid-2">
+  <section class="panel" aria-labelledby="fitness-title">
+    <div class="panel-head">
+      <h2 id="fitness-title">Fitness trend</h2>
+      <span class="muted small">from your heart rate on easy runs</span>
+    </div>
+    {% if trend | length > 1 %}
+    <div class="spark-row">
+      <div><p class="eyebrow">Now</p><p class="figure">{{ trend[-1][1] }}</p><p class="muted small">from {{ trend[0][1] }} in {{ trend[0][0].strftime("%b") }}</p></div>
+      {{ spark(trend, "", "Estimated fitness score from " ~ trend[0][1] ~ " to " ~ trend[-1][1]) }}
+    </div>
+    {% if athlete and (trend[-1][1] - athlete.vdot) | abs >= retest_gap %}
+    <p class="small">That's {{ "above" if trend[-1][1] > athlete.vdot else "below" }} your paces' score of {{ athlete.vdot }}. A time trial would settle it; <a href="/settings">enter one in Settings</a>.</p>
+    {% endif %}
+    {% elif athlete and athlete.max_hr %}
+    <p class="empty">{{ icon("pulse") }}Needs a few more steady runs with heart rate. It fills in by itself.</p>
+    {% else %}
+    <p class="empty">{{ icon("heart") }}<span><a href="/settings">Add your maximum heart rate</a> and Coachal estimates your fitness from every easy run.</span></p>
+    {% endif %}
+  </section>
+
+  <section class="panel" aria-labelledby="records-title">
+    <h2 id="records-title">Personal bests</h2>
+    <ul class="records">
+      {% if records.longest_run %}<li>{{ icon("run") }}<span>Longest run</span><strong>{{ records.longest_run.distance_m | km }}</strong><small class="muted">{{ records.longest_run.started_at | local_time }}</small></li>{% endif %}
+      {% if records.fastest_run %}<li>{{ icon("flame") }}<span>Fastest pace ({{ fastest_min_km | int }} km+)</span><strong>{{ (records.fastest_run.duration_s / records.fastest_run.distance_m * 1000) | pace }}/km</strong><small class="muted">{{ records.fastest_run.started_at | local_time }}</small></li>{% endif %}
+      {% if records.biggest_week %}<li>{{ icon("calendar") }}<span>Biggest running week</span><strong>{{ "%.1f" | format(records.biggest_week[1]) }} km</strong><small class="muted">week of {{ records.biggest_week[0].strftime("%d %b") }}</small></li>{% endif %}
+      {% for sport, label in [("run", "Runs"), ("football", "Football games"), ("climb", "Climbing sessions")] if records.counts.get(sport) %}
+      <li>{{ icon(sport) }}<span>{{ label }} logged</span><strong>{{ records.counts[sport] }}</strong><small></small></li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+
+<div class="grid-2">
+  <section class="panel" aria-labelledby="paces-title">
+    <div class="panel-head">
+      <h2 id="paces-title">Your paces</h2>
+      {% if athlete %}<span class="pill" title="Fitness score (VDOT)">Score {{ athlete.vdot }}</span>{% endif %}
+    </div>
+    {% if zones %}
+    <ul class="zones">
+      {% for name, z in [("Easy", zones.easy), ("Marathon", zones.marathon), ("Threshold", zones.threshold), ("Interval", zones.interval), ("Repetition", zones.repetition)] %}
+      <li class="zone-{{ loop.index }}"><span>{{ name }}</span><strong>{{ z.min_s_per_km | pace }}{% if z.max_s_per_km - z.min_s_per_km >= 1 %}–{{ z.max_s_per_km | pace }}{% endif %}</strong><small>/km</small></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">{{ icon("target") }}<a href="/settings">Set your fitness score</a> to see your training paces.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel" aria-labelledby="recovery-title">
+    <div class="panel-head">
+      <h2 id="recovery-title">Recovery</h2>
+      <span class="muted small">last 4 weeks</span>
+    </div>
+    {% if resting | length > 1 %}
+    <div class="spark-row">
+      <div><p class="eyebrow">Resting HR</p><p class="figure">{{ resting[-1][1] }}<small> bpm</small></p></div>
+      {{ spark(resting, "bpm", "Resting heart rate over the last four weeks") }}
+    </div>
+    {% endif %}
+    {% if slept | length > 1 %}
+    <div class="spark-row">
+      <div><p class="eyebrow">Sleep</p><p class="figure">{{ "%.1f" | format(slept[-1][1]) }}<small> h</small></p></div>
+      {{ spark(slept, "h", "Sleep over the last four weeks") }}
+    </div>
+    {% endif %}
+    {% if resting | length <= 1 and slept | length <= 1 %}
+    <p class="empty">{{ icon("heart") }}Resting heart rate and sleep come in from Garmin.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -10,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from runcoach import db
 from runcoach.config import ConfigNode, load_scheduling_config
+from runcoach.display import monday
 from runcoach.domain.models import Activity, Session
 from runcoach.ingest.inbox import PARSERS, ingest_file
 from runcoach.ingest.matcher import local_day
@@ -19,6 +21,17 @@ from runcoach.web.deps import get_cfg, get_conn, is_htmx, parse_form, redirect, 
 router = APIRouter(prefix="/activities")
 _ASSIGN_WINDOW = timedelta(days=3)  # how far either side of an activity to offer sessions
 _RATE_WINDOW = timedelta(days=7)  # how far back to ask how hard an activity felt
+
+
+_LOG_WEEKS = 12  # shortcut: no paging; older weeks are on Progress as totals
+
+
+@dataclass(frozen=True)
+class LogEntry:
+    activity: Activity
+    session: Session | None
+    candidates: list[Session]
+    unrated: bool
 
 
 def _candidates(activity: Activity, sessions: list[Session]) -> list[Session]:
@@ -36,19 +49,28 @@ def _page(
     request: Request, conn: sqlite3.Connection, errors: list[str], status_code: int = 200
 ) -> HTMLResponse:
     plan = db.active_plan(conn)
-    sessions = db.plan_sessions(conn, plan.id) if plan and plan.id else []
-    activities = db.activities(conn)
-    unmatched = [a for a in activities if a.session_id is None]
+    sessions = db.active_sessions(conn)
+    by_id = {s.id: s for s in sessions}
+    unrated = {
+        a.id for a in db.unrated_activities(conn, datetime.now(timezone.utc) - _RATE_WINDOW, 10)
+    }
+    weeks: dict[date, list[LogEntry]] = {}
+    for a in reversed(db.activities(conn)):
+        entry = LogEntry(
+            a, by_id.get(a.session_id) if a.session_id else None,
+            [] if a.session_id else _candidates(a, sessions), a.id in unrated,
+        )  # fmt: skip
+        weeks.setdefault(monday(local_day(a.started_at)), []).append(entry)
     return render(
         request,
         "activities.html",
         {
             "active": "activities",
             "errors": errors,
-            "unmatched": [(a, _candidates(a, sessions)) for a in reversed(unmatched)],
-            "recent": [a for a in reversed(activities) if a.session_id is not None][:20],
-            "unrated": db.unrated_activities(conn, datetime.now(timezone.utc) - _RATE_WINDOW, 10),
+            "weeks": list(weeks.items())[:_LOG_WEEKS],
+            "unrated": [e.activity for w in weeks.values() for e in w if e.unrated],
             "accept": ",".join(PARSERS),
+            "plan_start": date.fromisoformat(plan.start_date) if plan else None,
         },
         status_code=status_code,
     )
@@ -93,6 +115,23 @@ def assign(
     db.link_activity(
         conn, activity_id, session_id, rule="manual_match", reason="Assigned in the app."
     )
+    return redirect(request, "/activities")
+
+
+@router.post("/{activity_id}/unassign", response_model=None)
+def unassign(
+    request: Request,
+    activity_id: int,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+) -> Response:
+    """The matcher got it wrong: free the session, then match again (a same-day entry you
+    logged by hand is merged with it)."""
+    try:
+        db.unlink_activity(conn, activity_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Activity not found") from None
+    match_activities(conn, load_scheduling_config(cfg))
     return redirect(request, "/activities")
 
 

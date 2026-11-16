@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any
@@ -10,19 +11,22 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field, model_validator
 
 from runcoach import db
-from runcoach.config import ConfigNode, load_scheduling_config
-from runcoach.display import monday
-from runcoach.domain.models import DISTANCE_METRES, Distance, PlanInput, PlannedSession
+from runcoach.config import ConfigNode, SchedulingConfig, load_scheduling_config
+from runcoach.display import monday, phase
+from runcoach.domain.models import DISTANCE_METRES, Distance, Plan, PlanInput, PlannedSession
 from runcoach.engine.continuous import ContinuousPlanResult, generate_continuous_plan_result
 from runcoach.engine.plan import (
     InfeasibleGoal,
     PlanGenerationResult,
+    fixed_instances,
     generate_race_plan_result,
     plan_snapshot,
 )
+from runcoach.engine.scheduler import FixedInstance, fixed_leg_load
 from runcoach.engine.vdot import vdot_from_race
 from runcoach.sync import history_from_activities
 from runcoach.web.deps import get_cfg, get_conn, parse_form, redirect, render, today
+from runcoach.web.stats import stack_bars
 
 router = APIRouter(prefix="/plan")
 
@@ -80,22 +84,38 @@ class WeekSummary:
     sessions: list[PlannedSession]
     run_km: float
     leg_load: float
+    by_sport: dict[str, float]  # leg load, fixed commitments included
+    phase: str | None
 
 
-def by_week(sessions: list[PlannedSession]) -> list[WeekSummary]:
-    """Group sessions into Monday-start weeks with their run km and leg load."""
+def by_week(
+    sessions: Sequence[PlannedSession], fixed: list[FixedInstance] | None = None,
+    cfg: SchedulingConfig | None = None,
+) -> list[WeekSummary]:  # fmt: skip
+    """Group sessions into Monday-start weeks with their run km and leg load by sport; fixed
+    commitments (with `cfg` to cost them) count towards each week's load too."""
     weeks: dict[date, list[PlannedSession]] = {}
     for session in sessions:
         weeks.setdefault(monday(session.date), []).append(session)
-    return [
-        WeekSummary(
-            start=start,
-            sessions=items,
-            run_km=sum(s.distance_m or 0 for s in items if s.sport == "run") / 1000,
-            leg_load=sum(s.leg_load for s in items),
+    result = []
+    for start, items in sorted(weeks.items()):
+        sports: dict[str, float] = {}
+        for s in items:
+            sports[s.sport] = sports.get(s.sport, 0.0) + s.leg_load
+        for f in fixed or []:
+            if cfg is not None and monday(f.date) == start:
+                sports[f.sport] = sports.get(f.sport, 0.0) + fixed_leg_load(f, cfg)
+        result.append(
+            WeekSummary(
+                start=start,
+                sessions=items,
+                run_km=sum(s.distance_m or 0 for s in items if s.sport == "run") / 1000,
+                leg_load=sum(s.leg_load for s in items),
+                by_sport=sports,
+                phase=next((p for s in items if (p := phase(s.reason))), None),
+            )
         )
-        for start, items in sorted(weeks.items())
-    ]
+    return result
 
 
 def _generate(
@@ -125,7 +145,7 @@ def _wizard(
         request,
         "plan_new.html",
         {
-            "active": "plan",
+            "active": "week",
             "form": form,
             "errors": errors or [],
             "result": result,
@@ -138,15 +158,38 @@ def _wizard(
 
 @router.get("", response_class=HTMLResponse)
 def overview(
-    request: Request, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
+    request: Request,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
 ) -> HTMLResponse:
-    """The active plan, week by week."""
+    """The whole plan: phases, load by sport week by week, and the goal."""
     plan = db.active_plan(conn)
-    sessions: list[PlannedSession] = (
-        list(db.plan_sessions(conn, plan.id)) if plan and plan.id else []
+    sessions = db.active_sessions(conn)
+    typed = load_scheduling_config(cfg)
+    fixed = (
+        fixed_instances(db.list_commitments(conn), sessions[0].date, sessions[-1].date)[0]
+        if sessions
+        else []
     )
+    weeks = by_week(sessions, fixed, typed)
     return render(
-        request, "plan.html", {"active": "plan", "plan": plan, "weeks": by_week(sessions)}
+        request,
+        "plan.html",
+        {
+            "active": "week",
+            "plan": plan,
+            "weeks": weeks,
+            "bars": stack_bars(
+                [(w.start, w.by_sport) for w in weeks],
+                monday(today()),
+                link=True,
+                notes={
+                    w.start: w.phase
+                    for i, w in enumerate(weeks)
+                    if w.phase and (i == 0 or weeks[i - 1].phase != w.phase)
+                },
+            ),  # fmt: skip
+        },
     )
 
 
@@ -218,7 +261,7 @@ def _continuous(
             athlete, history, today(), db.list_commitments(conn), cfg
         )
     except (RuntimeError, ValueError) as exc:
-        return None, [f"{exc}. Upload a few recent runs first."]
+        return None, [f"{exc}. Connect Garmin in Settings, or upload a few recent runs."]
     return result, []
 
 
@@ -226,16 +269,18 @@ def _continuous_page(
     request: Request,
     result: ContinuousPlanResult | None,
     errors: list[str],
+    current: Plan | None,
     status_code: int = 200,
 ) -> HTMLResponse:
     return render(
         request,
         "plan_continuous.html",
         {
-            "active": "plan",
+            "active": "week",
             "result": result,
             "errors": errors,
             "weeks": by_week(result.sessions) if result else [],
+            "current": current,
         },
         status_code=status_code,
     )
@@ -249,7 +294,7 @@ def continuous_preview(
 ) -> HTMLResponse:
     """Preview the next weeks of a goal-free plan built from recent load."""
     result, errors = _continuous(conn, cfg)
-    return _continuous_page(request, result, errors)
+    return _continuous_page(request, result, errors, db.active_plan(conn))
 
 
 @router.post("/continuous/save", response_model=None)
@@ -262,7 +307,7 @@ def continuous_save(
     result, errors = _continuous(conn, cfg)
     if result is None or result.violations or not result.sessions:
         reasons = errors or ["Not saved: the plan fails the safety checks below."]
-        return _continuous_page(request, result, reasons, status_code=400)
+        return _continuous_page(request, result, reasons, db.active_plan(conn), status_code=400)
     commitments = db.list_commitments(conn)
     db.save_plan(
         conn,

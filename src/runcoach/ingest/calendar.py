@@ -129,29 +129,6 @@ def fetch_ical_events(
     )
 
 
-def busy_slots(
-    events: list[CalendarEvent],
-    *,
-    start: str | datetime,
-    end: str | datetime,
-) -> list[tuple[datetime, datetime]]:
-    """Return timed event ranges that overlap the requested window."""
-    window_start = datetime.fromisoformat(start) if isinstance(start, str) else start
-    window_end = datetime.fromisoformat(end) if isinstance(end, str) else end
-    if window_end < window_start:
-        raise ValueError("end must not precede start")
-
-    slots: list[tuple[datetime, datetime]] = []
-    for event in events:
-        if event.all_day:
-            continue
-        event_start = datetime.fromisoformat(event.starts_at)
-        event_end = datetime.fromisoformat(event.ends_at)
-        if event_start < window_end and event_end > window_start:
-            slots.append((event_start, event_end))
-    return sorted(slots)
-
-
 def detect_commitments(
     events: list[CalendarEvent],
     cfg: CalendarKeywordsConfig,

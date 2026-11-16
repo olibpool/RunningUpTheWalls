@@ -265,7 +265,8 @@ def _can_place(
                     return False
 
     occupied_days = {placement.start.date() for placement in placements}
-    if candidate.start.date() not in occupied_days and len(occupied_days) >= 6:
+    max_days = 7 - cfg.progression.min_rest_days_per_week
+    if candidate.start.date() not in occupied_days and len(occupied_days) >= max_days:
         return False
     return True
 
@@ -557,14 +558,15 @@ def _cost_bound(
 
     Day costs only grow as placements are added, so each session costs at least its cheapest
     day now. At most one session per day without a flexible session (fixed-only or, within
-    the six-day cap, empty) escapes the same-day cost; the rest pay it.
+    the training-day cap, empty) escapes the same-day cost; the rest pay it.
     """
     occupied = {placement.start.date() for placement in placements}
     shared = {placement.start.date() for placement in placements if not placement.is_fixed}
-    days = [day for day in week_days if len(occupied) < 6 or day.date() in occupied]
+    max_days = 7 - cfg.progression.min_rest_days_per_week
+    days = [day for day in week_days if len(occupied) < max_days or day.date() in occupied]
     empty = sum(day.date() not in occupied for day in days)
     alone_slots = sum(day.date() not in shared for day in days) - empty
-    alone_slots += min(empty, max(0, 6 - len(occupied)))
+    alone_slots += min(empty, max(0, max_days - len(occupied)))
     inf = float("inf")
     cheapest: dict[tuple[str, str], tuple[float, float]] = {}
     savings: list[float] = []
@@ -693,6 +695,8 @@ def _fixed_conflict_warnings(
         for event in busy:
             event_start = event.start.astimezone(fixed.start.tzinfo)
             event_end = event.end.astimezone(fixed.start.tzinfo)
+            if event_start <= fixed.start and event_end >= fixed.end:
+                continue  # an event spanning the commitment is its own calendar entry
             if fixed.start < event_end + buffer and fixed.end > event_start - buffer:
                 warnings.append(
                     f"Fixed commitment {fixed.title} conflicts with busy event {event.title}; "

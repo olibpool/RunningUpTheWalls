@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from runcoach.config import load_config
+from configs import defaults
+
 from runcoach.domain.models import Checkin
 from runcoach.engine.readiness import resting_heart_rate_hint, sleep_hint
 
@@ -16,7 +17,7 @@ def test_rhr_hint_uses_median_and_only_suggests_above_delta() -> None:
         )
         for offset in range(7)
     ]
-    cfg = load_config(env={})
+    cfg = defaults()
 
     hint = resting_heart_rate_hint(checkins, today, cfg)
 
@@ -31,7 +32,7 @@ def test_rhr_hint_uses_median_and_only_suggests_above_delta() -> None:
 
 def test_rhr_hint_requires_enough_recent_readings_and_today_value() -> None:
     today = date(2026, 11, 9)
-    cfg = load_config(env={})
+    cfg = defaults()
     insufficient = [
         Checkin(date=today - timedelta(days=offset), resting_hr=50) for offset in range(6)
     ]
@@ -46,7 +47,7 @@ def test_rhr_hint_requires_enough_recent_readings_and_today_value() -> None:
 
 
 def test_sleep_hint_flags_a_short_night_or_a_low_average_only() -> None:
-    cfg = load_config(env={})
+    cfg = defaults()
     today = date(2026, 11, 15)
 
     def nights(*hours: float) -> list[Checkin]:

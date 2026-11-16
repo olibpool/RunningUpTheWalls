@@ -20,8 +20,7 @@ from runcoach.domain.models import (
     Session,
 )
 
-# All SQL lives in this module behind model-in/model-out functions; that is the seam to swap
-# for SQLAlchemy later. Migrations are portable DDL so Alembic can adopt them via a baseline stamp.
+# All SQL lives in this module, behind model-in, model-out functions (decision D1).
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_DIR = ROOT / "migrations"
 
@@ -284,6 +283,15 @@ def save_commitment(conn: sqlite3.Connection, commitment: object) -> int:
         return int(last_id)
 
 
+def set_commitment_duration(conn: sqlite3.Connection, commitment_id: int, minutes: int) -> None:
+    """Correct how long a commitment lasts (e.g. to what the watch records)."""
+    with conn:
+        if not conn.execute(
+            "UPDATE commitment SET duration_min = ? WHERE id = ?", (minutes, commitment_id)
+        ).rowcount:
+            raise KeyError(commitment_id)
+
+
 def list_commitments(conn: sqlite3.Connection) -> list[Commitment]:
     """Return every commitment and event, oldest first."""
     rows = conn.execute("SELECT * FROM commitment ORDER BY id").fetchall()
@@ -343,6 +351,14 @@ def plan_sessions(
         (plan_id, (start or date.min).isoformat(), (end or date.max).isoformat()),
     ).fetchall()
     return [_session(row) for row in rows]
+
+
+def active_sessions(
+    conn: sqlite3.Connection, start: date | None = None, end: date | None = None
+) -> list[Session]:
+    """The active plan's sessions (none without one), optionally limited to [start, end)."""
+    plan = active_plan(conn)
+    return plan_sessions(conn, plan.id, start, end) if plan and plan.id else []
 
 
 def get_session(conn: sqlite3.Connection, session_id: int) -> Session | None:
@@ -471,6 +487,32 @@ def link_activity(
             "INSERT INTO adjustment (created_at, session_id, rule, reason) VALUES (?, ?, ?, ?)",
             (datetime.now(timezone.utc).isoformat(), session_id, rule, reason),
         )
+
+
+def unlink_activity(conn: sqlite3.Connection, activity_id: int) -> int | None:
+    """Undo a wrong match: the activity stands alone again and its session, if it was marked
+    done by that match, is planned again. Returns the session id it was linked to."""
+    row = conn.execute("SELECT session_id FROM activity WHERE id = ?", (activity_id,)).fetchone()
+    if row is None:
+        raise KeyError(activity_id)
+    session_id = row["session_id"]
+    if session_id is None:
+        return None
+    with conn:
+        conn.execute("UPDATE activity SET session_id = NULL WHERE id = ?", (activity_id,))
+        conn.execute(
+            "UPDATE session SET status = 'planned' WHERE id = ? AND status = 'done'"
+            " AND NOT EXISTS (SELECT 1 FROM activity WHERE session_id = ?)",
+            (session_id, session_id),
+        )
+        conn.execute(
+            "INSERT INTO adjustment (created_at, session_id, rule, reason) VALUES (?, ?, ?, ?)",
+            (
+                datetime.now(timezone.utc).isoformat(), session_id, "manual_unmatch",
+                "You said an activity wasn't this session.",
+            ),
+        )  # fmt: skip
+    return int(session_id)
 
 
 def find_activity(conn: sqlite3.Connection, source: str, external_id: str) -> int | None:
@@ -834,6 +876,41 @@ def set_activity_rpe(conn: sqlite3.Connection, activity_id: int, rpe: float) -> 
         ).rowcount
     if not updated:
         raise KeyError(activity_id)
+
+
+def replace_manual_activity(conn: sqlite3.Connection, manual: Activity, activity_id: int) -> None:
+    """A recording of a session you already marked done by hand takes over that session and
+    your effort rating, and the hand entry goes, so the run counts once."""
+    if manual.id is None or manual.session_id is None:
+        raise ValueError("only a stored hand entry linked to a session can be replaced")
+    with conn:
+        conn.execute(
+            "UPDATE activity SET session_id = ?, rpe = COALESCE(rpe, ?),"
+            " load = COALESCE(COALESCE(rpe, ?) * duration_s / 60.0, load) WHERE id = ?",
+            (manual.session_id, manual.rpe, manual.rpe, activity_id),
+        )
+        conn.execute("DELETE FROM activity WHERE id = ?", (manual.id,))
+        conn.execute(
+            "INSERT INTO adjustment (created_at, session_id, rule, reason) VALUES (?, ?, ?, ?)",
+            (
+                datetime.now(timezone.utc).isoformat(), manual.session_id, "matched",
+                "The synced recording replaced the entry logged by hand.",
+            ),
+        )  # fmt: skip
+
+
+def relabel_activity(
+    conn: sqlite3.Connection, activity_id: int, sport: str, default_rpe: float
+) -> bool:
+    """Give an activity stored as "other" its real sport; an unrated one is re-estimated."""
+    with conn:
+        return bool(
+            conn.execute(
+                "UPDATE activity SET sport = ?, load = CASE WHEN rpe IS NULL AND session_id IS NULL"
+                " THEN ? * duration_s / 60.0 ELSE load END WHERE id = ? AND sport = 'other'",
+                (sport, default_rpe, activity_id),
+            ).rowcount
+        )
 
 
 def unrated_activities(conn: sqlite3.Connection, since: datetime, limit: int) -> list[Activity]:

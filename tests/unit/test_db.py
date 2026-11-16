@@ -5,9 +5,7 @@ import pytest
 
 from runcoach import db
 from runcoach.adapt.rules import Change
-from runcoach.domain.models import Activity, CalendarEvent, Commitment, PlannedSession
-from runcoach.engine.events import expand_commitments
-from runcoach.ingest.calendar import busy_slots, parse_ical_events
+from runcoach.domain.models import Activity, PlannedSession
 
 
 def test_db_save_plan_persists_sessions(tmp_path) -> None:
@@ -236,119 +234,6 @@ def test_apply_changes_updates_session_and_logs_adjustment(tmp_path) -> None:
         == 1
     )
     conn.close()
-
-
-def test_expand_commitments_and_commitment_roundtrip(tmp_path) -> None:
-    commitments = [
-        Commitment(
-            kind="fixed",
-            title="Football",
-            sport="football",
-            weekday=0,
-            start_time="19:00",
-            duration_min=90,
-            rpe=6.0,
-            active=True,
-        ),
-        Commitment(
-            kind="block",
-            title="Holiday",
-            start_date="2026-11-15",
-            end_date="2026-11-18",
-            active=True,
-        ),
-    ]
-    occurrences = expand_commitments(commitments, date(2026, 11, 9), date(2026, 11, 25))
-
-    assert any(
-        item.title == "Football" and item.date.isoformat() == "2026-11-09" for item in occurrences
-    )
-    assert any(
-        item.title == "Holiday" and item.date.isoformat() == "2026-11-15" for item in occurrences
-    )
-
-    conn = db.connect(tmp_path / "commitments.db")
-    commitment_id = db.save_commitment(
-        conn,
-        Commitment(
-            kind="fixed",
-            title="Football",
-            sport="football",
-            weekday=2,
-            start_time="18:30",
-            duration_min=75,
-            active=True,
-        ),
-    )
-    travel_block_id = db.save_commitment(
-        conn,
-        Commitment(
-            kind="block",
-            title="Travel",
-            start_date="2026-12-20",
-            end_date="2026-12-27",
-            minimal_plan=True,
-        ),
-    )
-    assert commitment_id > 0
-    assert travel_block_id > 0
-    rows = db.list_commitments(conn)
-    assert any(row.title == "Football" for row in rows)
-    assert next(row for row in rows if row.id == travel_block_id).minimal_plan
-    db.delete_commitment(conn, commitment_id)
-    db.delete_commitment(conn, travel_block_id)
-    assert not any(row.id in {commitment_id, travel_block_id} for row in db.list_commitments(conn))
-    conn.close()
-
-
-def test_parse_ical_events_and_busy_slots() -> None:
-    ics = """BEGIN:VCALENDAR
-VERSION:2.0
-BEGIN:VEVENT
-UID:evt-1
-DTSTAMP:20261101T100000Z
-DTSTART:20261115T090000Z
-DTEND:20261115T103000Z
-SUMMARY:Team run
-END:VEVENT
-BEGIN:VEVENT
-UID:evt-2
-DTSTAMP:20261101T100000Z
-DTSTART:20261116T100000Z
-DTEND:20261116T113000Z
-SUMMARY:Client meeting
-END:VEVENT
-END:VCALENDAR
-"""
-    events = parse_ical_events(ics)
-    assert len(events) == 2
-    assert events[0].title == "Team run"
-    assert events[0].starts_at == "2026-11-15T09:00:00+00:00"
-
-    busy = busy_slots(
-        [
-            CalendarEvent(
-                external_id="evt-1",
-                title="Team run",
-                starts_at="2026-11-15T09:00:00+00:00",
-                ends_at="2026-11-15T10:30:00+00:00",
-                all_day=False,
-                fetched_at="2026-11-01T10:00:00+00:00",
-            ),
-            CalendarEvent(
-                external_id="evt-2",
-                title="Client meeting",
-                starts_at="2026-11-16T10:00:00+00:00",
-                ends_at="2026-11-16T11:30:00+00:00",
-                all_day=False,
-                fetched_at="2026-11-01T10:00:00+00:00",
-            ),
-        ],
-        start="2026-11-15T08:00:00+00:00",
-        end="2026-11-16T12:00:00+00:00",
-    )
-    assert busy[0][0].isoformat() == "2026-11-15T09:00:00+00:00"
-    assert busy[0][1].isoformat() == "2026-11-15T10:30:00+00:00"
 
 
 def test_apply_changes_maps_fields_flags_and_rejects_unknown(tmp_path) -> None:

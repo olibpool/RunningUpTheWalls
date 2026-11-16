@@ -4,12 +4,13 @@ import json
 import re
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
+from configs import defaults, typed
 from fastapi.testclient import TestClient
 
 from runcoach import config, db
-from runcoach.config import load_config, load_scheduling_config
 from runcoach.engine.plan import PlanGenerationResult
 from runcoach.engine.safety import Violation
 from runcoach.web.app import create_app
@@ -25,7 +26,10 @@ FOOTBALL = {
 }
 PLAN = {
     "distance": "10k",
-    "goal_date": (date.today() + timedelta(weeks=10)).isoformat(),
+    # A Saturday about 10 weeks out, so the race never sits beside Tuesday's football.
+    "goal_date": (
+        date.today() + timedelta(weeks=10, days=(5 - date.today().weekday()) % 7)
+    ).isoformat(),
     "race_distance": "5k",
     "race_time": "22:30",
     "current_weekly_km": "25",
@@ -41,7 +45,8 @@ def db_path(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def client(db_path: Path) -> TestClient:
-    cfg = load_config(local_path=Path("does-not-exist.toml"), env={})
+    cfg = defaults()
+    cfg.garmin.token_dir = str(db_path.parent / "garmin")  # never the developer's own login
     return TestClient(create_app(db_path=db_path, cfg=cfg))
 
 
@@ -51,34 +56,35 @@ def _save_plan(client: TestClient) -> str:
     return response.headers["location"]
 
 
-def test_health_reports_the_migrated_schema(client: TestClient) -> None:
+def test_app_shell_health_caching_pwa_and_guide(client: TestClient) -> None:
     payload = client.get("/healthz").json()
-    assert payload["status"] == "ok"
-    assert payload["db_version"] == 5
-
-
-def test_empty_week_offers_a_plan(client: TestClient) -> None:
-    response = client.get("/week")
-    assert "No active plan yet." in response.text
-    assert 'href="/plan/new"' in response.text
-    assert response.text.count('class="day') == 7
+    assert payload["status"] == "ok" and payload["db_version"] == 5
+    assert client.get("/static/app.css").headers["cache-control"] == "public, max-age=86400"
+    week = client.get("/week")
+    assert "cache-control" not in week.headers
+    assert 'rel="manifest"' in week.text and 'href="/guide"' in week.text
+    manifest = client.get("/manifest.webmanifest")
+    assert manifest.headers["content-type"].startswith("application/manifest+json")
+    assert manifest.json()["start_url"] == "/week"
+    worker = client.get("/sw.js")
+    assert worker.headers["content-type"].startswith("text/javascript")
+    assert worker.headers["cache-control"] == "no-cache"
+    assert client.get("/static/icon-512.png").status_code == 200
+    assert "User guide" in client.get("/guide").text
 
 
 def test_home_guides_a_new_user_then_summarises_the_plan(client: TestClient) -> None:
-    assert "Get started" in client.get("/").text
+    week = client.get("/week").text
+    assert "No active plan yet." in week and 'href="/plan/new"' in week
+    assert week.count('class="day') == 7
+    assert "Three steps" in client.get("/").text
     client.post("/events", data=FOOTBALL)
     client.post("/plan/save", data=PLAN)
     page = client.get("/").text
-    assert "Get started" not in page
-    assert "weeks to go" in page
-    assert 'id="week-stats"' in page and "Your paces" in page and "Weekly running" in page
-
-
-def test_guide_is_served_and_linked_from_the_nav(client: TestClient) -> None:
-    page = client.get("/guide")
-    assert page.status_code == 200
-    assert "User guide" in page.text
-    assert 'href="/guide"' in client.get("/week").text
+    assert "Three steps" not in page
+    assert "days to race day" in page and "Coming up" in page
+    assert 'id="week-stats"' in page and "How this week fits together" in page
+    assert "How are you today?" in page and "Drinks tonight" in page
 
 
 def test_events_add_validate_and_delete(client: TestClient, db_path: Path) -> None:
@@ -98,7 +104,7 @@ def test_events_add_validate_and_delete(client: TestClient, db_path: Path) -> No
     assert client.post("/events", data=holiday, follow_redirects=False).status_code == 303
 
     page = client.get("/events").text
-    assert "Every Tuesday" in page and "travel with running" in page and "drinks" in page
+    assert "Every Tuesday" in page and "Travel, short runs" in page and "Night out" in page
     conn = db.connect(db_path)
     kinds = {c.kind: c for c in db.list_commitments(conn)}
     conn.close()
@@ -119,7 +125,7 @@ def test_plan_wizard_previews_saves_and_fills_the_week(client: TestClient) -> No
     location = _save_plan(client)
     week = client.get(location).text
     assert "Long run" in week
-    assert "Football" in week and ">fixed<" in week
+    assert "Football" in week and ">every week<" in week
     assert re.search(r"\d:\d\d-\d:\d\d/km", week)  # paces render
     assert "Week of" in client.get("/plan").text
 
@@ -196,25 +202,6 @@ def test_cross_site_posts_are_blocked(client: TestClient) -> None:
     assert same_site.status_code == 303
 
 
-def test_logging_drinks_eases_the_next_hard_session_straight_away(
-    client: TestClient, db_path: Path
-) -> None:
-    _save_plan(client)
-    conn = db.connect(db_path)
-    plan = db.active_plan(conn)
-    assert plan is not None and plan.id is not None
-    hard = next(s for s in db.plan_sessions(conn, plan.id) if s.kind in {"tempo", "intervals"})
-    conn.close()
-
-    night_before = (hard.date - timedelta(days=1)).isoformat()
-    client.post("/events", data={"form": "drinks", "date": night_before, "severity": "2"})
-
-    conn = db.connect(db_path)
-    eased = db.get_session(conn, hard.id)
-    conn.close()
-    assert eased is not None and eased.kind == "easy" and "by feel" in eased.title
-
-
 GPX_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="t" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
 <trkpt lat="51.5" lon="-0.12"><time>{start}</time></trkpt>
@@ -268,7 +255,7 @@ def test_activity_upload_matches_and_manual_assign(client: TestClient, db_path: 
     stray = _gpx_for(second.date, second.start_time, 5)
     client.post("/activities/upload", files={"file": ("short.gpx", stray, "application/gpx+xml")})
     page = client.get("/activities").text
-    assert "Needs a session" in page and "Assign" in page
+    assert "Which session was it?" in page and "Assign" in page
     conn = db.connect(db_path)
     (unmatched,) = db.activities(conn, unmatched_only=True)
     conn.close()
@@ -279,32 +266,6 @@ def test_activity_upload_matches_and_manual_assign(client: TestClient, db_path: 
 
     bad = client.post("/activities/upload", files={"file": ("x.tcx", b"<x/>", "text/xml")})
     assert bad.status_code == 400 and "Unsupported file type" in bad.text
-
-
-def test_checkin_niggle_changes_the_plan_and_reports_it(client: TestClient, db_path: Path) -> None:
-    _save_plan(client)
-    response = client.post(
-        "/checkin", data={"feel": "3", "niggle": "left calf", "resting_hr": "52"}
-    )
-    assert response.status_code == 200
-    assert "Saved." in response.text
-    assert client.get("/checkin").text.count('value="left calf"') == 1
-    conn = db.connect(db_path)
-    (checkin,) = db.checkins(conn)
-    conn.close()
-    assert checkin.niggle == "left calf" and checkin.resting_hr == 52
-
-
-def test_fever_check_in_clears_the_next_days(client: TestClient, db_path: Path) -> None:
-    _save_plan(client)
-    assert "Fever or chest symptoms" in client.get("/checkin").text
-    assert client.post("/checkin", data={"ill": "true", "fever": "true"}).status_code == 200
-    conn = db.connect(db_path)
-    (checkin,) = db.checkins(conn)
-    rules = {row["rule"] for row in conn.execute("SELECT rule FROM adjustment").fetchall()}
-    conn.close()
-    assert checkin.fever and checkin.ill
-    assert "ill_or_niggle" in rules or "illness_rest" in rules
 
 
 def test_move_is_refused_when_unsafe_and_applied_when_safe(
@@ -359,12 +320,6 @@ def test_settings_profile_time_trial_and_sync(client: TestClient, db_path: Path)
     assert "inbox" in status and "Sync running" not in status
 
 
-def test_static_files_are_cached_for_a_day(client: TestClient) -> None:
-    response = client.get("/static/app.css")
-    assert response.headers["cache-control"] == "public, max-age=86400"
-    assert "cache-control" not in client.get("/week").headers
-
-
 def test_calendar_proposals_are_confirmed_not_assumed(client: TestClient, db_path: Path) -> None:
     from runcoach.domain.models import CalendarEvent
 
@@ -391,7 +346,7 @@ def test_calendar_proposals_are_confirmed_not_assumed(client: TestClient, db_pat
     conn.close()
 
     page = client.get("/events").text
-    assert "From your calendar" in page and "Drinks with the team" in page
+    assert "Spotted in your calendar" in page and "Drinks with the team" in page
     assert "Dentist" not in page
     conn = db.connect(db_path)
     assert db.list_commitments(conn) == []  # nothing active until confirmed
@@ -404,7 +359,7 @@ def test_calendar_proposals_are_confirmed_not_assumed(client: TestClient, db_pat
     (drinks,) = db.list_commitments(conn)
     conn.close()
     assert drinks.kind == "penalty" and drinks.active and drinks.source == "gcal"
-    assert "From your calendar" not in client.get("/events").text
+    assert "Spotted in your calendar" not in client.get("/events").text
 
 
 def test_continuous_mode_needs_a_profile_and_history_then_saves(
@@ -415,7 +370,7 @@ def test_continuous_mode_needs_a_profile_and_history_then_saves(
         "/settings/athlete",
         data={"vdot": "45", "runs_per_week": "3", "climbing_target_per_week": "0"},
     )
-    assert "Upload a few recent runs" in client.get("/plan/continuous").text
+    assert "Connect Garmin in Settings" in client.get("/plan/continuous").text
 
     four_weeks_ago = date.today() - timedelta(days=20)
     for offset in range(0, 18, 3):  # a run every third day for the last few weeks
@@ -433,17 +388,6 @@ def test_continuous_mode_needs_a_profile_and_history_then_saves(
     plan = db.active_plan(conn)
     conn.close()
     assert plan is not None and plan.mode == "continuous"
-
-
-def test_pwa_manifest_and_service_worker_are_served_with_their_types(client: TestClient) -> None:
-    manifest = client.get("/manifest.webmanifest")
-    assert manifest.headers["content-type"].startswith("application/manifest+json")
-    assert manifest.json()["start_url"] == "/week"
-    worker = client.get("/sw.js")
-    assert worker.headers["content-type"].startswith("text/javascript")
-    assert worker.headers["cache-control"] == "no-cache"
-    assert client.get("/static/icon-512.png").status_code == 200
-    assert 'rel="manifest"' in client.get("/week").text
 
 
 def test_garmin_watch_pieces_fit_download_scoring_and_prefill(
@@ -511,11 +455,11 @@ def test_app_settings_save_and_reload(
 
     # A blank address keeps the saved one; the CLI and sync see the saves through load_config.
     assert client.post("/settings/app", data={**form, "ics_url": ""}).status_code == 200
-    typed = load_scheduling_config(load_config(local_path=tmp_path / "none.toml", env={}))
-    assert typed.gcal.ics_url == "https://example.com/secret.ics"
-    assert typed.availability.weekday == [("06:30", "08:00"), ("18:00", "20:00")]
-    assert typed.availability.weekend == [] and typed.weather.enabled
-    assert typed.export.backend == "fit" and not typed.garmin.enabled
+    reloaded = typed()
+    assert reloaded.gcal.ics_url == "https://example.com/secret.ics"
+    assert reloaded.availability.weekday == [("06:30", "08:00"), ("18:00", "20:00")]
+    assert reloaded.availability.weekend == [] and reloaded.weather.enabled
+    assert reloaded.export.backend == "fit" and not reloaded.garmin.enabled
 
     bad = client.post("/settings/app", data={**form, "weekday": "09:00-08:00"})
     assert bad.status_code == 400 and "ends before it starts" in bad.text
@@ -526,11 +470,6 @@ def test_app_settings_save_and_reload(
 
     client.post("/settings/app", data={**form, "clear_ics_url": "on"})
     assert config.read_settings(saved)["gcal"]["ics_url"] == ""
-
-
-def test_settings_reports_garmin_and_watch_status(client: TestClient) -> None:
-    page = client.get("/settings").text
-    assert "Garmin activities and resting HR" in page and "Watch workouts" in page
 
 
 def test_rating_an_activity_sets_its_load_and_leaves_the_list(
@@ -578,14 +517,138 @@ def test_session_page_shows_fuel_and_pacing_for_the_race(client: TestClient, db_
     assert "Fuel and pacing" in page and "Pacing:" in page
 
 
-def test_sleep_check_in_round_trips_and_a_short_night_suggests_an_easy_day(
+def test_sync_chip_starts_a_due_sync_and_asks_the_page_to_refresh(
     client: TestClient, db_path: Path
 ) -> None:
-    assert client.post("/checkin", data={"sleep_hours": "5.25"}).status_code == 200
-    assert client.post("/checkin", data={"sleep_hours": "5.3"}).status_code == 400  # quarters
+    chip = client.get("/sync/chip")  # never synced, so opening the app starts one
+    assert "Syncing" in chip.text and "HX-Trigger" not in chip.headers
+    done = client.get("/sync/chip?was=running")  # TestClient ran the sync after the response
+    assert "Synced now" in done.text and "synced" in done.headers["HX-Trigger"]
+    conn = db.connect(db_path)
+    assert db.get_kv(conn, "sync.last_run") is not None
+    conn.close()
+    assert "HX-Trigger" not in client.get("/sync/chip").headers  # fresh: no new sync
+
+    client.app.state.cfg.sync.auto_minutes = 0  # type: ignore[attr-defined]
+    conn = db.connect(db_path)
+    db.delete_kv(conn, "sync.last_run")
+    conn.close()
+    assert "Sync now" in client.get("/sync/chip").text  # off: nothing starts by itself
+
+
+def test_garmin_connects_from_settings_with_a_one_time_code(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from runcoach.integrations import garmin
+
+    monkeypatch.setattr(config, "SETTINGS_PATH", tmp_path / "settings.json")
+    token_dir = Path(client.app.state.cfg.garmin.token_dir)  # type: ignore[attr-defined]
+    seen: list[str] = []
+
+    def start(cfg: Any, email: str, password: str) -> tuple[str, str]:
+        if password != "right":
+            raise garmin_errors.GarminConnectAuthenticationError("401 for someone@example.com")
+        return "client", "state"
+
+    def finish(cfg: Any, pending: Any, code: str) -> None:
+        seen.append(code)
+        token_dir.mkdir()
+
+    import garminconnect as garmin_errors
+
+    monkeypatch.setattr(garmin, "start_login", start)
+    monkeypatch.setattr(garmin, "finish_login", finish)
+    assert "Connect Garmin" in client.get("/settings").text
+
+    wrong = client.post("/garmin/login", data={"email": "a@b.co", "password": "nope"})
+    assert wrong.status_code == 400 and "accept that email" in wrong.text
+    assert "someone@example.com" not in wrong.text  # library messages never reach the page
+
+    client.post("/garmin/login", data={"email": "a@b.co", "password": "right"})
+    assert "one-time code" in client.get("/settings").text
+    assert client.post("/garmin/code", data={"code": "abc"}).status_code == 400
+    client.post("/garmin/code", data={"code": " 123456 "})
+    assert seen == ["123456"]
+    page = client.get("/settings").text
+    assert "Connected" in page and "one-time code" not in page
+    assert json.loads((tmp_path / "settings.json").read_text())["garmin"]["enabled"] is True
+
+
+def test_today_takes_a_feeling_and_a_night_out_in_one_tap(
+    client: TestClient, db_path: Path
+) -> None:
+    _save_plan(client)
+    htmx = {"HX-Request": "true"}
+    rough = client.post("/checkin/feel", data={"feel": "2"}, headers=htmx)
+    assert "Make today easy" in rough.text  # a low score offers an easier day
+    assert client.post("/checkin/feel", data={"feel": "9"}, headers=htmx).status_code == 400
+    conn = db.connect(db_path)
+    assert [c.feel for c in db.checkins(conn)] == [2]
+    conn.close()
+
+    # A night out logged the evening before a hard session eases it straight away.
+    conn = db.connect(db_path)
+    hard = next(s for s in db.active_sessions(conn) if s.kind in {"tempo", "intervals"})
+    conn.close()
+    night_before = (hard.date - timedelta(days=1)).isoformat()
+    night = {"form": "drinks", "reply": "1", "date": night_before, "severity": "2"}
+    reply = client.post("/events", data=night, headers=htmx)
+    assert reply.status_code == 200 and "Got it." in reply.text and "<html" not in reply.text
+    conn = db.connect(db_path)
+    eased = db.get_session(conn, hard.id)
+    conn.close()
+    assert eased is not None and eased.kind == "easy" and "by feel" in eased.title
+    assert "Night out" in client.get("/events").text  # it is listed under Coming up
+
+
+def test_progress_and_whole_plan_pages_show_every_sport(client: TestClient) -> None:
+    _save_plan(client)
+    progress = client.get("/progress").text
+    assert "Streak" in progress and "Every day, last" in progress and "Personal bests" in progress
+    assert "Add your maximum heart rate" in progress  # the fitness trend needs it
+    plan = client.get("/plan").text
+    assert "Load, week by week" in plan and 'class="season"' in plan and "Football" in plan
+
+
+def test_life_offers_the_length_the_watch_records(client: TestClient, db_path: Path) -> None:
+    from datetime import datetime, timezone
+
+    from runcoach.domain.models import Activity
+
+    client.post("/events", data=FOOTBALL)  # entered as 90 minutes
+    conn = db.connect(db_path)
+    for days in (2, 9):
+        start = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        db.insert_activity(conn, Activity(source="garmin", sport="football", started_at=start,
+                                          duration_s=40 * 60, load=280))  # fmt: skip
+    (football,) = db.list_commitments(conn)
+    conn.close()
+    assert "Use 40 min" in client.get("/events").text
+    client.post(f"/events/{football.id}/duration", data={"minutes": "40"})
+    page = client.get("/events").text
+    assert "Use 40 min" not in page and "40 min" in page
+    assert client.post("/events/999/duration", data={"minutes": "40"}).status_code == 400
+
+
+def test_check_in_round_trips_and_the_plan_reacts(client: TestClient, db_path: Path) -> None:
+    _save_plan(client)
+    assert "Fever or chest symptoms" in client.get("/checkin").text
+    saved = client.post("/checkin", data={"feel": "3", "niggle": "left calf", "resting_hr": "52"})
+    assert saved.status_code == 200 and "Saved." in saved.text
+    assert client.get("/checkin").text.count('value="left calf"') == 1
     conn = db.connect(db_path)
     (checkin,) = db.checkins(conn)
     conn.close()
-    assert checkin.sleep_hours == 5.25
+    assert checkin.niggle == "left calf" and checkin.resting_hr == 52
+
+    assert client.post("/checkin", data={"sleep_hours": "5.3"}).status_code == 400  # quarters
+    sick = {"sleep_hours": "5.25", "ill": "true", "fever": "true"}
+    assert client.post("/checkin", data=sick).status_code == 200
+    conn = db.connect(db_path)
+    (checkin,) = db.checkins(conn)
+    rules = {row["rule"] for row in conn.execute("SELECT rule FROM adjustment").fetchall()}
+    conn.close()
+    assert checkin.fever and checkin.ill and checkin.sleep_hours == 5.25
+    assert {"ill_or_niggle", "illness_rest"} & rules
     for page in (client.get("/").text, client.get("/checkin").text):
         assert "You slept 5.2 h last night" in page and "Make today easy" in page

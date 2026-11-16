@@ -4,15 +4,15 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
+from configs import defaults
 from fastapi.testclient import TestClient
 from icalendar import Calendar
 
-from runcoach.config import load_config
 from runcoach.domain.models import Session, Step
 from runcoach.integrations.watch import RepeatGroup, to_workout_spec
 from runcoach.web.app import create_app
 
-CFG = load_config(local_path=Path("does-not-exist.toml"), env={})
+CFG = defaults()
 
 
 def _intervals() -> Session:

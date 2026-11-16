@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Literal, Protocol
+from typing import Literal
 
 from runcoach.domain.models import Session, Step
 
@@ -81,9 +81,3 @@ class SyncReport:
     pushed: int = 0
     removed: int = 0
     unchanged: int = 0
-
-
-class WatchExporter(Protocol):
-    """Keeps a watch platform's calendar in step with the planned runs in [start, end)."""
-
-    def sync_window(self, sessions: list[Session], start: date, end: date) -> SyncReport: ...

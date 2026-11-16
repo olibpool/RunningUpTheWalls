@@ -4,8 +4,8 @@ import sqlite3
 from datetime import timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from runcoach import db
@@ -14,7 +14,7 @@ from runcoach.config import ConfigNode, load_scheduling_config
 from runcoach.domain.models import Checkin
 from runcoach.engine.readiness import resting_heart_rate_hint, sleep_hint
 from runcoach.sync import adapt_plan
-from runcoach.web.deps import get_cfg, get_conn, parse_form, render, today
+from runcoach.web.deps import get_cfg, get_conn, is_htmx, parse_form, redirect, render, today
 
 router = APIRouter(prefix="/checkin")
 
@@ -46,7 +46,7 @@ def _page(
     hint = resting_heart_rate_hint(recent, day, typed)
     sleep = sleep_hint(recent, day, typed)
     context: dict[str, Any] = {
-        "active": "checkin",
+        "active": "home",
         "errors": errors or [],
         "today": day,
         "current": current,
@@ -68,6 +68,27 @@ def checkin(
 ) -> HTMLResponse:
     """Today's check-in form, prefilled if already done."""
     return _page(request, conn, cfg)
+
+
+class FeelForm(BaseModel):
+    feel: int = Field(ge=1, le=5)
+
+
+@router.post("/feel", response_model=None)
+async def feel(
+    request: Request, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
+) -> Response:
+    """One tap from Today: how you feel, kept with anything Garmin or you already logged."""
+    form, errors = parse_form(FeelForm, await request.form())
+    if form is None:
+        raise HTTPException(status_code=400, detail="; ".join(errors))
+    day = today()
+    current = next((c for c in db.checkins(conn, day) if c.date == day), Checkin(date=day))
+    saved = current.model_copy(update={"feel": form.feel})
+    db.save_checkin(conn, saved)
+    if not is_htmx(request):
+        return redirect(request, "/")
+    return render(request, "_feel.html", {"checkin": saved, "today": day, "just_saved": True})
 
 
 @router.post("", response_class=HTMLResponse)

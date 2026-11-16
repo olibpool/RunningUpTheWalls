@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from configs import defaults
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from runcoach.config import load_config
 from runcoach.domain.models import Athlete, Commitment
 from runcoach.engine.continuous import History, WeekLoad, generate_continuous_plan_result
 
@@ -31,7 +31,7 @@ def test_random_events_preserve_weekly_caps_and_day_constraints(
     penalty_offset: int,
     severity: int,
 ) -> None:
-    config = load_config(env={})
+    config = defaults()
     config.continuous.weeks_ahead = 6
     athlete = Athlete(
         vdot=45.0,

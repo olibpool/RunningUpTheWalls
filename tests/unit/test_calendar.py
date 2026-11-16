@@ -3,15 +3,15 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 import httpx
+from configs import typed
 
 from runcoach import db
-from runcoach.config import load_config, load_scheduling_config
 from runcoach.domain.models import CalendarEvent
 from runcoach.ingest.calendar import (
-    busy_slots,
     detect_commitments,
     fetch_ical_events,
     parse_ical_events,
+    to_busy,
 )
 
 
@@ -76,36 +76,22 @@ END:VCALENDAR
     assert events[0].starts_at == "2026-11-16"
     assert events[0].ends_at == "2026-11-19"
     assert events[0].all_day
-    assert (
-        busy_slots(
-            events,
-            start="2026-11-15T00:00:00+00:00",
-            end="2026-11-20T00:00:00+00:00",
-        )
-        == []
-    )
+    assert to_busy(events) == []  # all-day events never block a slot
 
 
-def test_busy_slots_keep_only_timed_events_overlapping_window() -> None:
+def test_timed_events_become_busy_slots() -> None:
     event = CalendarEvent(
         external_id="meeting@2026-11-15T09:00:00+00:00",
         title="Meeting",
         starts_at="2026-11-15T09:00:00+00:00",
         ends_at="2026-11-15T10:00:00+00:00",
     )
-
-    slots = busy_slots(
-        [event],
-        start="2026-11-15T09:30:00+00:00",
-        end="2026-11-15T11:00:00+00:00",
+    (slot,) = to_busy([event])
+    assert (slot.start, slot.end, slot.title) == (
+        datetime(2026, 11, 15, 9, tzinfo=timezone.utc),
+        datetime(2026, 11, 15, 10, tzinfo=timezone.utc),
+        "Meeting",
     )
-
-    assert slots == [
-        (
-            datetime(2026, 11, 15, 9, tzinfo=timezone.utc),
-            datetime(2026, 11, 15, 10, tzinfo=timezone.utc),
-        )
-    ]
 
 
 def test_fetch_ical_events_uses_injected_http_client() -> None:
@@ -165,7 +151,7 @@ def test_calendar_cache_upserts_and_removes_stale_window_rows(tmp_path) -> None:
 
 
 def test_detect_commitments_creates_inactive_proposals(tmp_path) -> None:
-    config = load_scheduling_config(load_config(local_path=tmp_path / "local.toml", env={}))
+    config = typed()
     events = [
         CalendarEvent(
             external_id="football@1",

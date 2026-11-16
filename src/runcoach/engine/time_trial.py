@@ -21,7 +21,7 @@ def time_trial_session(
     day: date,
     cfg: ConfigNode | SchedulingConfig,
 ) -> PlannedSession:
-    typed_cfg = cfg if isinstance(cfg, SchedulingConfig) else load_scheduling_config(cfg)
+    typed_cfg = load_scheduling_config(cfg)
     trial = typed_cfg.time_trial
     distance_m = typed_cfg.continuous.retest_distance_m
     duration_min = trial.warmup_min + trial.estimated_5k_duration_min + trial.cooldown_min

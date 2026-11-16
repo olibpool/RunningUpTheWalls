@@ -20,6 +20,7 @@
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="topbar">
     <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Coachal</a>
+    <div id="sync-chip" class="sync-chip" hx-get="/sync/chip" hx-trigger="load" hx-swap="outerHTML"></div>
     <nav aria-label="Main">
       {% for key, label, href, glyph in nav %}
       <a href="{{ href }}" class="{{ 'tab' if loop.index <= tabs else 'more' }}"{% if active == key %} aria-current="page"{% endif %}>{{ icon(glyph) }}<span>{{ label }}</span></a>

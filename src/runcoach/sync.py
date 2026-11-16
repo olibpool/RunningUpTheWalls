@@ -19,9 +19,15 @@ from runcoach import db
 from runcoach.adapt.heat import adjust_for_heat
 from runcoach.adapt.reschedule import reschedule_for_calendar
 from runcoach.adapt.rules import Change, PlanState, evaluate
-from runcoach.config import ConfigNode, GarminConfig, SchedulingConfig, load_scheduling_config
+from runcoach.config import (
+    ConfigNode,
+    GarminConfig,
+    LoadFactorsConfig,
+    SchedulingConfig,
+    load_scheduling_config,
+)
 from runcoach.display import monday
-from runcoach.domain.models import LOCAL_TIMEZONE, Athlete, Commitment
+from runcoach.domain.models import LOCAL_TIMEZONE, Activity, Athlete, Commitment
 from runcoach.engine.continuous import (
     ContinuousPlanResult,
     History,
@@ -139,7 +145,19 @@ def match_activities(conn: sqlite3.Connection, cfg: SchedulingConfig) -> str:
     plan = db.active_plan(conn)
     if plan is None or plan.id is None:
         return "skipped: no active plan"
-    unmatched = db.activities(conn, unmatched_only=True)
+    stored = db.activities(conn)
+    by_hand = {
+        (local_day(a.started_at), a.sport): a
+        for a in stored
+        if a.source == "manual" and a.session_id is not None
+    }
+    unmatched = []
+    for a in (a for a in stored if a.session_id is None):
+        twin = by_hand.pop((local_day(a.started_at), a.sport), None) if a.id else None
+        if twin is not None and a.id is not None:  # you pressed Done, then the watch synced
+            db.replace_manual_activity(conn, twin, a.id)
+        else:
+            unmatched.append(a)
     matches = match(unmatched, db.plan_sessions(conn, plan.id), cfg.matching)
     for m in matches:
         db.link_activity(
@@ -185,6 +203,25 @@ def adapt_plan(conn: sqlite3.Connection, cfg: SchedulingConfig, today: date) -> 
     return changes
 
 
+def weekly_leg_loads(
+    activities: list[Activity], weeks: list[date], factors: LoadFactorsConfig
+) -> dict[date, dict[str, float]]:
+    """Leg load by sport for each Monday in `weeks`, counted as the planner counts it (climbing
+    barely loads the legs)."""
+    loads: dict[date, dict[str, float]] = {week: {} for week in weeks}
+    for a in activities:
+        week = loads.get(monday(local_day(a.started_at)))
+        if week is not None:
+            week[a.sport] = week.get(a.sport, 0.0) + (a.load or 0.0) * leg_factor(a.sport, factors)
+    return loads
+
+
+def first_record_week(activities: list[Activity], default: date) -> date:
+    """Monday of the first stored activity: weeks before it are unknown, not rest, and counting
+    them as zero load would plan far below what you actually do."""
+    return monday(local_day(activities[0].started_at)) if activities else default
+
+
 def history_from_activities(
     conn: sqlite3.Connection, cfg: SchedulingConfig, today: date
 ) -> History:
@@ -193,16 +230,16 @@ def history_from_activities(
     weeks = [
         this_week - timedelta(weeks=n) for n in range(cfg.continuous.chronic_load_weeks + 1, 0, -1)
     ]
-    loads = {week: 0.0 for week in weeks}
+    stored = db.activities(conn)
+    loads = weekly_leg_loads(stored, weeks, cfg.load_factors)
+    first_week = first_record_week(stored, this_week)
+    week_run_minutes = dict.fromkeys(weeks, 0.0)
     run_minutes: list[float] = []
-    for activity in db.activities(conn):
+    for activity in (a for a in stored if a.sport == "run"):
         day = local_day(activity.started_at)
-        if monday(day) in loads:
-            # Climbing barely loads the legs; count each sport as the planner does.
-            loads[monday(day)] += (activity.load or 0.0) * leg_factor(
-                activity.sport, cfg.load_factors
-            )
-        if activity.sport == "run" and day >= today - timedelta(days=28):
+        if monday(day) in week_run_minutes:
+            week_run_minutes[monday(day)] += activity.duration_s / 60
+        if day >= today - timedelta(days=28):
             run_minutes.append(activity.duration_s / 60)
     blocks = [c for c in db.list_commitments(conn) if c.kind == "block" and c.active]
     blocked = {
@@ -215,8 +252,15 @@ def history_from_activities(
     }  # fmt: skip
     if not run_minutes:
         raise RuntimeError("continuous re-plan needs at least one run in the last 28 days")
+    weekly_loads = [
+        WeekLoad(w, sum(loads[w].values()), blocked=w in blocked or w < first_week) for w in weeks
+    ]
+    known = [w.week_start for w in weekly_loads if not w.blocked][
+        -cfg.continuous.chronic_load_weeks :
+    ]
     return History(
-        weekly_loads=[WeekLoad(w, loads[w], blocked=w in blocked) for w in weeks],
+        weekly_loads=weekly_loads,
+        weekly_run_minutes=sum(week_run_minutes[w] for w in known) / len(known) if known else 0.0,
         typical_easy_duration_min=round(median(run_minutes)),
         checkins=db.checkins(conn, today - timedelta(days=28)),
         busy=to_busy(db.calendar_events(conn)),
@@ -264,7 +308,7 @@ def _watch_push(
     if cfg.export.backend != "garmin":
         return f"skipped: export backend is {cfg.export.backend!r}"
     plan = db.active_plan(conn)
-    sessions = db.plan_sessions(conn, plan.id) if plan and plan.id else []
+    sessions = db.active_sessions(conn)
     start = date.fromisoformat(plan.start_date) if plan else today
     exporter = garmin.GarminExporter(conn, client(), cfg, start, now)
     report = exporter.sync_window(

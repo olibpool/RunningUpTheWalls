@@ -18,7 +18,7 @@ def should_replan(
     cfg: ConfigNode | SchedulingConfig,
 ) -> bool:
     """True on the first sync of a new week (from Monday) or once the interval has passed."""
-    typed_cfg = cfg if isinstance(cfg, SchedulingConfig) else load_scheduling_config(cfg)
+    typed_cfg = load_scheduling_config(cfg)
     if typed_cfg.continuous.replan_interval_days <= 0:
         raise ValueError("continuous.replan_interval_days must be positive")
     current_time = _utc_datetime(now_utc, "now_utc")

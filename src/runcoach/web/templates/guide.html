@@ -16,21 +16,24 @@
 
 <section id="start"><h2>First steps</h2>
   <ol>
-    <li><strong>Settings, Athlete</strong>: set your VDOT (a fitness number taken from a recent race), runs per week and climbing sessions per week. When you create a plan you can enter a recent race time instead and the VDOT is worked out for you.</li>
-    <li><strong>Events</strong>: add fixed commitments such as football (weekday, start time, length, effort 1 to 10). Plans are built around them.</li>
-    <li><strong>Plan, Create a plan</strong>: pick a distance (5K, 10K, half, marathon), the race date and your recent weekly distance. Preview it, then save. With no race, choose <em>continuous improvement</em>.</li>
+    <li><strong>Settings</strong>: connect Garmin, then set your fitness score (VDOT, from a recent race), runs per week and climbing sessions per week. When you create a plan you can enter a race time instead and the score is worked out for you.</li>
+    <li><strong>Life</strong>: add what you do every week, such as football (day, start time, how long you actually play, how hard it feels). Plans are built around it.</li>
+    <li><strong>Plan</strong>: pick a race (5K to marathon) and its date, or <em>just get fitter</em> (continuous improvement). Preview it, then save.</li>
   </ol>
   <p>A plan that fails the safety checks cannot be saved. The preview names the rule it broke; the usual fix is a later date or fewer runs per week.</p>
 </section>
 
 <section id="daily"><h2>Day to day</h2>
+  <p>Five tabs, one job each.</p>
   <ul>
-    <li><strong>Home</strong> shows today, the next session and anything that needs attention.</li>
-    <li><strong>Week</strong> lists each day's sessions with paces and the reason each was placed there. Prev and Next browse other weeks.</li>
-    <li>Open a session to see its steps. Mark it <strong>Done</strong> (optionally with effort and minutes) or <strong>Skip</strong>, or <strong>Move</strong> it to another day. A move that would break a safety rule is refused, with the reason.</li>
-    <li><strong>Plan</strong> shows every week with its distance and block (base, build, peak, taper).</li>
-    <li><strong>How plans are built</strong>: the base block builds easy volume with short threshold runs and strides; build adds intervals; peak focuses on what your race needs. The last week is short easy runs and one sharpener, and the race itself appears on race day with the pace your VDOT predicts. Football counts as one of your hard days, so a football week has one fewer quality run.</li>
-    <li><strong>Check-in</strong>: log how you feel, any niggle, illness and resting heart rate. A raised resting heart rate may suggest an easy day, but nothing changes until you accept it.</li>
+    <li><strong>Today</strong>: what to do today and why, a one-tap "how are you?", quick logs for when life happens (drinks tonight, feeling ill, a niggle, going away), the coming days, and <em>how the week fits together</em>: your running, football and climbing as one bar of leg load, done and still to come, against a usual week.</li>
+    <li><strong>Plan</strong>: the week, day by day, with paces and the reason each session sits where it does; and the <em>whole plan</em>, with its phases (base, build, peak, taper) and every sport's load week by week.</li>
+    <li><strong>Progress</strong>: your streak, a square for every day you trained, load by sport, running distance, personal bests, paces and recovery. Add your maximum heart rate in Settings and Coachal also estimates your fitness from your easy runs.</li>
+    <li><strong>Life</strong>: nights out, trips and weekly commitments, each with what it does to the plan.</li>
+    <li><strong>Log</strong>: everything you did, week by week, matched to the plan.</li>
+    <li>Open a session to see its steps and why it's there. Mark it <strong>Done</strong> or <strong>Skip</strong>, or move it to tomorrow. A move that would put two hard days together is refused, with the reason. If you press Done and the watch syncs the same run later, it counts once.</li>
+    <li><strong>Leg load</strong> is effort (1 to 10) times minutes, weighted by how much each sport tires your legs: football counts a little more than running, climbing very little. It's how the plan fits everything into one safe week.</li>
+    <li><strong>How plans are built</strong>: the base block builds easy volume with short threshold runs and strides; build adds intervals; peak focuses on what your race needs. The last week is short easy runs and one sharpener, and the race itself appears on race day with the pace your fitness score predicts. Football counts as one of your hard days, so a football week has one fewer quality run.</li>
   </ul>
 </section>
 
@@ -40,9 +43,9 @@
     <li><strong>A missed session</strong> is marked skipped. Two or more misses in a week lighten the rest of it.</li>
     <li><strong>Illness or a niggle</strong> in a check-in downgrades hard sessions, then ramps you back at about 70% and 85%. With a <strong>fever or chest symptoms</strong> the first days are cleared completely: rest until the fever has gone.</li>
     <li><strong>No sudden long runs</strong>: no run is planned more than 10% longer than your longest run of the last 30 days.</li>
-    <li><strong>A drinks night</strong> (Events) eases the next day. <strong>A holiday or trip</strong> clears those days and ramps you back afterwards.</li>
+    <li><strong>A night out</strong> (Today or Life) keeps that day and the next easy. <strong>A holiday or trip</strong> clears those days and ramps you back afterwards.</li>
     <li><strong>Heat</strong> slows pace targets, and hard sessions turn easy on very hot days. This needs your location in the config.</li>
-    <li><strong>Retest</strong>: when your runs suggest your fitness has changed, a banner offers a time trial. Your VDOT only changes when you submit a result in Settings.</li>
+    <li><strong>Retest</strong>: when your runs suggest your fitness has changed, a banner offers a time trial. Your fitness score only changes when you submit a result in Settings.</li>
   </ul>
 </section>
 
@@ -53,16 +56,16 @@
 <section id="data"><h2>Getting runs in</h2>
   <ul>
     <li>With Garmin connected, runs arrive by themselves at the next sync (see below).</li>
-    <li><strong>Activities, Upload</strong> a FIT or GPX file. It is matched to the closest planned session by day and duration. Anything it cannot match with confidence is listed for you to assign by hand.</li>
+    <li><strong>Log, Upload</strong> a FIT or GPX file. It is matched to the closest planned session by day and duration. Anything it cannot match with confidence is listed for you to assign by hand.</li>
     <li>You can also drop FIT or GPX files into the inbox folder; the next sync picks them up. The same run is never stored twice, even if it arrives from two places.</li>
   </ul>
 </section>
 
 <section id="garmin"><h2>Garmin watch</h2>
-  <p>Coachal talks to Garmin Connect, not to the watch: your watch syncs with Garmin Connect through the phone app as usual, and Coachal's sync (every 30 minutes) pulls from and pushes to Garmin Connect.</p>
+  <p>Coachal talks to Garmin Connect, not to the watch: your watch syncs with Garmin Connect through the phone app as usual, and Coachal syncs with Garmin Connect by itself every 30 minutes and whenever you open the app. The chip next to the logo shows the last sync; tap it to sync now. When new data arrives, the page refreshes itself.</p>
   <ul>
-    <li><strong>Set up</strong>: run <code>runcoach garmin login</code> once on the server, then turn on <code>[garmin] enabled</code> and set <code>[export] backend = "garmin"</code>. Settings shows whether it's logged in.</li>
-    <li><strong>Runs in</strong>: new activities and their laps are pulled and matched to your sessions. Garmin's daily resting heart rate fills in your check-ins (a value you typed yourself always wins).</li>
+    <li><strong>Set up</strong>: in <a href="/settings#garmin-title">Settings, Garmin Connect</a>, enter your Garmin email and password, and the one-time code if Garmin sends one. Only Garmin's session token is kept, never your password. The first sync brings in the last six weeks. To send workouts to the watch, set <em>Watch workouts</em> to <em>Push to Garmin Connect</em>.</li>
+    <li><strong>Runs in</strong>: new activities and their laps are pulled and matched to your sessions. Garmin files climbing and football as "other", so Coachal reads the activity's name: anything called Bouldering or Climb counts as climbing, and Football, Footy, Soccer or 5 a side counts as football. Garmin's daily resting heart rate and sleep fill in your check-ins (a value you typed yourself always wins).</li>
     <li><strong>Workouts out</strong>: the next 7 days of runs go to your Garmin calendar as structured workouts with warm-up, reps, recoveries and pace ranges. Start a run on the day and the watch offers the workout. When the plan changes, the workout is updated or removed at the next sync. Session pages show <em>On your watch</em> once pushed.</li>
     <li><strong>How it went</strong>: when you follow the workout on the watch, each step is recorded as a lap, and the session page shows every rep's pace against its target. If your last few quality sessions were all too fast, or all missed, a banner suggests a time trial. Your paces only change when you submit one.</li>
     <li><strong>Without Garmin Connect</strong>: every run session has a <em>Download as a watch workout (.fit)</em> link. Copy the file to the watch's <code>GARMIN/NewFiles</code> folder over USB.</li>
@@ -73,7 +76,7 @@
 <section id="calendar"><h2>Calendar</h2>
   <ul>
     <li>With your Google Calendar's private iCal address configured, busy times are respected and a session that a new event clashes with is moved. The address is a secret: keep it in <code>config/local.toml</code> or an environment variable, never in the repository.</li>
-    <li>Calendar events that look like a regular commitment appear on Events as proposals for you to confirm.</li>
+    <li>Calendar events that look like a regular commitment appear on Life as proposals for you to confirm.</li>
     <li>Subscribe a calendar app to <code>/export/plan.ics</code> to see your plan there.</li>
   </ul>
 </section>
@@ -86,8 +89,9 @@
   <ul>
     <li><strong>A plan will not save</strong>: read the rule listed. Try a later race date, fewer runs per week or a lower starting distance.</li>
     <li><strong>A form is refused behind a proxy or Tailscale</strong>: the proxy must forward the original host header.</li>
-    <li><strong>Nothing seems to sync</strong>: Settings shows the last sync and each step's result. Use <em>Run sync now</em>.</li>
-    <li><strong>Garmin login failed</strong>: run <code>runcoach garmin login</code> again on the server.</li>
+    <li><strong>Nothing seems to sync</strong>: the chip next to the logo says <em>Sync issue</em> when a step failed; tap it to see each step's result in Settings.</li>
+    <li><strong>Garmin login failed</strong>: Garmin's session has expired. Connect again in <a href="/settings#garmin-title">Settings</a>.</li>
+    <li><strong>The continuous plan has few runs</strong>: it builds from your recorded load, so football and climbing as entered on Life count too. If Life says your watch records your games as shorter, take its suggestion. Running never drops below your recent running time.</li>
     <li><strong>No "How it went" table</strong>: the laps must line up with the workout's steps, so follow the workout on the watch and avoid pressing the lap button.</li>
     <li><strong>Health check</strong>: <code>/healthz</code> shows the app and database versions.</li>
   </ul>

@@ -6,6 +6,6 @@
 {% endif %}
 {% if warnings %}
 <div class="banner warning" role="status">
-  <ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+  <ul>{% for w in warnings | unique %}<li>{{ w }}</li>{% endfor %}</ul>
 </div>
 {% endif %}

@@ -188,12 +188,6 @@ short_sleep_h = 6.0           # one night under this suggests an easier day
 low_sleep_avg_h = 6.5         # ... as does this average over the last few nights
 sleep_avg_nights = 3
 
-# After the race: one easy day per mile raced (a common rule of thumb), the first few as rest.
-[recovery]
-easy_days = { "5k" = 3, "10k" = 6, "half" = 13, "marathon" = 26 }
-rest_days = { "5k" = 1, "10k" = 1, "half" = 2, "marathon" = 3 }
-volume = [0.5, 0.7, 0.85]     # share of the pre-race peak km, week by week
-
 [fuel]
 long_run_min = 75             # carbs during runs from this long
 carbs_g_per_h = [30, 60]
@@ -210,9 +204,6 @@ min_minutes = 20
 hrr_range = [0.5, 0.9]
 retest_gap_vdot = 2.0
 trend_weeks = 12
-
-[monotony]
-high = 2.0                    # Foster: mean / SD of daily load; above this is too uniform
 
 # ---- Phase 2: ingestion and adaptation (unsourced starting points; tune from use) ----
 
@@ -265,12 +256,30 @@ backup_keep = 14
 backend = "none"              # none | garmin (push runs to Garmin Connect each sync) | fit (download only)
 push_horizon_days = 7         # watches hold few workouts; push this many days ahead
 
+[progress]
+streak_per_week = 3           # activities in a week that keep your streak going
+fastest_min_km = 5.0          # a run counts for "fastest pace" from this distance
+grid_weeks = 16               # weeks shown in the consistency grid
+upcoming_days = 7             # days shown in the "coming up" strip on Today
+typical_window_days = 56      # recorded sessions this recent show how long a weekly commitment really is
+typical_min_samples = 2
+typical_tolerance = 0.2       # offer to correct a commitment more than this far from its recordings
+
+[sync]
+auto_minutes = 30             # the web app syncs in the background this often, and when opened after
+                              # this long; 0 turns it off (then use deploy/sync.timer or `runcoach sync`)
+
 [garmin]
 enabled = false               # pull activities and resting HR; log in first with `runcoach garmin login`
 token_dir = "~/.config/runcoach/garmin"  # session token only; the password is never stored
-pull_days_back = 14           # each sync looks this far back for activities not yet stored
+pull_days_back = 42           # each sync looks this far back for activities not yet stored; covers the
+                              # continuous plan's chronic-load weeks so a first sync has enough history
 health_days_back = 7          # resting HR days copied into check-ins (your own entries win)
 workout_name_max = 32         # shortcut: Garmin's real limit is unconfirmed; check after the spike
+
+[garmin.sport_keywords]        # Garmin files climbing and football as "other"; its type or your activity name decides
+climb = ["climb", "boulder"]
+football = ["football", "footy", "soccer", "5 a side", "five a side"]
 
 [compliance]
 pace_tolerance_s_per_km = 5   # a lap this close to its pace range still counts as on target

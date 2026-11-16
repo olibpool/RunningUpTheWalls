@@ -191,14 +191,6 @@ class RaceConfig(BaseModel):
     week_max_runs: int = Field(ge=0)
 
 
-class RecoveryConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    easy_days: dict[Distance, int]
-    rest_days: dict[Distance, int]
-    volume: list[float] = Field(min_length=1)
-
-
 class FuelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -218,12 +210,6 @@ class FitnessConfig(BaseModel):
     hrr_range: tuple[float, float]
     retest_gap_vdot: float = Field(gt=0)
     trend_weeks: int = Field(gt=0)
-
-
-class MonotonyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    high: float = Field(gt=0)
 
 
 class TimeTrialConfig(BaseModel):
@@ -400,6 +386,24 @@ class ExportConfig(BaseModel):
     push_horizon_days: int = Field(gt=0)
 
 
+class ProgressConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    streak_per_week: int = Field(gt=0)
+    fastest_min_km: float = Field(gt=0)
+    grid_weeks: int = Field(gt=0)
+    upcoming_days: int = Field(gt=0)
+    typical_window_days: int = Field(gt=0)
+    typical_min_samples: int = Field(gt=0)
+    typical_tolerance: float = Field(gt=0)
+
+
+class SyncConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    auto_minutes: int = Field(ge=0)
+
+
 class GarminConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -408,6 +412,7 @@ class GarminConfig(BaseModel):
     pull_days_back: int = Field(gt=0)
     health_days_back: int = Field(ge=0)
     workout_name_max: int = Field(gt=0)
+    sport_keywords: dict[Sport, list[str]] = {}
 
 
 class ComplianceConfig(BaseModel):
@@ -442,10 +447,8 @@ class SchedulingConfig(BaseModel):
     minimal_plan: MinimalPlanConfig
     time_trial: TimeTrialConfig
     race: RaceConfig
-    recovery: RecoveryConfig
     fuel: FuelConfig
     fitness: FitnessConfig
-    monotony: MonotonyConfig
     readiness: ReadinessConfig
     default_rpe: dict[Sport, float]
     matching: MatchingConfig
@@ -457,6 +460,8 @@ class SchedulingConfig(BaseModel):
     gcal: GcalConfig
     storage: StorageConfig
     export: ExportConfig
+    sync: SyncConfig
+    progress: ProgressConfig
     garmin: GarminConfig
     compliance: ComplianceConfig
 
@@ -469,18 +474,6 @@ def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
         else:
             merged[key] = value
     return merged
-
-
-def _set_nested(target: dict[str, Any], path: list[str], value: Any) -> None:
-    current = target
-    for part in path[:-1]:
-        if part not in current or not isinstance(current[part], dict):
-            raise ValueError(f"Unknown config key: {'__'.join(path)}")
-        current = current[part]
-    last = path[-1]
-    if last not in current and path[-1] not in current:
-        raise ValueError(f"Unknown config key: {'__'.join(path)}")
-    current[last] = value
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -574,8 +567,10 @@ def with_overrides(config: ConfigNode, overrides: dict[str, Any]) -> ConfigNode:
     return result
 
 
-def load_scheduling_config(config: ConfigNode) -> SchedulingConfig:
-    """Validate the typed multi-sport scheduling configuration."""
+def load_scheduling_config(config: ConfigNode | SchedulingConfig) -> SchedulingConfig:
+    """Validate the typed multi-sport scheduling configuration (a typed one passes through)."""
+    if isinstance(config, SchedulingConfig):
+        return config
     data = _to_mapping(config)
     if not isinstance(data, dict):
         raise TypeError("config must be a ConfigNode mapping")

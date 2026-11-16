@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 
 from runcoach.domain.models import Step
@@ -78,3 +79,47 @@ def describe_steps(steps: list[Step], indent: str = "") -> list[str]:
             parts.append(f"RPE {step.rpe:g}")
         lines.append(indent + " ".join(parts))
     return lines
+
+
+# The planner's reasons are terse fragments joined by "; "; these say them the way a coach would.
+_WHY = [
+    (r"(\w+) block, cut-back week", "A lighter cut-back week, so your body absorbs the training."),
+    (r"(\w+) (block|emphasis)", ""),  # the phase is shown on its own
+    (
+        r"run volume reduced to (\d+)% to respect the combined leg-load ceiling",
+        r"Trimmed to \1% so running, football and climbing together stay within this week's load.",
+    ),
+    (r"(\w+day) availability", r"Fits your \1 time window."),
+    (r"day after football", "Placed the day after football."),
+    (r"spaced from football", "Kept apart from football so your legs recover between them."),
+    (r"spaced before the long run", "Leaves your legs fresh for the long run."),
+    (r"weekend long-run slot", "On the weekend, when there's time for the long run."),
+    (r"Aerobic maintenance", "Easy miles that build your aerobic engine."),
+    (r"Long aerobic session", "Your long run: the backbone of endurance."),
+    (r"Penalty (.+) \(severity \d\)", r"\1: an easy day, nothing hard."),
+    (r"Easy day after penalty (.+)", r"Easy day after \1."),
+]
+
+
+def why(reason: str | None) -> list[str]:
+    """A session's reason as plain sentences, without the phase name."""
+    out: list[str] = []
+    for part in (reason or "").split(";"):
+        part = part.strip().rstrip(".")
+        if not part:
+            continue
+        for pattern, text in _WHY:
+            if re.fullmatch(pattern, part, flags=re.IGNORECASE):
+                part = re.sub(pattern, text, part, flags=re.IGNORECASE)
+                break
+        else:
+            part = part[:1].upper() + part[1:] + "."
+        if part and part not in out:
+            out.append(part)
+    return out
+
+
+def phase(reason: str | None) -> str | None:
+    """The training phase named in a reason ("Base", "Build", "Aerobic"...), if any."""
+    found = re.search(r"(\w+) (?:block|emphasis)", reason or "", flags=re.IGNORECASE)
+    return found.group(1).title() if found else None

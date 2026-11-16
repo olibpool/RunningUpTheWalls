@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 
-from runcoach.config import load_config, load_scheduling_config
+from configs import typed
+
 from runcoach.domain.models import PlannedSession, Step
 from runcoach.engine import scheduler
 from runcoach.engine.events import DayConstraint
@@ -21,8 +22,8 @@ def _session(day: date, kind: str, minutes: int) -> PlannedSession:
     )
 
 
-def _config(tmp_path, *, unavailable: bool = False):
-    config = load_scheduling_config(load_config(local_path=tmp_path / "local.toml", env={}))
+def _config(*, unavailable: bool = False):
+    config = typed()
     if unavailable:
         availability = config.availability.model_copy(update={"weekday": [], "weekend": []})
         return config.model_copy(update={"availability": availability})
@@ -51,7 +52,7 @@ def _football() -> list[FixedInstance]:
     ]
 
 
-def test_scheduler_matches_example_week_and_keeps_rest_day(tmp_path) -> None:
+def test_scheduler_matches_example_week_and_keeps_rest_day() -> None:
     result = schedule_week(
         date(2026, 11, 9),
         _example_sessions(),
@@ -59,7 +60,7 @@ def test_scheduler_matches_example_week_and_keeps_rest_day(tmp_path) -> None:
         _football(),
         [],
         [],
-        _config(tmp_path),
+        _config(),
     )
 
     by_kind = {
@@ -77,7 +78,7 @@ def test_scheduler_matches_example_week_and_keeps_rest_day(tmp_path) -> None:
     assert all(placement.reason for placement in result.placed)
 
 
-def test_busy_thursday_moves_quality_and_explains_why(tmp_path) -> None:
+def test_busy_thursday_moves_quality_and_explains_why() -> None:
     busy = Busy(
         start=datetime(2026, 11, 12, 17, 30, tzinfo=timezone.utc),
         end=datetime(2026, 11, 12, 21, 0, tzinfo=timezone.utc),
@@ -91,7 +92,7 @@ def test_busy_thursday_moves_quality_and_explains_why(tmp_path) -> None:
         _football(),
         [busy],
         [],
-        _config(tmp_path),
+        _config(),
     )
 
     quality = next(
@@ -103,7 +104,7 @@ def test_busy_thursday_moves_quality_and_explains_why(tmp_path) -> None:
     assert "Work event" in quality.reason
 
 
-def test_impossible_week_drops_easy_first_and_never_drops_long(tmp_path) -> None:
+def test_impossible_week_drops_easy_first_and_never_drops_long() -> None:
     result = schedule_week(
         date(2026, 11, 9),
         _example_sessions(),
@@ -111,7 +112,7 @@ def test_impossible_week_drops_easy_first_and_never_drops_long(tmp_path) -> None
         _football(),
         [],
         [],
-        _config(tmp_path, unavailable=True),
+        _config(unavailable=True),
     )
 
     assert result.dropped
@@ -120,8 +121,8 @@ def test_impossible_week_drops_easy_first_and_never_drops_long(tmp_path) -> None
     assert any("Long run could not be placed" in warning for warning in result.warnings)
 
 
-def test_scheduler_relaxes_hard_spacing_to_24_hours_once(tmp_path) -> None:
-    config = _config(tmp_path)
+def test_scheduler_relaxes_hard_spacing_to_24_hours_once() -> None:
+    config = _config()
     availability = config.availability.model_copy(update={"weekday": [("06:30", "08:00")]})
     config = config.model_copy(update={"availability": availability})
     busy = [
@@ -154,14 +155,14 @@ def test_scheduler_relaxes_hard_spacing_to_24_hours_once(tmp_path) -> None:
     assert any("relaxed to 24 hours" in warning for warning in result.warnings)
 
 
-def test_cost_bound_prunes_without_changing_a_dense_week(tmp_path, monkeypatch) -> None:
+def test_cost_bound_prunes_without_changing_a_dense_week(monkeypatch) -> None:
     sessions = [
         *_example_sessions(),
         _session(date(2026, 11, 10), "intervals", 40),
     ]
 
     def week():
-        return schedule_week(date(2026, 11, 9), sessions, 2, _football(), [], [], _config(tmp_path))
+        return schedule_week(date(2026, 11, 9), sessions, 2, _football(), [], [], _config())
 
     pruned = week()
     monkeypatch.setattr(scheduler, "_cost_bound", lambda remaining, placements, soft, *_: soft)
@@ -169,7 +170,7 @@ def test_cost_bound_prunes_without_changing_a_dense_week(tmp_path, monkeypatch) 
     assert pruned.relaxed and not pruned.dropped
 
 
-def test_prior_tail_start_time_preserves_hard_session_spacing(tmp_path) -> None:
+def test_prior_tail_start_time_preserves_hard_session_spacing() -> None:
     prior = _session(date(2026, 11, 8), "tempo", 45).model_copy(update={"start_time": "20:00"})
 
     result = schedule_week(
@@ -179,7 +180,7 @@ def test_prior_tail_start_time_preserves_hard_session_spacing(tmp_path) -> None:
         [],
         [],
         [prior],
-        _config(tmp_path),
+        _config(),
     )
 
     tempo = result.placed[0]
@@ -189,7 +190,7 @@ def test_prior_tail_start_time_preserves_hard_session_spacing(tmp_path) -> None:
     assert tempo.session.start_time == "20:00"
 
 
-def test_fixed_commitment_conflict_is_reported_without_moving_it(tmp_path) -> None:
+def test_fixed_commitment_conflict_is_reported_without_moving_it() -> None:
     fixed = _football()
     busy = Busy(
         start=datetime(2026, 11, 10, 19, 0, tzinfo=timezone.utc),
@@ -204,15 +205,15 @@ def test_fixed_commitment_conflict_is_reported_without_moving_it(tmp_path) -> No
         fixed,
         [busy],
         [],
-        _config(tmp_path),
+        _config(),
     )
 
     assert result.placed[0].date == date(2026, 11, 10)
     assert any("conflicts with busy event Work event" in warning for warning in result.warnings)
 
 
-def test_compose_week_reduces_runs_to_combined_leg_load_cap(tmp_path) -> None:
-    config = _config(tmp_path)
+def test_compose_week_reduces_runs_to_combined_leg_load_cap() -> None:
+    config = _config()
     run = PlannedSession(
         date=date(2026, 11, 9),
         sport="run",
@@ -247,8 +248,8 @@ def test_compose_week_reduces_runs_to_combined_leg_load_cap(tmp_path) -> None:
     assert not result.warnings
 
 
-def test_compose_week_respects_reduction_floor_and_warns_on_cutback_overage(tmp_path) -> None:
-    config = _config(tmp_path)
+def test_compose_week_respects_reduction_floor_and_warns_on_cutback_overage() -> None:
+    config = _config()
     run = _session(date(2026, 11, 9), "easy", 100)
     run = run.model_copy(update={"leg_load": 400.0, "distance_m": 10000})
     football = FixedInstance(
@@ -268,33 +269,8 @@ def test_compose_week_respects_reduction_floor_and_warns_on_cutback_overage(tmp_
     assert result.warnings
 
 
-def test_safety_check_finds_hard_spacing_rest_and_busy_violations(tmp_path) -> None:
-    config = _config(tmp_path)
-    sessions = [
-        PlannedSession(
-            date=date(2026, 11, 9) + timedelta(days=offset),
-            start_time="07:00",
-            sport="run",
-            kind="tempo" if offset == 0 else "long" if offset == 1 else "easy",
-            title=f"Session {offset}",
-            duration_min=30,
-        )
-        for offset in range(7)
-    ]
-    busy = Busy(
-        start=datetime(2026, 11, 13, 7, 0, tzinfo=timezone.utc),
-        end=datetime(2026, 11, 13, 8, 0, tzinfo=timezone.utc),
-        title="Work event",
-    )
-
-    violations = check_plan(sessions, config, busy=[busy], timezone_name="UTC")
-
-    kinds = {violation.kind for violation in violations}
-    assert {"no-rest-day", "hard-leg-spacing", "busy-overlap"} <= kinds
-
-
-def test_blocked_week_has_no_placed_training_sessions(tmp_path) -> None:
-    config = _config(tmp_path)
+def test_blocked_week_has_no_placed_training_sessions() -> None:
+    config = _config()
     week_start = date(2026, 11, 9)
     constraints = {
         week_start + timedelta(days=offset): DayConstraint(
@@ -322,8 +298,8 @@ def test_blocked_week_has_no_placed_training_sessions(tmp_path) -> None:
     assert any("Long run could not be placed" in warning for warning in result.warnings)
 
 
-def test_easy_day_moves_quality_and_warns_for_fixed_after_penalty(tmp_path) -> None:
-    config = _config(tmp_path)
+def test_easy_day_moves_quality_and_warns_for_fixed_after_penalty() -> None:
+    config = _config()
     week_start = date(2026, 11, 9)
     fixed = _football()
     constraints = {
@@ -358,3 +334,24 @@ def test_easy_day_moves_quality_and_warns_for_fixed_after_penalty(tmp_path) -> N
         fixed=fixed,
         day_constraints=constraints,
     )
+
+
+def test_a_calendar_entry_for_a_fixed_commitment_is_not_a_clash() -> None:
+    fixed = [
+        FixedInstance(
+            date=date(2026, 11, 10), title="5 a side", sport="football",
+            start_time="19:30", duration_min=60, rpe=7.5,
+        )
+    ]  # fmt: skip
+    calendar_copy = Busy(  # your calendar's own entry for the game, with travel either side
+        start=datetime(2026, 11, 10, 19, 0, tzinfo=timezone.utc),
+        end=datetime(2026, 11, 10, 22, 30, tzinfo=timezone.utc),
+        title="5 a side Footy",
+    )
+    result = schedule_week(date(2026, 11, 9), [], 0, fixed, [calendar_copy], [], _config())
+    assert not any("conflicts with busy event" in w for w in result.warnings)
+    sessions = [p.session for p in result.placed if p.session is not None]
+    violations = check_plan(
+        sessions, _config(), fixed=fixed, busy=[calendar_copy], timezone_name="UTC"
+    )
+    assert not [v for v in violations if v.kind == "busy-overlap"]

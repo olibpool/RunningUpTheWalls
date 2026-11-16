@@ -5,10 +5,11 @@ from pathlib import Path
 
 import httpx
 import pytest
+from configs import defaults
 from pytest_httpx import HTTPXMock
 
 from runcoach import db
-from runcoach.config import ConfigNode, load_config, load_scheduling_config
+from runcoach.config import ConfigNode, load_scheduling_config
 from runcoach.domain.models import PlannedSession
 from runcoach.ingest.inbox import ingest_file, ingest_inbox
 from runcoach.sync import run_sync
@@ -22,7 +23,7 @@ SECRET_URL = "https://calendar.example/private-abc123/basic.ics"
 
 
 def _cfg(tmp_path: Path) -> ConfigNode:
-    cfg = load_config(local_path=tmp_path / "none.toml", env={})
+    cfg = defaults()
     cfg.inbox.path = str(tmp_path / "inbox")
     return cfg
 
@@ -140,4 +141,28 @@ def test_calendar_errors_never_reveal_the_private_url(
 
     assert report["calendar"] == "error: calendar fetch failed (HTTPStatusError)"
     assert "private-abc123" not in (db.get_kv(conn, "sync.last_report") or "")
+    conn.close()
+
+
+def test_a_synced_run_replaces_the_done_you_pressed_and_unlinking_undoes_a_wrong_match(
+    tmp_path: Path,
+) -> None:
+    from runcoach.domain.models import Activity
+    from runcoach.sync import match_activities
+
+    conn = db.connect(tmp_path / "s.db")
+    cfg = load_scheduling_config(_cfg(tmp_path))
+    session_id = _plan(conn, date(2026, 11, 2))
+    by_hand = Activity(source="manual", sport="run", started_at="2026-11-02T06:00:00+00:00",
+                       duration_s=360, rpe=4.0, load=24.0, session_id=session_id)  # fmt: skip
+    db.insert_activity(conn, by_hand)  # what the Done button stores
+    ingest_file(conn, GPX, "watch.gpx", cfg)  # the same run arrives from the watch
+    match_activities(conn, cfg)
+    (only,) = db.activities(conn)
+    assert only.source != "manual" and only.session_id == session_id
+    assert only.rpe == 4.0 and only.load == pytest.approx(4.0 * 6)  # your rating is kept
+
+    assert db.unlink_activity(conn, only.id or 0) == session_id
+    assert db.get_session(conn, session_id).status == "planned"  # type: ignore[union-attr]
+    assert db.unlink_activity(conn, only.id or 0) is None  # already free
     conn.close()

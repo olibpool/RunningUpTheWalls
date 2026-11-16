@@ -3,7 +3,8 @@
 {% block content %}
 <header class="page-head">
   <p class="eyebrow">{{ today.strftime("%A %d %B") }}</p>
-  <h1>Check-in for {{ today.strftime("%A %d %B") }}</h1>
+  <h1>How are you?</h1>
+  <p class="muted">Tell the plan about illness or a niggle and it backs off, then ramps you back. Resting heart rate and sleep come from Garmin.</p>
 </header>
 {% include "_messages.html" %}
 
@@ -26,10 +27,10 @@
       {% endfor %}
     </div>
   </fieldset>
-  <label>Any niggle? (where)
+  <label id="niggle">Any niggle? (where)
     <input name="niggle" value="{{ current.niggle if current and current.niggle else '' }}" placeholder="e.g. left calf">
   </label>
-  <label class="switch"><input type="checkbox" role="switch" name="ill" value="true"{% if current and current.ill %} checked{% endif %}><span class="track" aria-hidden="true"></span> I'm ill</label>
+  <label class="switch" id="ill"><input type="checkbox" role="switch" name="ill" value="true"{% if current and current.ill %} checked{% endif %}><span class="track" aria-hidden="true"></span> I'm ill</label>
   <label class="switch"><input type="checkbox" role="switch" name="fever" value="true"{% if current and current.fever %} checked{% endif %}><span class="track" aria-hidden="true"></span> Fever or chest symptoms</label>
   <label>Resting heart rate (bpm)
     <input type="number" name="resting_hr" min="21" max="149" inputmode="numeric" value="{{ current.resting_hr if current and current.resting_hr else '' }}">

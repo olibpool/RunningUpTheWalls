@@ -1,0 +1,32 @@
+{% from "_icons.html" import icon %}
+{# One-tap daily check-in. Picking a face saves it; a low score offers an easier day. #}
+{% set faces = [(1, "😫", "Awful"), (2, "🙁", "Rough"), (3, "😐", "OK"), (4, "🙂", "Good"), (5, "😄", "Great")] %}
+<div id="feel" class="feel-card">
+  <h2 class="eyebrow">How are you today?</h2>
+  <form method="post" action="/checkin/feel" hx-post="/checkin/feel" hx-trigger="change" hx-target="#feel" hx-swap="outerHTML">
+    <fieldset class="feel-pick">
+      <legend class="sr-only">How do you feel today?</legend>
+      {% for n, face, label in faces %}
+      <label title="{{ label }}"><input type="radio" name="feel" value="{{ n }}"{% if checkin and checkin.feel == n %} checked{% endif %}><span><span aria-hidden="true">{{ face }}</span><small>{{ label }}</small></span></label>
+      {% endfor %}
+    </fieldset>
+    <noscript><button type="submit" class="small">Save</button></noscript>
+  </form>
+  {% if checkin and checkin.feel %}
+    {% if checkin.feel <= 2 %}
+    <div class="coach-note">
+      <p>Sorry to hear it. One easy day costs nothing and protects the next hard one.</p>
+      <form method="post" action="/events" hx-post="/events" hx-target="#feel-reply" hx-swap="innerHTML" class="actions">
+        <input type="hidden" name="form" value="drinks"><input type="hidden" name="reply" value="1">
+        <input type="hidden" name="title" value="Feeling rough"><input type="hidden" name="date" value="{{ today }}">
+        <input type="hidden" name="severity" value="1">
+        <button type="submit" class="small">Make today easy</button>
+        <a class="button ghost small" href="/checkin">Ill or a niggle?</a>
+      </form>
+      <div id="feel-reply"></div>
+    </div>
+    {% elif just_saved | default(False) %}
+    <p class="muted small">{{ icon("check") }} Noted. {% if checkin.feel == 5 %}Make the most of it.{% else %}Thanks.{% endif %}</p>
+    {% endif %}
+  {% endif %}
+</div>

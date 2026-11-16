@@ -1,0 +1,13 @@
+{% from "_icons.html" import icon %}
+{# Header sync state: polls quickly while a sync runs, else once a minute (which also starts a due sync). #}
+<div id="sync-chip" class="sync-chip" hx-get="/sync/chip{{ '?was=running' if running }}" hx-trigger="{{ 'every 3s' if running else 'every 60s' }}" hx-swap="outerHTML" aria-live="polite">
+  {% if running %}
+  <span class="chip busy">{{ icon("sync", "spin") }}<span>Syncing…</span></span>
+  {% elif failed %}
+  <a class="chip warn" href="/settings#sync-title" title="Last sync had problems: {{ failed | join(', ') }}">{{ icon("alert") }}<span>Sync issue</span></a>
+  {% else %}
+  <form method="post" action="/sync/run" hx-post="/sync/run" hx-target="#sync-chip" hx-swap="outerHTML">
+    <button type="submit" class="chip" title="Sync Garmin, calendar and weather now">{{ icon("sync") }}<span>{% if minutes is none %}Sync now{% elif minutes < 1 %}Synced now{% elif minutes < 60 %}Synced {{ minutes }}m ago{% elif minutes < 1440 %}Synced {{ minutes // 60 }}h ago{% else %}Synced {{ minutes // 1440 }}d ago{% endif %}</span></button>
+  </form>
+  {% endif %}
+</div>

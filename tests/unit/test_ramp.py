@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from configs import typed
 
-from runcoach.config import load_config, load_scheduling_config
 from runcoach.domain.models import PlannedSession
 from runcoach.engine.ramp import ramp_for_block
 from runcoach.engine.scheduler import compose_week
@@ -23,7 +23,7 @@ def test_ramp_for_block_selects_configured_profile(
     multipliers: tuple[float, ...],
     no_quality_weeks: int,
 ) -> None:
-    config = load_scheduling_config(load_config(env={}))
+    config = typed()
 
     ramp = ramp_for_block(days_off, config)
 
@@ -32,7 +32,7 @@ def test_ramp_for_block_selects_configured_profile(
 
 
 def test_compose_week_multiplies_growth_ceiling_by_ramp_factor() -> None:
-    config = load_scheduling_config(load_config(env={}))
+    config = typed()
     session = PlannedSession(
         date=date(2026, 11, 9),
         sport="run",
@@ -59,7 +59,7 @@ def test_compose_week_multiplies_growth_ceiling_by_ramp_factor() -> None:
 
 
 def test_ramp_rejects_nonpositive_block_duration() -> None:
-    config = load_scheduling_config(load_config(env={}))
+    config = typed()
 
     with pytest.raises(ValueError, match="days_off must be positive"):
         ramp_for_block(0, config)

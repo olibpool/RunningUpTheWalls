@@ -5,12 +5,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from configs import defaults, typed
 from fitdata import activity_fit
 from garminconnect import GarminConnectNotFoundError
 
 from runcoach import db
-from runcoach.config import ConfigNode, GarminConfig, load_config, load_scheduling_config
-from runcoach.domain.models import Checkin, PlannedSession, Step
+from runcoach.config import ConfigNode, GarminConfig, load_scheduling_config
+from runcoach.domain.models import Activity, Checkin, PlannedSession, Step
 from runcoach.integrations.garmin import GarminClient, to_garmin_workout
 from runcoach.integrations.watch import to_workout_spec
 from runcoach.sync import run_sync
@@ -72,7 +73,7 @@ class FakeGarmin:
 
 
 def _cfg(tmp_path: Path, *, pull: bool = True, push: bool = True) -> ConfigNode:
-    cfg = load_config(local_path=tmp_path / "none.toml", env={})
+    cfg = defaults()
     cfg.inbox.path = str(tmp_path / "inbox")
     cfg.garmin.enabled = pull
     cfg.export.backend = "garmin" if push else "none"
@@ -245,7 +246,7 @@ def test_sleep_fills_missing_nights_only_and_keeps_your_own(tmp_path) -> None:
     from runcoach.integrations.garmin import pull_sleep
 
     conn = db.connect(tmp_path / "s.db")
-    cfg = load_scheduling_config(load_config(env={})).garmin
+    cfg = typed().garmin
     today = date(2026, 11, 15)
     db.save_checkin(conn, Checkin(date=date(2026, 11, 14), sleep_hours=8.0))  # typed by you
     fake = FakeGarmin()
@@ -260,4 +261,36 @@ def test_sleep_fills_missing_nights_only_and_keeps_your_own(tmp_path) -> None:
     fake.sleep_calls.clear()
     assert pull_sleep(conn, fake, cfg, today) == "0 sleep nights"
     assert fake.sleep_calls == []  # later syncs only ask about missing recent nights
+    conn.close()
+
+
+def test_climbing_and_football_filed_as_other_get_their_sport(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "g.db")
+    cfg = _cfg(tmp_path, push=False)
+    other = {"typeKey": "other"}
+    fake = FakeGarmin()
+    fake.activities = [
+        {"activityId": 1, "activityName": "Bouldering", "activityType": other,
+         "startTimeGMT": "2026-11-12 20:00:00"},
+        {"activityId": 2, "activityName": "Tennis", "activityType": other,
+         "startTimeGMT": "2026-11-13 20:00:00"},
+    ]  # fmt: skip
+    fake.files = {  # Garmin's FIT files say "generic" for both
+        str(n): activity_fit(datetime(2026, 11, 11 + n, 20, tzinfo=timezone.utc), [(3600, 0)],
+                             sport="generic")
+        for n in (1, 2)
+    }  # fmt: skip
+    footy = db.insert_activity(  # stored before sports were read from Garmin's names
+        conn,
+        Activity(source="garmin", external_id="3", sport="other", duration_s=2400,
+                 started_at="2026-11-10T19:00:00+00:00", load=160.0),
+    )  # fmt: skip
+    fake.activities.append({"activityId": 3, "activityName": "Footy", "activityType": other})
+
+    assert "2 activities added, 1 relabelled" in _sync(conn, cfg, fake)["garmin"]
+    sports = {a.external_id: a.sport for a in db.activities(conn)}
+    assert sports == {"1": "climb", "2": "other", "3": "football"}
+    relabelled = next(a for a in db.activities(conn) if a.id == footy)
+    assert relabelled.load == 40 * load_scheduling_config(cfg).default_rpe["football"]
+    assert "relabelled" not in _sync(conn, cfg, fake)["garmin"]  # once only
     conn.close()

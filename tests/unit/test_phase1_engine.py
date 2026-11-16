@@ -1,23 +1,23 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from configs import defaults
 from hypothesis import given
 from hypothesis import strategies as st
 
-from runcoach.config import ConfigNode, load_config, load_scheduling_config
+from runcoach.config import load_scheduling_config
 from runcoach.domain.models import Commitment, PlanInput, PlannedSession, Step
-from runcoach.engine.load import duration_from_distance_and_pace, session_rpe_load
 from runcoach.engine.plan import (
     InfeasibleGoal,
-    generate_race_plan,
     generate_race_plan_result,
 )
 from runcoach.engine.progression import split_blocks, weekly_targets
 from runcoach.engine.safety import check_plan
+from runcoach.engine.scheduler import Busy
 from runcoach.engine.templates import WeekContext, build_session, quality_minutes
 from runcoach.engine.vdot import vdot_from_race, velocity_at_vo2, vo2_at_velocity
 from runcoach.engine.zones import zones_from_vdot
@@ -26,11 +26,7 @@ GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "golden_half_plan.js
 MONDAY = date(2026, 11, 16)
 
 
-def _config() -> ConfigNode:
-    return load_config(local_path=Path("does-not-exist.toml"), env={})
-
-
-CFG = _config()
+CFG = defaults()
 TYPED = load_scheduling_config(CFG)
 
 
@@ -91,11 +87,6 @@ def test_split_blocks_fill_the_weeks_and_end_with_the_taper() -> None:
     assert sum(block.weeks for block in blocks) == 17
     assert [block.label for block in blocks] == ["base", "build", "peak", "taper"]
     assert blocks[-1].weeks == len(TYPED.taper_factors["marathon"])
-
-
-def test_load_helpers() -> None:
-    assert session_rpe_load(8.0, 30) == 240.0
-    assert duration_from_distance_and_pace(1000.0, 300.0) == pytest.approx(5.0, abs=1e-6)
 
 
 def test_templates_build_structured_sessions_with_zone_paces() -> None:
@@ -160,6 +151,14 @@ def test_safety_flags_each_rule_with_a_bad_plan() -> None:
             _run(MONDAY + timedelta(days=3), "tempo", 20, 120, [tempo]),
         ]
     )
+    # Training every day of the week, and a session over a calendar event.
+    every_day = [_run(MONDAY + timedelta(days=d), "easy", 30, 90) for d in range(7)]
+    meeting = Busy(
+        start=datetime(2026, 11, 20, 7, tzinfo=timezone.utc),
+        end=datetime(2026, 11, 20, 8, tzinfo=timezone.utc),
+        title="Work event",
+    )
+    assert {"no-rest-day", "busy-overlap"} <= kinds(every_day, busy=[meeting], timezone_name="UTC")
 
 
 def test_infeasible_goals_explain_and_suggest_a_date() -> None:
@@ -167,12 +166,12 @@ def test_infeasible_goals_explain_and_suggest_a_date() -> None:
         distance="half", goal_date=date(2027, 1, 10), vdot=49.8, current_weekly_km=30
     )
     with pytest.raises(InfeasibleGoal, match=r"at least 10 weeks.*2027-01-24"):
-        generate_race_plan(too_soon, MONDAY, CFG)
+        generate_race_plan_result(too_soon, MONDAY, CFG)
     no_base = PlanInput(
         distance="marathon", goal_date=date(2027, 6, 1), vdot=45, current_weekly_km=0
     )
     with pytest.raises(InfeasibleGoal, match="above the 10% weekly cap"):
-        generate_race_plan(no_base, MONDAY, CFG)
+        generate_race_plan_result(no_base, MONDAY, CFG)
 
 
 def test_race_plan_has_paced_steps_tapers_and_ends_with_the_race() -> None:
@@ -267,7 +266,7 @@ def test_golden_half_marathon_plan(request: pytest.FixtureRequest) -> None:
         climbing_target_per_week=0,
         current_weekly_km=30,
     )
-    plan = [s.model_dump(mode="json") for s in generate_race_plan(inp, MONDAY, CFG)]
+    plan = [s.model_dump(mode="json") for s in generate_race_plan_result(inp, MONDAY, CFG).sessions]
     if request.config.getoption("--update-golden"):
         GOLDEN.parent.mkdir(exist_ok=True)
         GOLDEN.write_text(json.dumps(plan, indent=1) + "\n", encoding="utf-8")

@@ -15,15 +15,21 @@ Raspberry Pi, with the sync and backup timers, follow `deploy/README.md`.
 
 ## Using the app
 
-1. **Settings**: set your VDOT, runs per week and climbing sessions per week.
-2. **Events**: add fixed commitments (football), drinks nights and holidays.
+1. **Settings**: connect Garmin (email, password and any one-time code; only a session token is
+   kept), then set your VDOT, runs per week and climbing sessions per week.
+2. **Life**: add weekly commitments (football), nights out and holidays.
 3. **Plan, Create a plan**: pick a distance and race date, or choose continuous improvement.
    A plan that fails the safety checks cannot be saved, and the preview says why.
-4. **Home** shows today and what needs attention. **Week** shows each day with paces and the reason
+4. **Today** shows what to do and why, a one-tap check-in, quick logs (drinks tonight, ill, a
+   niggle, going away), the coming days, and how the week's running, football and climbing fit
+   together. **Plan** shows each day with paces and the reason
    for each placement. Mark sessions done or skipped, or move them.
-5. **Activities**: runs arrive from Garmin, or upload a FIT or GPX file; each is matched to a
+5. **Log**: activities arrive from Garmin, or upload a FIT or GPX file; each is matched to a
    session. Unmatched runs can be assigned by hand.
-6. **Check-in**: log how you feel, niggles, illness and resting heart rate.
+6. **Progress**: streak, a square for every training day, load by sport, running km, personal
+   bests, paces, recovery, and a fitness estimate from easy runs once your max HR is set.
+7. **Check-in** (from Today): how you feel, niggles and illness; resting HR and sleep come from
+   Garmin.
 
 The plan adapts to missed sessions, illness, drinks, holidays and heat, and records the reason for
 every change on the session page. Your VDOT never changes unless you submit a time trial.
@@ -41,18 +47,25 @@ The usual personal settings:
 | `[weather] enabled`, latitude, longitude | Heat adjustment |
 | `[inbox] path` | Folder watched for dropped FIT or GPX files |
 | `[storage] db_path` | Database location (default `runcoach.db`) |
-| `[garmin] enabled` | Pull activities and resting HR from Garmin Connect |
+| `[progress]` | Streak threshold, fastest-pace distance, grid weeks, days in Coming up, and when Life offers your watch's length for a commitment |
+| `[sync] auto_minutes` | The web app syncs this often and when opened after this long (0 = off) |
+| `[garmin] enabled` | Pull activities, resting HR and sleep from Garmin Connect (on after connecting) |
+| `[garmin.sport_keywords]` | Words in a Garmin activity's type or name that make "other" climbing or football |
 | `[export] backend` | `garmin` pushes the next `push_horizon_days` of runs to Garmin Connect |
 | `[compliance]` | How close a rep must be to its pace range to count as on target |
 
 ## Garmin
 
 Coachal works through Garmin Connect: the watch syncs to Garmin Connect through the phone as usual,
-and every `runcoach sync` pulls new activities (original FIT files, with laps) and resting heart
-rate, then pushes the coming week's runs as structured workouts with pace targets.
+and every sync pulls new activities (original FIT files, with laps; the last `pull_days_back` = 42
+days, enough history for the continuous plan), resting heart rate and sleep, then pushes the coming
+week's runs as structured workouts with pace targets. The web app syncs by itself every
+`[sync] auto_minutes` and whenever it is opened after that long; the header chip shows the last sync.
+
+Connect from **Settings, Garmin Connect**. The command line works too:
 
 ```bash
-uv run python -m runcoach garmin login    # once: password and MFA prompt; saves only a token
+uv run python -m runcoach garmin login    # password and MFA prompt; saves only a token
 uv run python -m runcoach garmin status   # checks the saved token still works
 ```
 

@@ -15,7 +15,7 @@ def minimal_travel_plan(
         raise ValueError("week_start must be a Monday")
     if typical_easy_duration_min <= 0:
         raise ValueError("typical_easy_duration_min must be positive")
-    typed_cfg = cfg if isinstance(cfg, SchedulingConfig) else load_scheduling_config(cfg)
+    typed_cfg = load_scheduling_config(cfg)
     minimal = typed_cfg.minimal_plan
     duration_min = max(1, round(typical_easy_duration_min * minimal.duration_share))
     sessions: list[PlannedSession] = []

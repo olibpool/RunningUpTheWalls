@@ -11,8 +11,6 @@ from runcoach.engine.load import session_load
 from runcoach.engine.vdot import race_time_s
 from runcoach.engine.zones import ZoneRange, Zones
 
-RUN_KINDS = ("easy", "recovery", "long", "tempo", "intervals")
-
 
 @dataclass(frozen=True)
 class WeekContext:

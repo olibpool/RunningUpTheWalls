@@ -248,7 +248,7 @@ def check_plan(
     for instance in fixed_instances:
         occupied_by_week.setdefault(_week_start(instance.date), set()).add(instance.date)
     for days in occupied_by_week.values():
-        if len(days) >= 7:
+        if len(days) > 7 - typed_cfg.progression.min_rest_days_per_week:
             violations.append(Violation("no-rest-day", "No rest day in the week"))
 
     for index, slot in enumerate(slots):
@@ -330,7 +330,8 @@ def check_plan(
                         f"{slot.title} violates {constraint.max_intensity}: {constraint.reason}",
                     )
                 )
-        for event in busy_events:
+        # A fixed commitment's time is yours to keep; your calendar often holds it too.
+        for event in [] if slot.fixed else busy_events:
             if event.start.tzinfo is None or event.end.tzinfo is None:
                 violations.append(
                     Violation("invalid-busy-slot", f"{event.title} must be timezone-aware.")

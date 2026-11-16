@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from configs import defaults
 
-from runcoach.config import load_config
 from runcoach.domain.models import Athlete
 from runcoach.engine.time_trial import (
     apply_time_trial_result,
@@ -30,7 +30,7 @@ def test_vdot_from_time_trial_validates_and_uses_race_calculation() -> None:
 
 
 def test_time_trial_session_uses_configured_structure() -> None:
-    session = time_trial_session(date(2026, 11, 30), load_config(env={}))
+    session = time_trial_session(date(2026, 11, 30), defaults())
 
     assert session.kind == "time_trial"
     assert session.date == date(2026, 11, 30)

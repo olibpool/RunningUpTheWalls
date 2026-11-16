@@ -3,13 +3,13 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from configs import typed
 
-from runcoach.config import load_config, load_scheduling_config
 from runcoach.engine.travel import minimal_travel_plan
 
 
 def test_minimal_travel_plan_has_configured_runs_and_strides() -> None:
-    config = load_scheduling_config(load_config(env={}))
+    config = typed()
 
     sessions = minimal_travel_plan(date(2026, 11, 9), 45, config)
 
@@ -24,7 +24,7 @@ def test_minimal_travel_plan_has_configured_runs_and_strides() -> None:
 
 
 def test_minimal_travel_plan_rejects_bad_inputs() -> None:
-    config = load_scheduling_config(load_config(env={}))
+    config = typed()
 
     with pytest.raises(ValueError, match="Monday"):
         minimal_travel_plan(date(2026, 11, 10), 45, config)

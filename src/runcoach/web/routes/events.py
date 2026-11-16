@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import timedelta
+from statistics import median
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -8,11 +10,13 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from runcoach import db
+from runcoach.adapt.rules import Change
 from runcoach.config import ConfigNode, load_scheduling_config
-from runcoach.domain.models import Commitment, commitment_problem
+from runcoach.domain.models import Commitment, Session, commitment_problem
 from runcoach.ingest.calendar import detect_commitments
+from runcoach.ingest.matcher import local_day
 from runcoach.sync import adapt_plan
-from runcoach.web.deps import get_cfg, get_conn, parse_form, redirect, render, today
+from runcoach.web.deps import get_cfg, get_conn, is_htmx, parse_form, redirect, render, today
 
 router = APIRouter(prefix="/events")
 
@@ -64,6 +68,13 @@ class EventForm(BaseModel):
         )
 
 
+def describe(conn: sqlite3.Connection, changes: list[Change]) -> list[tuple[Session | None, str]]:
+    """Each plan change with the session it touched, for a reply the human can read."""
+    return [
+        (db.get_session(conn, c.session_id) if c.session_id else None, c.reason) for c in changes
+    ]
+
+
 def _proposals(conn: sqlite3.Connection, cfg: ConfigNode) -> list[Commitment]:
     """Calendar events that look like commitments, minus any already confirmed."""
     known = {c.external_id for c in db.list_commitments(conn) if c.external_id}
@@ -83,15 +94,36 @@ def _page(
     status_code: int = 200,
 ) -> HTMLResponse:
     commitments = db.list_commitments(conn)
+    day = today().isoformat()
+    events = sorted((c for c in commitments if c.kind != "fixed"), key=lambda c: c.start_date or "")
+    typed = load_scheduling_config(cfg)
+    # How long each sport really lasts lately, to catch a commitment entered as longer or shorter.
+    since = today() - timedelta(days=typed.progress.typical_window_days)
+    minutes: dict[str, list[float]] = {}
+    for a in db.activities(conn):
+        if local_day(a.started_at) >= since:
+            minutes.setdefault(a.sport, []).append(a.duration_s / 60)
+    typical = {
+        sport: round(median(values))
+        for sport, values in minutes.items()
+        if len(values) >= typed.progress.typical_min_samples
+    }
     return render(
         request,
         "events.html",
         {
             "active": "events",
             "fixed": [c for c in commitments if c.kind == "fixed"],
-            "events": [c for c in commitments if c.kind != "fixed"],
+            "upcoming": [c for c in events if (c.end_date or c.start_date or "") >= day],
+            "past": [c for c in events if (c.end_date or c.start_date or "") < day][::-1],
             "proposals": _proposals(conn, cfg),
             "errors": errors,
+            "today": today(),
+            "days_after": typed.penalty.days_after,
+            "ramp": typed.return_ramp,
+            "athlete": db.get_athlete(conn),
+            "typical": typical,
+            "tolerance": typed.progress.typical_tolerance,
         },
         status_code=status_code,
     )
@@ -124,7 +156,12 @@ async def add(
             problem = commitment_problem(commitment)
             if problem is None:
                 db.save_commitment(conn, commitment)
-                adapt_plan(conn, load_scheduling_config(cfg), today())  # apply it straight away
+                # Applied straight away; a quick log from Today gets the coach's reply in place.
+                changes = adapt_plan(conn, load_scheduling_config(cfg), today())
+                if is_htmx(request) and "reply" in (await request.form()):
+                    return render(
+                        request, "_coach_reply.html", {"changes": describe(conn, changes)}
+                    )
                 return redirect(request, "/events")
             errors = [problem]
     return _page(request, conn, cfg, errors, status_code=400)
@@ -145,6 +182,28 @@ def confirm(
         proposal = proposal.model_copy(update={"severity": 2})  # the human can delete and re-log
     db.save_commitment(conn, proposal.model_copy(update={"active": True}))
     adapt_plan(conn, load_scheduling_config(cfg), today())
+    return redirect(request, "/events")
+
+
+class DurationForm(BaseModel):
+    minutes: int = Field(gt=0, le=600)
+
+
+@router.post("/{commitment_id}/duration", response_model=None)
+async def duration(
+    request: Request,
+    commitment_id: int,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+) -> Response:
+    """Set a commitment's length, e.g. to what the watch records."""
+    form, errors = parse_form(DurationForm, await request.form())
+    if form is None:
+        return _page(request, conn, cfg, errors, status_code=400)
+    try:
+        db.set_commitment_duration(conn, commitment_id, form.minutes)
+    except KeyError:
+        return _page(request, conn, cfg, ["That commitment no longer exists."], 400)
     return redirect(request, "/events")
 
 

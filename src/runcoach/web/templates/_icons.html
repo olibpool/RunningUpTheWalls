@@ -25,6 +25,15 @@
   "clock": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   "target": '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   "alert": '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h0"/>',
+  "drinks": '<path d="M6 3h12l-1.6 17.1a1 1 0 0 1-1 .9H8.6a1 1 0 0 1-1-.9z"/><path d="M6.6 9h10.8"/>',
+  "away": '<path d="M21 3 3 10.5l7 2.5 2.5 7z"/><path d="m10 13 4.5-4.5"/>',
+  "ill": '<path d="M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z"/><path d="M12 9v6"/>',
+  "niggle": '<path d="m4.9 13.4 8.5-8.5a3.5 3.5 0 0 1 5 5l-8.5 8.5a3.5 3.5 0 0 1-5-5z"/><path d="M11 11h.01M13 13h.01M11 13h.01M13 11h.01"/>',
+  "trophy": '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/>',
+  "plus": '<path d="M12 5v14M5 12h14"/>',
+  "penalty": '<path d="M6 3h12l-1.6 17.1a1 1 0 0 1-1 .9H8.6a1 1 0 0 1-1-.9z"/><path d="M6.6 9h10.8"/>',
+  "block": '<path d="M21 3 3 10.5l7 2.5 2.5 7z"/><path d="m10 13 4.5-4.5"/>',
+  "credit": '<path d="m3 20 6-11 4 6 2-3 6 8z"/>',
 } %}
 {% macro icon(name, cls="") -%}
 <svg class="icon {{ cls }}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ _paths.get(name, _paths["other"]) | safe }}</svg>

@@ -27,19 +27,18 @@ versions.
    sudo systemd-analyze verify /etc/systemd/system/runcoach.service \
        /etc/systemd/system/sync.service /etc/systemd/system/backup.service
    sudo systemctl daemon-reload
-   sudo systemctl enable --now runcoach.service sync.timer backup.timer
+   sudo systemctl enable --now runcoach.service backup.timer   # the app syncs by itself ([sync] auto_minutes)
    sudo tailscale serve --bg 8000     # publishes http://127.0.0.1:8000 over HTTPS on your tailnet
    ```
 7. **Phone.** Open the HTTPS tailnet address, then "Add to Home Screen".
-8. **Garmin (optional).** Log in once as the app user; it asks for your password and any MFA
-   code and saves only a session token under `/home/runcoach/.config/runcoach/garmin`:
-   ```bash
-   sudo -u runcoach -H /opt/runcoach/.venv/bin/python -m runcoach garmin login
-   sudo -u runcoach -H /opt/runcoach/.venv/bin/python -m runcoach garmin status
-   ```
-   Then set `RUNCOACH_GARMIN__ENABLED=true` (pull runs and resting HR) and
-   `RUNCOACH_EXPORT__BACKEND=garmin` (push workouts) in `/etc/runcoach.env` and restart
-   `runcoach.service`. If the token expires, `sync` reports it and you run `garmin login` again.
+8. **Garmin (optional).** In the app, open Settings, Garmin Connect and log in (with the one-time
+   code if Garmin asks). Only a session token is saved, under
+   `/home/runcoach/.config/runcoach/garmin`, and the Garmin pull switches on. To push workouts,
+   set *Watch workouts* to Garmin Connect. If the token expires, the header chip shows a sync
+   issue; connect again in Settings. (`runcoach garmin login` on the command line still works.)
+
+   `sync.timer` is only needed with `RUNCOACH_SYNC__AUTO_MINUTES=0`. With both on, the app skips
+   its own sync while the timer's last one is recent.
 
 **Gate (Phase 0):** reboot the Pi; with no manual steps the page loads on the phone over HTTPS,
 `/healthz` returns `{"status": "ok", ...}`, and `sudo systemctl start backup.service` leaves a file

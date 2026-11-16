@@ -506,30 +506,6 @@ def generate_race_plan_result(
     )
 
 
-def generate_race_plan(
-    inp: PlanInput,
-    today: date,
-    cfg: ConfigNode,
-    *,
-    commitments: list[Commitment] | None = None,
-    busy: list[Busy] | None = None,
-    fixed: list[FixedInstance] | None = None,
-    prior_tail: list[PlannedSession] | None = None,
-    timezone_name: str = "Europe/London",
-) -> list[PlannedSession]:
-    """Return the scheduled sessions of a race plan (see generate_race_plan_result)."""
-    return generate_race_plan_result(
-        inp,
-        today,
-        cfg,
-        fixed=fixed,
-        commitments=commitments,
-        busy=busy,
-        prior_tail=prior_tail,
-        timezone_name=timezone_name,
-    ).sessions
-
-
 def plan_snapshot(inp: PlanInput, commitments: list[Commitment]) -> dict[str, object]:
     """What a saved plan was built from, including which events it already accounts for."""
     return {

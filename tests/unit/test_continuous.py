@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
 
-from runcoach.config import ConfigNode, load_config, load_scheduling_config
+from configs import defaults
+
+from runcoach.config import ConfigNode, load_scheduling_config
 from runcoach.domain.models import Athlete, Commitment
 from runcoach.engine.continuous import (
     History,
@@ -42,7 +44,7 @@ def _history() -> History:
 
 
 def _config(*, weeks_ahead: int = 6) -> ConfigNode:
-    config = load_config(env={})
+    config = defaults()
     config.continuous.weeks_ahead = weeks_ahead
     return config
 
@@ -268,7 +270,7 @@ def test_acr_excludes_acute_week_from_chronic_average_and_holds_target() -> None
         cfg,
     )
     assert result.targets[0] == chronic_load(loads, typed_cfg.continuous.chronic_load_weeks)
-    assert any("ACR 1.60" in warning for warning in result.warnings)
+    assert any("1.60x your recent average" in warning for warning in result.warnings)
 
 
 def test_acr_soft_warning_thresholds_do_not_raise_the_hold_threshold() -> None:
@@ -385,3 +387,57 @@ def test_history_counts_climbing_as_the_planner_does(tmp_path) -> None:
     conn.close()
     week = next(w for w in history.weekly_loads if w.week_start == date(2026, 11, 2))
     assert week.leg_load == 300.0 + 500.0 * typed.load_factors.climb_leg
+
+
+def test_running_never_drops_below_recent_running_when_football_fills_the_target() -> None:
+    football = Commitment(
+        kind="fixed", sport="football", title="Football", weekday=1,
+        start_time="19:30", duration_min=60, rpe=7.5,
+    )  # fmt: skip
+    athlete = _athlete().model_copy(update={"climbing_target_per_week": 2})
+    loads = [WeekLoad(date(2026, 10, 19) + timedelta(weeks=n), 550.0) for n in range(4)]
+    cfg = _config(weeks_ahead=4)
+
+    def run_minutes(minutes: float) -> dict[date, float]:
+        result = generate_continuous_plan_result(
+            athlete,
+            History(weekly_loads=loads, typical_easy_duration_min=30, weekly_run_minutes=minutes),
+            date(2026, 11, 16),
+            [football],
+            cfg,
+        )
+        assert not result.violations
+        weeks: dict[date, float] = {}
+        for s in result.sessions:
+            if s.sport == "run":
+                week = s.date - timedelta(days=s.date.weekday())
+                weeks[week] = weeks.get(week, 0) + (s.duration_min or 0)
+        return weeks
+
+    assert run_minutes(0) == {}  # football and climbing as entered use the whole target
+    weeks = run_minutes(90)
+    # Week 4 of the program is a cut-back; the rest keep (nearly) your 90 minutes of running.
+    assert len(weeks) == 4
+    assert all(minutes >= 90 * 0.85 for week, minutes in weeks.items() if week != date(2026, 12, 7))
+
+
+def test_history_ignores_weeks_before_the_first_record(tmp_path) -> None:
+    from runcoach import db
+    from runcoach.domain.models import Activity
+    from runcoach.sync import history_from_activities
+
+    conn = db.connect(tmp_path / "h.db")
+    for day in ("2026-11-03", "2026-11-05", "2026-11-10"):
+        db.insert_activity(
+            conn,
+            Activity(
+                source="manual", sport="run", started_at=f"{day}T08:00:00+00:00",
+                duration_s=1800, distance_m=5000, load=120.0,
+            ),
+        )  # fmt: skip
+    history = history_from_activities(conn, load_scheduling_config(_config()), date(2026, 11, 18))
+    conn.close()
+    known = [w.week_start for w in history.weekly_loads if not w.blocked]
+    assert known == [date(2026, 11, 2), date(2026, 11, 9)]  # not three weeks of "rest" before
+    assert chronic_load(history.weekly_loads, 4) == 180.0
+    assert history.weekly_run_minutes == 45.0  # (60 + 30) / 2 known weeks

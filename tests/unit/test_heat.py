@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from pathlib import Path
 
 import httpx
 import pytest
+from configs import typed
 from pytest_httpx import HTTPXMock
 
 from runcoach.adapt.heat import adjust_for_heat, pace_penalty_pct
-from runcoach.config import load_config, load_scheduling_config
 from runcoach.domain.models import Session, Step
 from runcoach.integrations.weather import fetch_forecast
 
-CFG = load_scheduling_config(load_config(local_path=Path("does-not-exist.toml"), env={}))
+CFG = typed()
 TODAY = date(2027, 7, 12)
 
 

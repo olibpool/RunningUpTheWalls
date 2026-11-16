@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, BeforeValidator, Field
 
@@ -15,6 +16,7 @@ from runcoach import db
 from runcoach.config import ConfigNode, load_scheduling_config, save_settings, with_overrides
 from runcoach.domain.models import DISTANCE_METRES, Athlete, Distance
 from runcoach.engine.time_trial import apply_time_trial_result
+from runcoach.integrations import garmin
 from runcoach.sync import run_sync
 from runcoach.web.deps import get_cfg, get_conn, is_htmx, parse_form, redirect, render
 from runcoach.web.routes.plans import race_seconds
@@ -98,7 +100,7 @@ class AppSettingsForm(BaseModel):
 def _status(request: Request, conn: sqlite3.Connection) -> dict[str, Any]:
     report = db.get_kv(conn, "sync.last_report")
     return {
-        "running": request.app.state.sync_running,
+        "running": request.app.state.sync_lock.locked(),
         "last_run": db.get_kv(conn, "sync.last_run"),
         "report": json.loads(report) if report else {},
     }
@@ -127,15 +129,6 @@ def _page(
             ),
             ("Activity inbox", str(Path(typed.inbox.path).expanduser())),
             (
-                "Garmin activities and resting HR",
-                ("on" if typed.garmin.enabled else "off")
-                + (
-                    ", logged in"
-                    if Path(typed.garmin.token_dir).expanduser().exists()
-                    else ", not logged in (run `runcoach garmin login`)"
-                ),
-            ),
-            (
                 "Watch workouts",
                 {
                     "garmin": "pushed to Garmin Connect each sync",
@@ -145,6 +138,8 @@ def _page(
             ),
         ],
         "typed": typed,
+        "garmin_connected": garmin.logged_in(typed.garmin),
+        "garmin_pending": request.app.state.garmin_pending is not None,
         **_status(request, conn),
     }
     return render(request, "settings.html", context, status_code=status_code)
@@ -240,27 +235,64 @@ def dismiss_retest(
 
 
 def _sync_in_background(db_path: Path | str | None, cfg: ConfigNode, app_state: Any) -> None:
-    conn = db.connect(db_path)
     try:
-        run_sync(conn, cfg, datetime.now(timezone.utc))
+        conn = db.connect(db_path)
+        try:
+            run_sync(conn, cfg, datetime.now(timezone.utc))
+        finally:
+            conn.close()
     except Exception:  # the status panel shows the stored report; never crash the worker
         log.exception("background sync failed")
     finally:
+        app_state.sync_lock.release()
+
+
+def begin_sync(state: Any, background: BackgroundTasks | None = None) -> bool:
+    """Start a sync unless one is running; True when one was started. Without `background`
+    the caller runs `_sync_in_background(state.db_path, state.cfg, state)` itself."""
+    if not state.sync_lock.acquire(blocking=False):
+        return False
+    if background is not None:
+        background.add_task(_sync_in_background, state.db_path, state.cfg, state)
+    return True
+
+
+def sync_due(state: Any, now: datetime) -> bool:
+    """True when automatic sync is on and the last sync (from here, the CLI or a timer) is
+    older than `[sync] auto_minutes`."""
+    minutes = load_scheduling_config(state.cfg).sync.auto_minutes
+    if not minutes:
+        return False
+    conn = db.connect(state.db_path)
+    try:
+        last = db.get_kv(conn, "sync.last_run")
+    finally:
         conn.close()
-        app_state.sync_running = False
+    return last is None or now - datetime.fromisoformat(last) >= timedelta(minutes=minutes)
+
+
+def _chip(request: Request, conn: sqlite3.Connection) -> dict[str, Any]:
+    status = _status(request, conn)
+    last = status["last_run"]
+    minutes = (
+        int((datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() // 60)
+        if last
+        else None
+    )
+    failed = [step for step, outcome in status["report"].items() if outcome.startswith("error")]
+    return {**status, "minutes": minutes, "failed": failed}
 
 
 @router.post("/sync/run", response_model=None)
 def sync_run(
     request: Request,
     background: BackgroundTasks,
-    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
 ) -> Response:
-    """Start a sync after the response is sent; the settings page polls its status."""
-    state = request.app.state
-    if not state.sync_running:
-        state.sync_running = True
-        background.add_task(_sync_in_background, state.db_path, cfg, state)
+    """Start a sync after the response is sent; the page polls its status."""
+    begin_sync(request.app.state, background)
+    if request.headers.get("HX-Target") == "sync-chip":
+        return render(request, "_sync_chip.html", {**_chip(request, conn), "running": True})
     if is_htmx(request):
         return render(request, "_sync_status.html", {"running": True, "report": {}})
     return redirect(request, "/settings")
@@ -272,3 +304,86 @@ def sync_status(
 ) -> HTMLResponse:
     """The sync status panel; it keeps polling while a sync runs."""
     return render(request, "_sync_status.html", _status(request, conn))
+
+
+@router.get("/sync/chip", response_class=HTMLResponse)
+def sync_chip(
+    request: Request,
+    background: BackgroundTasks,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    was: str | None = None,
+) -> HTMLResponse:
+    """The header's sync chip. Opening the app after a while starts a sync; when a sync the
+    page watched finishes, the page is told to refresh."""
+    state = request.app.state
+    if sync_due(state, datetime.now(timezone.utc)):
+        begin_sync(state, background)
+    context = _chip(request, conn)
+    context["running"] = state.sync_lock.locked()
+    response = render(request, "_sync_chip.html", context)
+    if was == "running" and not context["running"]:
+        response.headers["HX-Trigger"] = json.dumps({"synced": "Synced"})
+    return response
+
+
+class GarminLoginForm(BaseModel):
+    email: str = Field(min_length=3)
+    password: str = Field(min_length=1, repr=False)
+
+
+class GarminCodeForm(BaseModel):
+    code: str = Field(pattern=r"^\s*\d{4,8}\s*$")
+
+
+def _garmin_connected(request: Request, background: BackgroundTasks, cfg: ConfigNode) -> None:
+    """Turn the Garmin pull on and fetch everything straight away."""
+    update = {"garmin": {"enabled": True}}
+    save_settings(update)
+    request.app.state.cfg = with_overrides(cfg, update)
+    begin_sync(request.app.state, background)
+
+
+@router.post("/garmin/login", response_model=None)
+async def garmin_login(
+    request: Request,
+    background: BackgroundTasks,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+) -> Response:
+    """Log in to Garmin Connect; only the session token is kept, never the password."""
+    form, _ = parse_form(GarminLoginForm, await request.form())
+    if form is None:
+        return _page(request, conn, cfg, ["Enter your Garmin email and password."], 400)
+    garmin_cfg = load_scheduling_config(cfg).garmin
+    try:
+        pending = await run_in_threadpool(garmin.start_login, garmin_cfg, form.email, form.password)
+    except Exception as exc:
+        return _page(request, conn, cfg, [garmin.login_problem(exc)], 400)
+    request.app.state.garmin_pending = pending
+    if pending is None:
+        _garmin_connected(request, background, cfg)
+    return redirect(request, "/settings#garmin-title")
+
+
+@router.post("/garmin/code", response_model=None)
+async def garmin_code(
+    request: Request,
+    background: BackgroundTasks,
+    conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    cfg: Annotated[ConfigNode, Depends(get_cfg)],
+) -> Response:
+    """Finish a Garmin login with the one-time code Garmin sent."""
+    form, _ = parse_form(GarminCodeForm, await request.form())
+    pending = request.app.state.garmin_pending
+    if pending is None:
+        return _page(request, conn, cfg, ["That login has expired; start again."], 400)
+    if form is None:
+        return _page(request, conn, cfg, ["Enter the code Garmin sent you."], 400)
+    garmin_cfg = load_scheduling_config(cfg).garmin
+    try:
+        await run_in_threadpool(garmin.finish_login, garmin_cfg, pending, form.code.strip())
+    except Exception as exc:
+        return _page(request, conn, cfg, [garmin.login_problem(exc)], 400)
+    request.app.state.garmin_pending = None
+    _garmin_connected(request, background, cfg)
+    return redirect(request, "/settings#garmin-title")

@@ -75,3 +75,52 @@
 </div>
 {% endif %}
 {% endmacro %}
+
+{# Stacked columns (stats.StackBar): one segment per sport, sport colours, notes above. #}
+{% macro stacked(bars, unit, caption) %}
+{% set slot, plot, bar_w = 28, 120, 16 %}
+{% set top = bars | map(attribute="value") | max %}
+{% set width = bars | length * slot %}
+<figure class="chart stacked">
+  <svg viewBox="0 -14 {{ width }} {{ plot + 34 }}" role="img" aria-label="{{ caption }}">
+    <line class="axis" x1="0" x2="{{ width }}" y1="{{ plot }}" y2="{{ plot }}"/>
+    {% for b in bars %}
+    {% set x = loop.index0 * slot %}
+    {% set bx = x + (slot - bar_w) / 2 %}
+    <g class="col{% if b.current %} current{% endif %}">
+      {% if b.href %}<a href="{{ b.href }}">{% endif %}
+      <title>{{ b.title }}</title>
+      <rect class="hit" x="{{ x }}" y="-14" width="{{ slot }}" height="{{ plot + 34 }}"/>
+      {% set ns = namespace(y=plot) %}
+      {% for sport, v in b.parts %}
+      {% set h = (v / top * (plot - 16)) if top else 0 %}
+      {% set ns.y = ns.y - h %}
+      <rect class="seg-{{ sport }}" x="{{ bx }}" y="{{ ns.y }}" width="{{ bar_w }}" height="{{ [h - 1, 0] | max }}" rx="2"/>
+      {% endfor %}
+      {% if b.note %}<text class="note" x="{{ x + 3 }}" y="-4" text-anchor="start">{{ b.note }}</text><line class="phase" x1="{{ x + 1 }}" x2="{{ x + 1 }}" y1="-2" y2="{{ plot }}"/>{% endif %}
+      {% if b.current %}<text class="val" x="{{ x + slot / 2 }}" y="{{ ns.y - 5 }}">now</text>{% endif %}
+      {% if loop.first or loop.last %}<text class="tick" x="{{ x + slot / 2 }}" y="{{ plot + 15 }}">{{ b.label }}</text>{% endif %}
+      {% if b.href %}</a>{% endif %}
+    </g>
+    {% endfor %}
+  </svg>
+  <table class="sr-only"><caption>{{ caption }}</caption>
+    <tbody>{% for b in bars %}<tr><th scope="row">{{ b.label }}</th><td>{{ b.title }} ({{ unit }})</td></tr>{% endfor %}</tbody>
+  </table>
+</figure>
+{% endmacro %}
+
+{# Consistency heatmap: one column per week, one cell per day, coloured by the day's main sport. #}
+{% macro heatmap(rows, caption) %}
+<figure class="heatmap" aria-label="{{ caption }}">
+  <div class="heat-days" aria-hidden="true"><span>M</span><span></span><span>W</span><span></span><span>F</span><span></span><span>S</span></div>
+  <div class="heat-grid" style="--weeks: {{ rows | length }}">
+    {% for row in rows %}{% for c in row %}<span class="cell lvl-{{ c.level }}{% if c.sport %} sport-{{ c.sport }}{% endif %}" title="{{ c.title }}"></span>{% endfor %}{% endfor %}
+  </div>
+</figure>
+{% endmacro %}
+
+{# Legend of sport colours. #}
+{% macro sport_legend(sports) %}
+<ul class="legend">{% for s in sports %}<li><span class="swatch seg-{{ s }}"></span>{{ sport_names[s] }}</li>{% endfor %}</ul>
+{% endmacro %}

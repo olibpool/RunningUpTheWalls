@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from pathlib import Path
 
-from runcoach.config import load_config, load_scheduling_config
+from configs import typed
+
 from runcoach.domain.models import PlannedSession
 from runcoach.engine.advice import session_notes
 
-CFG = load_scheduling_config(load_config(local_path=Path("does-not-exist.toml"), env={}))
+CFG = typed()
 RACE_DAY = date(2027, 3, 14)
 
 
