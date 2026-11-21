@@ -71,7 +71,7 @@
 
 * { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; } /* no sideways jump between short and long pages */
 
 body {
   margin: 0;
@@ -174,7 +174,7 @@ code { font-size: 0.9em; background: var(--surface-2); padding: 0.1em 0.35em; bo
   .tabbar { display: none; }
 }
 
-main { max-width: 1180px; margin: 0 auto; padding: 1.25rem max(1rem, env(safe-area-inset-left)) 3rem; view-transition-name: main; }
+main { max-width: 1180px; margin: 0 auto; padding: 1.25rem max(1rem, env(safe-area-inset-left)) 3rem; }
 
 .page-head { margin: 0.5rem 0 1.25rem; }
 .page-head h1 { margin-bottom: 0.25rem; }
@@ -523,7 +523,7 @@ progress[hidden] { display: none; }
 .spin { animation: spin 1s linear infinite; color: var(--accent); }
 
 /* Header sync chip */
-.sync-chip { margin-right: auto; }
+.sync-chip { margin-right: auto; min-height: 32px; }
 .sync-chip form { margin: 0; }
 .chip, button.chip {
   display: inline-flex; align-items: center; gap: 0.35rem; min-height: 32px; padding: 0 0.7rem;
@@ -551,13 +551,9 @@ button.chip:hover { transform: none; box-shadow: none; color: var(--accent); bor
 /* htmx swaps: fresh content fades in; swapped cards settle */
 .card.htmx-added { animation: pop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
 @keyframes pop { from { transform: scale(0.97); opacity: 0.4; } }
-::view-transition-old(main) { animation: 0.16s ease both vt-out; }
-::view-transition-new(main) { animation: 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both vt-in; }
-@keyframes vt-out { to { opacity: 0; transform: translateY(-4px); } }
-@keyframes vt-in { from { opacity: 0; transform: translateY(6px); } }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after, ::view-transition-old(main), ::view-transition-new(main) {
+  *, *::before, *::after {
     animation: none !important; transition: none !important;
   }
 }

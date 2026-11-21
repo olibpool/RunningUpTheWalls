@@ -1,5 +1,5 @@
 {% from "_icons.html" import icon %}
-<div id="sync-status" class="sync-status{% if running %} running{% endif %}"{% if running %} hx-get="/sync/status" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %} aria-live="polite">
+<div id="sync-status" class="sync-status{% if running %} running{% endif %}"{% if running %} hx-get="/sync/status" hx-trigger="every 2s" hx-swap="outerHTML" hx-indicator="#sync-status .icon"{% endif %} aria-live="polite">
   {% if running %}
   <p>{{ icon("sync", "spin") }}<strong>Sync running…</strong></p>
   {% elif last_run %}

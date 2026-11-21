@@ -7,7 +7,7 @@
       <span class="muted">{{ a.duration_s // 60 }} min{% if a.distance_m %} · {{ a.distance_m | km }}{% endif %}</span></span>
   </div>
   <form method="post" action="/activities/{{ a.id }}/rpe" hx-post="/activities/{{ a.id }}/rpe"
-        hx-trigger="change" hx-target="#rate-{{ a.id }}" hx-swap="outerHTML">
+        hx-trigger="change" hx-sync="this:replace" hx-target="#rate-{{ a.id }}" hx-swap="outerHTML">
     <fieldset class="rpe">
       <legend class="sr-only">How hard did it feel, 1 to 10</legend>
       <div class="segmented">

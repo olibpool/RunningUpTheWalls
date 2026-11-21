@@ -58,7 +58,7 @@ def _save_plan(client: TestClient) -> str:
 
 def test_app_shell_health_caching_pwa_and_guide(client: TestClient) -> None:
     payload = client.get("/healthz").json()
-    assert payload["status"] == "ok" and payload["db_version"] == 5
+    assert payload["status"] == "ok" and payload["db_version"] == 6
     assert client.get("/static/app.css").headers["cache-control"] == "public, max-age=86400"
     week = client.get("/week")
     assert "cache-control" not in week.headers
@@ -599,6 +599,10 @@ def test_today_takes_a_feeling_and_a_night_out_in_one_tap(
     conn.close()
     assert eased is not None and eased.kind == "easy" and "by feel" in eased.title
     assert "Night out" in client.get("/events").text  # it is listed under Coming up
+
+    # A rejected quick log answers with just the error, not the whole Events page in the reply box.
+    bad = client.post("/events", data={**night, "severity": "9"}, headers=htmx)
+    assert bad.status_code == 400 and 'class="banner error"' in bad.text and "<html" not in bad.text
 
 
 def test_progress_and_whole_plan_pages_show_every_sport(client: TestClient) -> None:

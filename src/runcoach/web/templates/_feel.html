@@ -3,7 +3,7 @@
 {% set faces = [(1, "😫", "Awful"), (2, "🙁", "Rough"), (3, "😐", "OK"), (4, "🙂", "Good"), (5, "😄", "Great")] %}
 <div id="feel" class="feel-card">
   <h2 class="eyebrow">How are you today?</h2>
-  <form method="post" action="/checkin/feel" hx-post="/checkin/feel" hx-trigger="change" hx-target="#feel" hx-swap="outerHTML">
+  <form method="post" action="/checkin/feel" hx-post="/checkin/feel" hx-trigger="change" hx-sync="this:replace" hx-target="#feel" hx-swap="outerHTML">
     <fieldset class="feel-pick">
       <legend class="sr-only">How do you feel today?</legend>
       {% for n, face, label in faces %}

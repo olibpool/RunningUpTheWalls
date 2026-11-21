@@ -164,6 +164,8 @@ async def add(
                     )
                 return redirect(request, "/events")
             errors = [problem]
+    if is_htmx(request) and "reply" in (await request.form()):
+        return render(request, "_messages.html", {"errors": errors}, status_code=400)
     return _page(request, conn, cfg, errors, status_code=400)
 
 

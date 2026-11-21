@@ -1,6 +1,6 @@
 {% from "_icons.html" import icon %}
 {# Header sync state: polls quickly while a sync runs, else once a minute (which also starts a due sync). #}
-<div id="sync-chip" class="sync-chip" hx-get="/sync/chip{{ '?was=running' if running }}" hx-trigger="{{ 'every 3s' if running else 'every 60s' }}" hx-swap="outerHTML" aria-live="polite">
+<div id="sync-chip" class="sync-chip" hx-get="/sync/chip{{ '?was=running' if running }}" hx-trigger="{{ 'every 3s' if running else 'every 60s' }}" hx-swap="outerHTML" hx-indicator="#sync-chip .icon" aria-live="polite">
   {% if running %}
   <span class="chip busy">{{ icon("sync", "spin") }}<span>Syncing…</span></span>
   {% elif failed %}

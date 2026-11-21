@@ -1,6 +1,6 @@
-// Coachal service worker: static assets cache-first; pages network-first so plan data is
-// never stale, falling back to the last week page seen when the network is down.
-const CACHE = "coachal-v5";
+// Coachal service worker: everything network-first so a CSS/JS update shows straight away
+// (cache-first served old CSS against new pages), falling back to the cache when offline.
+const CACHE = "coachal-v6";
 const SHELL = ["/static/app.css", "/static/app.js", "/static/vendor/htmx.min.js", "/static/icon-192.png"];
 
 self.addEventListener("install", (event) => {
@@ -21,7 +21,17 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET" || url.origin !== location.origin) return;
 
   if (url.pathname.startsWith("/static/")) {
-    event.respondWith(caches.match(request).then((hit) => hit || fetch(request)));
+    event.respondWith(
+      fetch(request, { cache: "no-cache" })
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then((hit) => hit || Response.error()))
+    );
     return;
   }
   if (request.mode === "navigate") {

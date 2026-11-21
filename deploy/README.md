@@ -40,6 +40,31 @@ versions.
    `sync.timer` is only needed with `RUNCOACH_SYNC__AUTO_MINUTES=0`. With both on, the app skips
    its own sync while the timer's last one is recent.
 
+9. **Auto-deploy (optional).** The Pi checks GitHub every 10 minutes and deploys the newest `v*`
+   tag by itself:
+   ```bash
+   sudo cp deploy/deploy.service deploy/deploy.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now deploy.timer
+   ```
+   If the repo is private, give the Pi a read-only deploy key first: as `runcoach`, run
+   `ssh-keygen -t ed25519`, add the `.pub` under the repo's *Settings → Deploy keys* (read-only),
+   and point the clone at `git@github.com:...` with `git remote set-url origin`.
+
+## Releasing
+
+1. Open a pull request into `main`. CI (`.github/workflows/ci.yml`) runs ruff, ruff format, mypy and
+   pytest on Python 3.12 and 3.14. To block merging on failure, add a branch rule for `main`
+   requiring the `checks` jobs (*Settings → Rules → Rulesets*).
+2. After merging, tag a release on `main`: `git tag v1.2.0 && git push origin v1.2.0`.
+3. Within about 10 minutes the Pi stops the app, backs up the database, switches to the tag, runs
+   `uv sync --frozen`, starts the app and checks `/healthz`. If the health check fails it switches
+   back to the previous version, restores the backup and skips that tag until a newer one appears.
+   Watch it with `journalctl -u deploy.service`; deploy now with `sudo systemctl start deploy.service`.
+
+Deploys only go forwards. To go back, tag the old commit with a higher version number
+(`git tag v1.2.1 <old-commit>`), or follow the restore steps below for the data.
+
 **Gate (Phase 0):** reboot the Pi; with no manual steps the page loads on the phone over HTTPS,
 `/healthz` returns `{"status": "ok", ...}`, and `sudo systemctl start backup.service` leaves a file
 in `/var/backups/runcoach/`.
