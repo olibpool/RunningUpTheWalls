@@ -133,10 +133,14 @@ def test_safety_flags_each_rule_with_a_bad_plan() -> None:
     rise = [_run(MONDAY + timedelta(weeks=w), "easy", 40, load) for w, load in ((0, 100), (1, 130))]
     assert "weekly-rise" in kinds(rise)
     assert "weekly-rise" not in kinds(rise, exempt_load_weeks={MONDAY + timedelta(weeks=1)})
-    # Long run above its share of weekly run time; 2-run weeks are exempt.
-    two_runs = [_run(MONDAY, "long", 90, 360), _run(MONDAY + timedelta(days=3), "easy", 30, 90)]
-    assert "long-run-share" not in kinds(two_runs)
-    assert "long-run-share" in kinds([*two_runs, _run(MONDAY + timedelta(days=5), "easy", 30, 90)])
+    # Long run above its share of weekly run time; weeks of under 4 runs are exempt.
+    three_runs = [
+        _run(MONDAY, "long", 90, 360),
+        *(_run(MONDAY + timedelta(days=d), "easy", 30, 90) for d in (2, 4)),
+    ]
+    assert "long-run-share" not in kinds(three_runs)
+    four_runs = [*three_runs, _run(MONDAY + timedelta(days=6), "easy", 30, 90)]
+    assert "long-run-share" in kinds(four_runs)
     # Taper week above the preceding peak.
     taper = [
         _run(MONDAY + timedelta(weeks=w), "easy", 40, load) for w, load in ((0, 100), (1, 105))

@@ -99,6 +99,7 @@ class ProgressionConfig(BaseModel):
     cutback_every_n_weeks: int
     cutback_factor: float
     max_long_run_share: float
+    long_share_min_runs: int = Field(ge=2)
     max_long_run_minutes: int
     max_weekly_km_per_run: float = Field(gt=0)
     marathon_max_long_run_share: float = Field(gt=0, lt=1)

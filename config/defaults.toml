@@ -22,6 +22,8 @@ max_weekly_increase = 0.10
 cutback_every_n_weeks = 4
 cutback_factor = 0.80
 max_long_run_share = 0.35
+long_share_min_runs = 4         # fewer runs a week are exempt: with 3, easy runs shorter than the long run
+                                # already make it about 40% of the week, so a 35% cap flattens it
 max_long_run_minutes = 180      # 3 h: longer adds injury risk faster than fitness
 max_weekly_km_per_run = 13      # peak km a week is at most this x runs a week: easy runs stay easy
 marathon_max_long_run_share = 0.42  # marathon long runs need a bigger share (29-32 km in most plans)

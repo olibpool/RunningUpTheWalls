@@ -457,6 +457,11 @@ def _candidate_reason(
     return "; ".join(reasons)
 
 
+def _first_day(not_before: date | datetime) -> date:
+    """`not_before` is a first day, or a moment (now) whose earlier slots are already past."""
+    return not_before.date() if isinstance(not_before, datetime) else not_before
+
+
 def _make_candidates(
     session: PlannedSession,
     week_start: date,
@@ -466,7 +471,7 @@ def _make_candidates(
     cfg: SchedulingConfig,
     minimum_hard_hours: int,
     tz: ZoneInfo,
-    not_before: date | None,
+    not_before: date | datetime | None,
     day_constraints: dict[date, DayConstraint],
     habits: dict[str, Habit],
 ) -> list[_Candidate]:
@@ -474,7 +479,7 @@ def _make_candidates(
     candidates: list[_Candidate] = []
     for offset in range(7):
         day = week_start + timedelta(days=offset)
-        if not_before is not None and day < not_before:
+        if not_before is not None and day < _first_day(not_before):
             continue
         windows = cfg.availability.weekend if day.weekday() >= 5 else cfg.availability.weekday
         starts = _candidate_starts(
@@ -492,6 +497,8 @@ def _make_candidates(
             usual = datetime.combine(day, time.fromisoformat(habit.start_time), tzinfo=tz)
             starts = sorted({*starts, usual})
         for start in starts:
+            if isinstance(not_before, datetime) and start < not_before:
+                continue  # already past
             placement = _Placement(
                 session=session,
                 fixed=None,
@@ -626,7 +633,7 @@ def _attempt_schedule(
     minimum_hard_hours: int,
     week_start: date,
     tz: ZoneInfo,
-    not_before: date | None,
+    not_before: date | datetime | None,
     day_constraints: dict[date, DayConstraint],
     habits: dict[str, Habit],
 ) -> _Attempt:
@@ -634,7 +641,7 @@ def _attempt_schedule(
     week_days = [
         datetime.combine(week_start + timedelta(days=offset), time(), tzinfo=tz)
         for offset in range(7)
-        if not_before is None or week_start + timedelta(days=offset) >= not_before
+        if not_before is None or week_start + timedelta(days=offset) >= _first_day(not_before)
     ]
 
     def search(
@@ -803,7 +810,7 @@ def schedule_week(
     cfg: SchedulingConfig,
     *,
     timezone_name: str = "Europe/London",
-    not_before: date | None = None,
+    not_before: date | datetime | None = None,
     day_constraints: dict[date, DayConstraint] | None = None,
     habits: dict[str, Habit] | None = None,
 ) -> ScheduleResult:

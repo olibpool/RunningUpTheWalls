@@ -53,6 +53,13 @@
     <label>Weekly load ceiling (continuous mode, optional)
       <input type="number" name="max_weekly_load" min="1" step="1" value="{{ athlete.max_weekly_load or '' if athlete else '' }}">
     </label>
+    <label>Weekly running you handle now, km (continuous mode, optional)
+      <input type="number" name="weekly_km" min="1" max="200" step="0.5" inputmode="decimal" value="{{ athlete.weekly_km or '' if athlete else '' }}">
+    </label>
+    <label>Long run you could comfortably do now, km (continuous mode, optional)
+      <input type="number" name="long_run_km" min="1" max="50" step="0.5" inputmode="decimal" value="{{ athlete.long_run_km or '' if athlete else '' }}">
+      <small class="muted">For when your synced runs undersell you. Plans keep at least this much running and a long run this long; only enter what you could run this week.</small>
+    </label>
     <label>Maximum heart rate (optional)
       <input type="number" name="max_hr" min="120" max="230" inputmode="numeric" value="{{ athlete.max_hr or '' if athlete else '' }}">
       <small class="muted">From a hard race finish or an all-out hill effort, not an age formula. Used to estimate fitness from your easy runs.</small>

@@ -61,6 +61,8 @@ class Athlete(BaseModel):
     max_weekly_load: float | None = None
     timezone: str = "Europe/London"
     max_hr: int | None = None  # for the fitness estimate from training heart rate
+    weekly_km: float | None = Field(default=None, gt=0)  # weekly running you handle now
+    long_run_km: float | None = Field(default=None, gt=0)  # long run you can comfortably do now
 
 
 class PlanInput(BaseModel):

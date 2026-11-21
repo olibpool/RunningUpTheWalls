@@ -858,10 +858,15 @@ def run_km_since(conn: sqlite3.Connection, since: datetime) -> float:
     return float(row[0]) / 1000
 
 
-def longest_run_km_since(conn: sqlite3.Connection, since: datetime) -> float | None:
-    """The longest stored run since a moment, in km, or None when there is none."""
+def longest_run_km_since(
+    conn: sqlite3.Connection, since: datetime, *, long_only: bool = False
+) -> float | None:
+    """The longest stored run since a moment, in km, or None when there is none; `long_only`
+    counts only runs that were a planned long run (not races or one-off efforts)."""
+    join = " JOIN session s ON s.id = a.session_id AND s.kind = 'long'" if long_only else ""
     row = conn.execute(
-        "SELECT MAX(distance_m) FROM activity WHERE sport = 'run' AND started_at >= ?",
+        f"SELECT MAX(a.distance_m) FROM activity a{join}"
+        " WHERE a.sport = 'run' AND a.started_at >= ?",
         (since.astimezone(timezone.utc).isoformat(),),
     ).fetchone()
     return float(row[0]) / 1000 if row[0] else None

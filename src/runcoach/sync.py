@@ -40,7 +40,6 @@ from runcoach.engine.habits import Habit, learn_habits
 from runcoach.engine.load import leg_factor
 from runcoach.engine.plan import fixed_instances
 from runcoach.engine.replan import should_replan
-from runcoach.engine.scheduler import first_open_day
 from runcoach.ingest.calendar import fetch_ical_events, to_busy
 from runcoach.ingest.inbox import ingest_inbox
 from runcoach.ingest.matcher import local_day, match
@@ -80,7 +79,7 @@ def replan_continuous_if_due(
         )
     result = generate_continuous_plan_result(
         athlete, current_history, today, events, cfg,
-        not_before=first_open_day(now_utc.astimezone(TZ), load_scheduling_config(cfg)),
+        not_before=now_utc.astimezone(TZ),
     )  # fmt: skip
     if result.violations:
         details = "; ".join(f"{v.kind}: {v.message}" for v in result.violations)
@@ -271,19 +270,20 @@ def history_from_activities(
     known = [w.week_start for w in weekly_loads if not w.blocked][
         -cfg.continuous.chronic_load_weeks :
     ]
+    spike_since = datetime.combine(
+        today - timedelta(days=cfg.progression.spike_window_days), time(), tzinfo=TZ
+    )
     return History(
         habits=activity_habits(stored, today, cfg),
+        recent_long_run_km=db.longest_run_km_since(conn, spike_since, long_only=True),
         weekly_loads=weekly_loads,
         weekly_run_minutes=sum(week_run_minutes[w] for w in known) / len(known) if known else 0.0,
+        weekly_run_load=sum(loads[w].get("run", 0.0) for w in known) / len(known) if known else 0.0,
+        week_so_far=weekly_leg_loads(stored, [this_week], cfg.load_factors)[this_week],
         typical_easy_duration_min=round(median(run_minutes)),
         checkins=db.checkins(conn, today - timedelta(days=28)),
         busy=to_busy(db.calendar_events(conn)),
-        longest_recent_run_km=db.longest_run_km_since(
-            conn,
-            datetime.combine(
-                today - timedelta(days=cfg.progression.spike_window_days), time(), tzinfo=TZ
-            ),
-        ),
+        longest_recent_run_km=db.longest_run_km_since(conn, spike_since),
     )
 
 

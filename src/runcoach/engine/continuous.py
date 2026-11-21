@@ -54,7 +54,10 @@ class History:
     busy: list[Busy] = field(default_factory=list)
     plan_start_date: date | None = None
     longest_recent_run_km: float | None = None  # longest run in the spike window
+    recent_long_run_km: float | None = None  # longest planned long run done in that window
     weekly_run_minutes: float = 0.0  # recent running time a week, the floor for planned running
+    weekly_run_load: float = 0.0  # recent running leg load a week, at the efforts you logged
+    week_so_far: dict[str, float] = field(default_factory=dict)  # done leg load this week, by sport
     habits: dict[str, Habit] = field(default_factory=dict)  # usual days and times by sport
 
 
@@ -245,9 +248,11 @@ def _sessions_for_week(
     progress: float = 0.0,
     quality_allowed: bool = True,
     longest_km: float | None = None,
+    min_long_minutes: int = 0,
 ) -> list[PlannedSession]:
     """A week's runs from its load budget: the quality session at its real cost first, then a
-    long run with easy runs at most `easy_max_share_of_long` of it; fewer runs, never tiny ones."""
+    long run with easy runs at most `easy_max_share_of_long` of it; fewer runs, never tiny ones,
+    and a long run no shorter than `min_long_minutes` (your usual run) while easy runs can go."""
     if runs_per_week < 2 or runs_per_week > 6:
         raise ValueError("runs_per_week must be between 2 and 6")
     if run_budget <= 0:
@@ -282,33 +287,51 @@ def _sessions_for_week(
     remaining = run_budget - sum(s.leg_load for s in quality)
     ratio = t.easy_max_share_of_long
     others = runs_per_week - 1 - len(quality)
+    long_limit = float(typed_cfg.progression.max_long_run_minutes)
+    if longest_km is not None:  # no run more than the allowed step over the recent longest
+        spike_km = longest_km * (1 + typed_cfg.progression.max_single_run_increase)
+        long_limit = min(long_limit, spike_km * easy_min_per_km)
+    share = typed_cfg.progression.max_long_run_share
+    quality_minutes_total = sum(s.duration_min or 0 for s in quality)
+    # A coach sets the long run first (your usual long run, or its share of the week), then
+    # shares out the rest as easy runs; when those hit their cap the long run takes the rest.
+    low, high = t.long_share
+    target = max(
+        min_long_minutes, (low + (high - low) * progress) * remaining / (rpe.easy * per_load)
+    )
     while True:
-        long_min = min(
-            remaining / ((rpe.long + others * ratio * rpe.easy) * per_load),
-            typed_cfg.progression.max_long_run_minutes,
-        )
-        if longest_km is not None:  # no run more than the allowed step over the recent longest
-            spike_km = longest_km * (1 + typed_cfg.progression.max_single_run_increase)
-            long_min = min(long_min, spike_km * easy_min_per_km)
+        balanced = remaining / ((rpe.long + others * ratio * rpe.easy) * per_load)
+        long_min = min(max(target, balanced), long_limit, remaining / (rpe.long * per_load))
         easy_load = remaining - long_min * rpe.long * per_load
         easy_min = (
             min(ratio * long_min, easy_load / (others * rpe.easy * per_load)) if others else 0
         )
-        if not others or easy_min >= t.min_easy_minutes:
+        capped = long_min
+        if len(quality) + others + 1 >= typed_cfg.progression.long_share_min_runs:
+            others_minutes = quality_minutes_total + others * easy_min
+            capped = min(long_min, share / (1 - share) * others_minutes)
+        if not others or (
+            easy_min >= t.min_easy_minutes and capped >= min(min_long_minutes, long_limit)
+        ):
+            long_min = capped
             break
-        others -= 1  # fewer, proper easy runs instead of several tiny ones
+        others -= 1  # fewer, proper runs instead of several tiny ones and a "long" run that isn't
     if long_min < t.min_easy_minutes:
         return []
+    # Strides are part of the run's time, not extra on top of the budget.
+    stride_min = t.strides_repeats * (t.stride_s + t.stride_recovery_s) / 60
     easy = [
         build_session(
-            "easy", WeekContext(week_start, round(easy_min), progress, strides=i == 0), zones,
-            typed_cfg,
+            "easy",
+            WeekContext(week_start, round(easy_min - (stride_min if i == 0 else 0)), progress,
+                        strides=i == 0),
+            zones, typed_cfg,
         ).model_copy(update={"reason": "Aerobic maintenance."})
         for i in range(others)
     ]  # fmt: skip
     rest = [*quality, *easy]
     long_minutes = round(long_min)
-    if len(rest) >= 2:  # 2-run weeks are exempt from the share rule
+    if len(rest) + 1 >= typed_cfg.progression.long_share_min_runs:  # few-run weeks are exempt
         share_cap = typed_cfg.progression.max_long_run_share
         others_minutes = sum(session.duration_min or 0 for session in rest)
         long_minutes = max(1, min(long_minutes, int(share_cap / (1 - share_cap) * others_minutes)))
@@ -323,9 +346,10 @@ def generate_continuous_plan_result(
     events: list[Commitment],
     cfg: ConfigNode,
     *,
-    not_before: date | None = None,
+    not_before: date | datetime | None = None,
 ) -> ContinuousPlanResult:
-    """`not_before` is the first day sessions may use (default `today`)."""
+    """`not_before` is the first day sessions may use (default `today`), or the current moment
+    so slots already past today are skipped."""
     typed_cfg = load_scheduling_config(cfg)
     zones = zones_from_vdot(athlete.vdot, typed_cfg.zones)
     baseline = chronic_load(
@@ -379,10 +403,21 @@ def generate_continuous_plan_result(
     ceiling = athlete.max_weekly_load or default_ceiling(
         athlete, zones, fixed_instances, first_monday, baseline, typed_cfg
     )
+    # What you say you can run now lifts what sparse records show (a coach would ask).
+    easy_min_per_km = (zones.easy.min_s_per_km + zones.easy.max_s_per_km) / 2 / 60
+    stated_run_load = (
+        (athlete.weekly_km or 0) * easy_min_per_km * typed_cfg.rpe.easy
+        * typed_cfg.load_factors.run_leg
+    )  # fmt: skip
+    # The long run's floor: your usual run, your stated long run, or the last long run you did;
+    # it grows with the plan, so each re-plan carries on from the long runs you've done.
+    long_floor = max(
+        float(history.typical_easy_duration_min),
+        max(athlete.long_run_km or 0, history.recent_long_run_km or 0) * easy_min_per_km,
+    )
+    longest_known = max(history.longest_recent_run_km or 0, athlete.long_run_km or 0)
     recent_runs: list[tuple[date, float]] = (
-        [(first_monday - timedelta(days=1), history.longest_recent_run_km)]
-        if history.longest_recent_run_km
-        else []
+        [(first_monday - timedelta(days=1), longest_known)] if longest_known else []
     )
     for week_index in range(weeks):
         week_start = first_monday + timedelta(weeks=week_index)
@@ -393,6 +428,8 @@ def generate_continuous_plan_result(
         ]
         cutback = (program_week + 1) % typed_cfg.progression.cutback_every_n_weeks == 0
         growth = typed_cfg.progression.cutback_factor if cutback else 1.0 + max_increase
+        if week_index and not cutback:
+            long_floor *= 1 + max_increase
         # Growth is measured from the last full week, so a cut-back doesn't lower the base.
         target = (
             previous_target
@@ -454,7 +491,9 @@ def generate_continuous_plan_result(
                 week_constraints[day] = merge_constraint(week_constraints.get(day), ramp_constraint)
         all_constraints.update(week_constraints)
 
-        credit_load = sum(constraint.credit_leg_load for constraint in week_constraints.values())
+        # A mid-week re-plan counts what you've already done this week, like a credit.
+        done = history.week_so_far if week_index == 0 else {}
+        credit_load = sum(c.credit_leg_load for c in week_constraints.values()) + sum(done.values())
         climb_target = 0 if minimal_week else athlete.climbing_target_per_week
         non_run_load = estimate_combined_leg_load(
             week_start,
@@ -466,7 +505,8 @@ def generate_continuous_plan_result(
         effective_load = target * ramp_factor
         run_budget = max(0.0, effective_load - non_run_load - credit_load)
         # Football and climbing as entered can fill the whole target; running never drops below
-        # your recent running time (as easy minutes), scaled like the target by ramps and cut-backs.
+        # your recent running (its time as easy minutes, or the load it put on your legs if that
+        # is more), scaled like the target by ramps and cut-backs.
         # ... and never below a couple of short easy runs, so someone back from a break, or
         # whose football fills the week, still has running to build on.
         # The smallest week with that many runs: easy runs of the minimum length, and a long run
@@ -478,11 +518,16 @@ def generate_continuous_plan_result(
         run_floor = (
             0.0
             if minimal_week
-            else max(history.weekly_run_minutes * typed_cfg.rpe.easy, fewest_runs if runs else 0)
-            * typed_cfg.load_factors.run_leg
+            else max(
+                max(history.weekly_run_minutes * typed_cfg.rpe.easy, fewest_runs if runs else 0)
+                * typed_cfg.load_factors.run_leg,
+                history.weekly_run_load,
+                stated_run_load,
+            )
             * ramp_factor
             * (typed_cfg.progression.cutback_factor if cutback else 1.0)
         )
+        run_floor = max(0.0, run_floor - done.get("run", 0.0))
         if run_budget < run_floor:
             run_budget = run_floor
             effective_load = non_run_load + credit_load + run_floor
@@ -515,6 +560,7 @@ def generate_continuous_plan_result(
             week_sessions = _sessions_for_week(
                 week_start, run_budget, athlete.runs_per_week, profile, at_ceiling, zones,
                 typed_cfg, progress, quality_allowed, longest,
+                round(long_floor * (typed_cfg.progression.cutback_factor if cutback else 1)),
             )  # fmt: skip
         week_sessions = within_long_share(
             [within_spike_limit(s, longest, typed_cfg) for s in week_sessions], typed_cfg
@@ -577,7 +623,7 @@ def generate_continuous_plan_result(
         timezone_name=athlete.timezone,
         relaxed_weeks=relaxed_weeks,
         day_constraints=all_constraints,
-        plan_start=not_before or today,
+        plan_start=(not_before.date() if isinstance(not_before, datetime) else not_before) or today,
         exempt_load_weeks=exempt_weeks,
     )
     return ContinuousPlanResult(

@@ -128,8 +128,8 @@ def _load_violations(
         longest = max((s.duration_min or 0 for s in runs if s.kind == "long"), default=0)
         share = cfg.progression.max_long_run_share
         # One minute of slack: durations are whole minutes and are rounded after scaling.
-        # Weeks with two or fewer runs are exempt: the long run can't be a small share there.
-        few_runs = len(runs) <= 2
+        # Weeks with few runs are exempt: the long run can't be a small share there.
+        few_runs = len(runs) < cfg.progression.long_share_min_runs
         if week not in exempt_weeks and not few_runs and total and longest > share * total + 1:
             violations.append(
                 Violation(

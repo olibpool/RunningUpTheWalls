@@ -32,6 +32,8 @@ class AthleteForm(BaseModel):
     climbing_target_per_week: int = Field(ge=0, le=3)
     max_weekly_load: float | None = Field(default=None, gt=0)
     max_hr: int | None = Field(default=None, ge=120, le=230)
+    weekly_km: float | None = Field(default=None, gt=0, le=200)
+    long_run_km: float | None = Field(default=None, gt=0, le=50)
 
 
 class TimeTrialForm(BaseModel):

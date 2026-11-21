@@ -249,7 +249,7 @@ def _week_sessions(
 
     sessions = quality + easy
     if long_minutes:
-        if len(sessions) >= 2:  # 2-run weeks are exempt from the share rule
+        if len(sessions) + 1 >= cfg.progression.long_share_min_runs:  # few-run weeks are exempt
             share_cap = cfg.progression.max_long_run_share
             others = sum(s.duration_min or 0 for s in sessions)
             # Keep the long run within its share of weekly run time, even when volume is low.

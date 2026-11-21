@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta, timezone
 
 from configs import defaults
 
 from runcoach.config import ConfigNode, load_scheduling_config
-from runcoach.domain.models import Athlete, Commitment
+from runcoach.domain.models import Athlete, Commitment, PlannedSession
 from runcoach.engine.continuous import (
     History,
     WeekLoad,
@@ -243,12 +244,13 @@ def test_time_trial_is_added_to_retest_cutback_week() -> None:
 
 
 def test_acr_excludes_acute_week_from_chronic_average_and_holds_target() -> None:
+    # Loads well above the two-short-runs floor, so the floor doesn't lift the held target.
     loads = [
-        WeekLoad(date(2026, 10, 5), 100.0),
-        WeekLoad(date(2026, 10, 12), 100.0),
-        WeekLoad(date(2026, 10, 19), 100.0),
-        WeekLoad(date(2026, 10, 26), 100.0),
-        WeekLoad(date(2026, 11, 2), 160.0),
+        WeekLoad(date(2026, 10, 5), 1000.0),
+        WeekLoad(date(2026, 10, 12), 1000.0),
+        WeekLoad(date(2026, 10, 19), 1000.0),
+        WeekLoad(date(2026, 10, 26), 1000.0),
+        WeekLoad(date(2026, 11, 2), 1600.0),
     ]
     cfg = _config(weeks_ahead=2)
     typed_cfg = load_scheduling_config(cfg)
@@ -331,9 +333,11 @@ def test_week_builder_costs_quality_first_and_keeps_the_long_run_longest() -> No
         assert all(e.duration_min >= typed.templates.min_easy_minutes for e in easy)
         quality = [s for s in sessions if s.kind in {"tempo", "intervals"}]
         run_minutes = sum(s.duration_min or 0 for s in sessions)
+        warm_cool = typed.templates.warmup_min + typed.templates.cooldown_min
         assert all(
-            q.duration_min <= run_minutes * typed.templates.max_quality_share * 1.6 for q in quality
-        )
+            q.duration_min - warm_cool <= run_minutes * typed.templates.max_quality_share
+            for q in quality
+        )  # the hard part stays within its share of running time
     # Tiny budgets give fewer runs rather than several too-short ones.
     small = _sessions_for_week(week, 200, 5, "aerobic", False, zones, typed)
     assert 1 <= len(small) < 5
@@ -414,11 +418,46 @@ def test_running_never_drops_below_recent_running_when_football_fills_the_target
                 weeks[week] = weeks.get(week, 0) + (s.duration_min or 0)
         return weeks
 
-    assert run_minutes(0) == {}  # football and climbing as entered use the whole target
+    # Football and climbing as entered use the whole target, yet a couple of short runs remain.
+    assert len(run_minutes(0)) == 4
     weeks = run_minutes(90)
     # Week 4 of the program is a cut-back; the rest keep (nearly) your 90 minutes of running.
     assert len(weeks) == 4
     assert all(minutes >= 90 * 0.85 for week, minutes in weeks.items() if week != date(2026, 12, 7))
+
+
+def test_low_running_gives_a_real_long_run_and_counts_this_weeks_done_load() -> None:
+    # Football and climbing fill most of the load; ~76 min of running a week, logged hard.
+    football = Commitment(
+        kind="fixed", sport="football", title="Football", weekday=1,
+        start_time="19:30", duration_min=40, rpe=7.5,
+    )  # fmt: skip
+    athlete = _athlete().model_copy(update={"runs_per_week": 4, "climbing_target_per_week": 2})
+    loads = [WeekLoad(date(2026, 10, 26) + timedelta(weeks=n), 590.0) for n in range(3)]
+    history = History(
+        weekly_loads=loads, typical_easy_duration_min=32, weekly_run_minutes=76,
+        weekly_run_load=340, longest_recent_run_km=9.0,
+    )  # fmt: skip
+    cfg = _config(weeks_ahead=3)
+
+    def runs(today: date, h: History) -> list[PlannedSession]:
+        result = generate_continuous_plan_result(athlete, h, today, [football], cfg)
+        assert not result.violations
+        return [s for s in result.sessions if s.sport == "run"]
+
+    planned = runs(date(2026, 11, 16), history)
+    for week in {s.date - timedelta(days=s.date.weekday()) for s in planned}:
+        week_runs = [s for s in planned if s.date - timedelta(days=s.date.weekday()) == week]
+        long_run = next(s for s in week_runs if s.kind == "long")
+        assert long_run.duration_min >= 32  # never shorter than your usual run
+        # The logged running load (340) is kept, not just its minutes at easy effort (228).
+        assert sum(s.leg_load for s in week_runs) >= 340 * 0.95
+    # Re-planned on Wednesday after a run and football: week one plans less from then on.
+    done = replace(history, week_so_far={"run": 100.0, "football": 330.0})
+    wednesday = date(2026, 11, 18)
+    first_week = [s for s in runs(wednesday, history) if s.date < date(2026, 11, 23)]
+    first_week_done = [s for s in runs(wednesday, done) if s.date < date(2026, 11, 23)]
+    assert sum(s.leg_load for s in first_week_done) < sum(s.leg_load for s in first_week) - 100
 
 
 def test_history_ignores_weeks_before_the_first_record(tmp_path) -> None:
@@ -441,3 +480,46 @@ def test_history_ignores_weeks_before_the_first_record(tmp_path) -> None:
     assert known == [date(2026, 11, 2), date(2026, 11, 9)]  # not three weeks of "rest" before
     assert chronic_load(history.weekly_loads, 4) == 180.0
     assert history.weekly_run_minutes == 45.0  # (60 + 30) / 2 known weeks
+
+
+def test_stated_capacity_holds_a_real_long_run_with_easy_runs_around_it() -> None:
+    # Sparse records (~76 min a week) but you say you run 25 km a week and a 10 km long run.
+    athlete = _athlete().model_copy(
+        update={"runs_per_week": 4, "weekly_km": 25.0, "long_run_km": 10.0}
+    )
+    loads = [WeekLoad(date(2026, 10, 26) + timedelta(weeks=n), 400.0) for n in range(3)]
+    history = History(
+        weekly_loads=loads, typical_easy_duration_min=32, weekly_run_minutes=76,
+        longest_recent_run_km=9.0,
+    )  # fmt: skip
+    result = generate_continuous_plan_result(
+        athlete, history, date(2026, 11, 16), [], _config(weeks_ahead=4)
+    )
+    assert not result.violations
+    weeks: dict[date, list[PlannedSession]] = {}
+    for s in (s for s in result.sessions if s.sport == "run"):
+        weeks.setdefault(s.date - timedelta(days=s.date.weekday()), []).append(s)
+    for week, runs in weeks.items():
+        long_run = next(s for s in runs if s.kind == "long")
+        cutback = week == date(2026, 12, 7)
+        assert (long_run.distance_m or 0) >= (7_500 if cutback else 9_500)
+        assert long_run.distance_m <= 11_000  # held near what you said, not grown 10% a week
+        total_m = sum(s.distance_m or 0 for s in runs)
+        assert len(runs) >= 2 and total_m >= (15_000 if cutback else 20_000)
+
+
+def test_a_replan_late_in_the_day_places_nothing_in_the_past() -> None:
+    history = History(
+        weekly_loads=[WeekLoad(date(2026, 10, 26) + timedelta(weeks=n), 400.0) for n in range(3)],
+        typical_easy_duration_min=32,
+    )
+    now = datetime(2026, 11, 18, 19, 50, tzinfo=timezone.utc)
+    result = generate_continuous_plan_result(
+        _athlete(), history, now.date(), [], _config(weeks_ahead=1), not_before=now
+    )
+    assert result.sessions and not result.violations
+    assert all(
+        datetime.combine(s.date, time.fromisoformat(s.start_time or "00:00"), tzinfo=timezone.utc)
+        >= now
+        for s in result.sessions
+    )

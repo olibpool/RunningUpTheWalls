@@ -262,7 +262,7 @@ def _continuous(
         history = history_from_activities(conn, typed, today())
         result = generate_continuous_plan_result(
             athlete, history, today(), db.list_commitments(conn), cfg,
-            not_before=first_open_day(datetime.now(TIMEZONE), typed),
+            not_before=datetime.now(TIMEZONE),
         )  # fmt: skip
     except (RuntimeError, ValueError) as exc:
         return None, [f"{exc}. Connect Garmin in Settings, or upload a few recent runs."]

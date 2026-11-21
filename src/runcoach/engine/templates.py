@@ -190,11 +190,11 @@ def within_spike_limit[S: PlannedSession](
 
 def within_long_share[S: PlannedSession](sessions: list[S], cfg: SchedulingConfig) -> list[S]:
     """Shorten the long run to its share of the week's run time. Run after anything else that
-    shortens runs (such as the spike limit), which raises the long run's share; weeks with two
+    shortens runs (such as the spike limit), which raises the long run's share; weeks with few
     runs are exempt."""
     runs = [s for s in sessions if s.sport == "run"]
     long = next((s for s in runs if s.kind == "long" and s.duration_min), None)
-    if long is None or len(runs) < 3:
+    if long is None or len(runs) < cfg.progression.long_share_min_runs:
         return sessions
     share = cfg.progression.max_long_run_share
     cap = int(share / (1 - share) * sum(s.duration_min or 0 for s in runs if s is not long))

@@ -196,6 +196,8 @@ def _ingest(args: argparse.Namespace) -> int:
 
 def _sync(_args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    # httpx logs each request URL, and the calendar's is a secret.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     conn = db.connect()
     try:
         report = run_sync(conn, load_config(), datetime.now(timezone.utc))
