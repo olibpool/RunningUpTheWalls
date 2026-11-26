@@ -1,0 +1,20 @@
+{% macro steps_list(steps) %}
+<ol class="steps">
+  {% for step in steps %}
+  <li class="step-{{ step.kind }}">
+    {% if step.kind == "repeat" %}
+      <span class="repeat-head">{{ step.repeats }} ×</span>
+      {{ steps_list(step.children) }}
+    {% else %}
+      <span class="step-kind">{{ step.kind }}</span>
+      <span class="step-body">
+        {% if step.duration_s %}{{ step.duration_s | clock }}{% endif %}
+        {% if step.distance_m %}{{ step.distance_m | km }}{% endif %}
+        {% set p = step | step_pace %}{% if p %}at <strong>{{ p }}</strong>{% endif %}
+        {% if step.rpe %}· RPE {{ step.rpe }}{% endif %}
+      </span>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% endmacro %}

@@ -1,7 +1,9 @@
+# Fractions of VDOT; checked against Daniels' Running Formula VDOT tables (VDOT 50: E 5:00-5:38,
+# M 4:30, T 4:15, I 3:55, R 3:41 /km). T is about the pace held for an hour's race.
 [zones]
 easy = [0.62, 0.72]
-marathon = 0.80
-threshold = 0.86
+marathon = 0.82
+threshold = 0.88
 interval = 0.97
 repetition = 1.05
 
@@ -12,13 +14,21 @@ strides = 3.5
 long = 4.0
 tempo = 6.0
 intervals = 8.0
+long_mp = 5.0                 # long run finishing at marathon pace
+race = 9.0
 
 [progression]
 max_weekly_increase = 0.10
 cutback_every_n_weeks = 4
 cutback_factor = 0.80
 max_long_run_share = 0.35
-max_long_run_minutes = 195
+long_share_min_runs = 4         # fewer runs a week are exempt: with 3, easy runs shorter than the long run
+                                # already make it about 40% of the week, so a 35% cap flattens it
+max_long_run_minutes = 180      # 3 h: longer adds injury risk faster than fitness
+max_weekly_km_per_run = 13      # peak km a week is at most this x runs a week: easy runs stay easy
+marathon_max_long_run_share = 0.42  # marathon long runs need a bigger share (29-32 km in most plans)
+max_single_run_increase = 0.10  # no run >10% longer than the longest of the last 30 days (BJSM 2025)
+spike_window_days = 30
 min_rest_days_per_week = 1
 
 [blocks]
@@ -44,6 +54,44 @@ marathon = [0.85, 0.7, 0.5]
 half = 70
 marathon = 90
 
+# Smallest peak weekly volume a goal needs; below it the goal is infeasible. Starting points
+# from the peak weeks of common novice plans (e.g. Higdon, Daniels' first plans); tune from use.
+[min_peak_weekly_km]
+5k = 15.0
+10k = 20.0
+half = 30.0
+marathon = 45.0
+
+[templates]
+warmup_min = 10
+cooldown_min = 10
+tempo_work_min = [15, 40]       # threshold work, grows across build and peak
+tempo_continuous_max_min = 20   # longer threshold work is split into cruise intervals (Daniels)
+cruise_rep_max_min = 10
+cruise_recovery_s_per_5min = 60 # jog 1 min per 5 min of threshold work
+tempo_max_share_of_week_km = 0.10    # Daniels: T work at most 10% of weekly volume ...
+interval_max_share_of_week_km = 0.08 # ... and I work at most 8% (never below the shortest session)
+long_mp_finish_share = 0.3      # marathon peak: every other long run ends at marathon pace
+long_mp_finish_max_min = 40
+interval_repeats = [3, 6]
+interval_rep_min = [3, 5]
+strides_repeats = 6
+stride_s = 20
+stride_recovery_s = 40
+recovery_share_of_easy = 0.6
+long_share = [0.30, 0.34]       # long run share of weekly km, grows across build and peak
+easy_max_share_of_long = 0.8    # an easy run is at most this share of the long run
+marathon_long_share = [0.34, 0.40]
+min_easy_minutes = 20
+max_quality_share = 0.25       # cap on one quality session's share of weekly run time
+
+[race]
+start_time = "09:00"
+warmup_min = 10               # half and marathon start from a jog; shorter races from this warm-up
+easy_days_before = 2          # no quality or long run in the last two days
+week_easy_max_min = 30        # race-week runs are shakeouts
+week_max_runs = 3             # runs before the race in race week
+
 [load_factors]
 run_leg = 1.0
 football_leg = 1.1
@@ -64,8 +112,10 @@ buffer_minutes = 30
 
 [scheduler]
 min_hours_between_hard_leg = 48
+max_hard_leg_days_per_week = 3  # long run + quality + football: football counts as a hard session
 relaxed_hours_between_hard_leg = 24
 min_hours_between_limit_climbs = 48
+max_runs_per_day = 1           # doubles are for elites; a squeezed week drops a run instead
 min_hours_same_day_gap = 6
 max_run_volume_reduction = 0.40
 quality_gap_target_hours = 72
@@ -73,6 +123,8 @@ long_run_weekday_cost = 5
 limit_climb_before_long_cost = 3
 hard_run_climb_same_day_cost = 4
 same_day_climb_cost = 2
+same_day_session_cost = 3
+adjacent_run_day_cost = 1
 climbing_spacing_days = 2
 drop_cost_easy = 100
 drop_cost_climb = 200
@@ -86,6 +138,7 @@ block = ["holiday", "annual leave", "ooo"]
 
 [continuous]
 weekly_increase = 0.05
+min_runs_per_week = 2         # never fewer short easy runs than this (or than you asked for)
 weeks_ahead = 4
 replan_interval_days = 7
 chronic_load_weeks = 4
@@ -96,7 +149,9 @@ retest_distance_m = 5000
 acr_low = 0.8
 acr_high = 1.3
 acr_hold = 1.5
-quality_load_share = 0.2
+# With no ceiling set, weekly load stops growing at max_weekly_km_per_run x runs of mostly easy
+# running at this average effort, plus a usual week's football and climbing.
+ceiling_run_rpe = 3.5
 
 [penalty]
 day_of_max_rpe = 4.0
@@ -133,3 +188,112 @@ estimated_5k_duration_min = 25
 [readiness]
 rhr_window_days = 28
 rhr_min_samples = 7
+short_sleep_h = 6.0           # one night under this suggests an easier day
+low_sleep_avg_h = 6.5         # ... as does this average over the last few nights
+sleep_avg_nights = 3
+
+[fuel]
+long_run_min = 75             # carbs during runs from this long
+carbs_g_per_h = [30, 60]
+carb_load_days = { "half" = 1, "marathon" = 2 }
+carb_load_g_per_kg = [7, 10]
+first_km_slower_s = [5, 10]   # race pacing: start this much slower than target per km
+
+# Fitness from training: %HRR approximates %VO2 reserve (Swain & Leutholtz), applied to
+# Daniels' oxygen cost of running. Easy runs only; heat and hills bias it low.
+[fitness]
+window_days = 42
+min_runs = 4
+min_minutes = 20
+hrr_range = [0.5, 0.9]
+retest_gap_vdot = 2.0
+trend_weeks = 12
+
+# ---- Phase 2: ingestion and adaptation (unsourced starting points; tune from use) ----
+
+[default_rpe]                 # used when an activity has no RPE and matches no session
+run = 4.0
+climb = 5.5
+football = 6.5
+other = 4.0
+
+[matching]
+max_score = 0.6               # day offset (0 or 0.5) + relative duration difference
+
+[illness]
+niggle_days = 3
+ill_days = 14
+fever_rest_days = 3           # fever or chest symptoms ("below the neck"): no running at all
+return_ramp = [0.7, 0.85]     # weekly multipliers on run load after the window, then 100%
+
+[retest]
+quality_runs = 3
+faster_by = 0.03              # each run this much faster than target, at or below planned RPE
+
+[heat_pace_penalty_pct]       # [apparent_temp_c, slowdown_fraction]
+points = [[15, 0.00], [20, 0.01], [25, 0.03], [28, 0.05], [32, 0.08], [35, 0.12]]
+quality_to_easy_above_c = 32
+suggest_rest_or_indoor_above_c = 35
+days_ahead = 3
+
+[weather]
+enabled = false               # set latitude and longitude in config/local.toml, then enable
+latitude = 0.0
+longitude = 0.0
+timeout_s = 10.0
+
+[inbox]
+path = "~/runcoach-inbox"
+
+[gcal]
+ics_url = ""                  # secret: set RUNCOACH_GCAL__ICS_URL or config/local.toml; never logged
+days_back = 7
+days_ahead = 28
+reschedule_days = 14
+
+[storage]
+db_path = "runcoach.db"       # relative to the project root, or absolute (e.g. /var/lib/runcoach/runcoach.db)
+backup_dir = "backups"
+backup_keep = 14
+
+[export]
+backend = "none"              # none | garmin (push runs to Garmin Connect each sync) | fit (download only)
+push_horizon_days = 7         # watches hold few workouts; push this many days ahead
+
+[habits]                      # learned from your activities: plans prefer your usual days and times
+window_weeks = 8
+min_sessions = 4              # a sport needs this many recent sessions before it has habits
+weekday_share = 0.4           # a weekday is usual when the sport happened on it in this share of weeks
+round_minutes = 15
+off_day_cost = 1.5            # scheduler soft cost for an unusual day (same_day_session_cost is 3)
+per_hour_cost = 0.25          # and per hour away from the usual start, up to max_hours
+max_hours = 6
+
+[progress]
+streak_per_week = 3           # activities in a week that keep your streak going
+fastest_min_km = 5.0          # a run counts for "fastest pace" from this distance
+grid_weeks = 16               # weeks shown in the consistency grid
+upcoming_days = 7             # days shown in the "coming up" strip on Today
+typical_window_days = 56      # recorded sessions this recent show how long a weekly commitment really is
+typical_min_samples = 2
+typical_tolerance = 0.2       # offer to correct a commitment more than this far from its recordings
+
+[sync]
+auto_minutes = 30             # the web app syncs in the background this often, and when opened after
+                              # this long; 0 turns it off (then use deploy/sync.timer or `runcoach sync`)
+
+[garmin]
+enabled = false               # pull activities and resting HR; log in first with `runcoach garmin login`
+token_dir = "~/.config/runcoach/garmin"  # session token only; the password is never stored
+pull_days_back = 42           # each sync looks this far back for activities not yet stored; covers the
+                              # continuous plan's chronic-load weeks so a first sync has enough history
+health_days_back = 7          # resting HR days copied into check-ins (your own entries win)
+workout_name_max = 32         # shortcut: Garmin's real limit is unconfirmed; check after the spike
+
+[garmin.sport_keywords]        # Garmin files climbing and football as "other"; its type or your activity name decides
+climb = ["climb", "boulder"]
+football = ["football", "footy", "soccer", "5 a side", "five a side"]
+
+[compliance]
+pace_tolerance_s_per_km = 5   # a lap this close to its pace range still counts as on target
+on_target_share = 0.75        # share of targeted steps on target for the workout to count as hit

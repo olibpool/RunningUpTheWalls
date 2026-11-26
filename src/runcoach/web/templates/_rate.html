@@ -1,0 +1,19 @@
+{% from "_icons.html" import icon %}
+{# One activity to rate: picking a value posts it and removes the row. #}
+<li id="rate-{{ a.id }}" class="rate-row sport-{{ a.sport }}">
+  <div class="rate-what">
+    <span class="sport-icon">{{ icon(a.sport) }}</span>
+    <span><strong>{{ a.started_at | local_time }}</strong>
+      <span class="muted">{{ a.duration_s // 60 }} min{% if a.distance_m %} · {{ a.distance_m | km }}{% endif %}</span></span>
+  </div>
+  <form method="post" action="/activities/{{ a.id }}/rpe" hx-post="/activities/{{ a.id }}/rpe"
+        hx-trigger="change" hx-sync="this:replace" hx-target="#rate-{{ a.id }}" hx-swap="outerHTML">
+    <fieldset class="rpe">
+      <legend class="sr-only">How hard did it feel, 1 to 10</legend>
+      <div class="segmented">
+        {% for n in range(1, 11) %}<label><input type="radio" name="rpe" value="{{ n }}"><span>{{ n }}</span></label>{% endfor %}
+      </div>
+    </fieldset>
+    <noscript><button type="submit" class="small">Save</button></noscript>
+  </form>
+</li>

@@ -5,9 +5,11 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from runcoach.config import SchedulingConfig
-from runcoach.domain.models import PlannedSession, Step
+from runcoach.domain.models import PlannedSession
 from runcoach.engine.events import DayConstraint
+from runcoach.engine.habits import Habit
 from runcoach.engine.load import session_load
+from runcoach.engine.templates import scale_session
 
 
 @dataclass(frozen=True)
@@ -90,7 +92,9 @@ class _Attempt:
 
 
 _QUALITY_KINDS = {"tempo", "intervals", "time_trial"}
-_HARD_LEG_KINDS = {"football", "long", "tempo", "intervals", "time_trial"}
+_HARD_LEG_KINDS = {"football", "long", "tempo", "intervals", "time_trial", "race"}
+_VOLUME_RUN_KINDS = {"easy", "recovery", "long"}
+_PROTECTED_RUN_KINDS = {"time_trial", "race"}  # distance efforts are never shortened
 _CLIMB_KINDS = ("climb_power", "climb_volume", "climb_technique")
 
 
@@ -172,7 +176,9 @@ def _fixed_placement(instance: FixedInstance, tz: ZoneInfo) -> _Placement:
         fixed=instance,
         start=start,
         end=start + timedelta(minutes=instance.duration_min),
-        kind=instance.kind if instance.sport == "climb" else instance.sport,
+        kind=instance.kind
+        if instance.sport == "climb" or instance.kind == "race"
+        else instance.sport,
         sport=instance.sport,
         title=instance.title,
     )
@@ -200,6 +206,12 @@ def _can_place(
             minutes=buffer_minutes
         ) and candidate.end > busy_start - timedelta(minutes=buffer_minutes):
             return False
+
+    same_day_runs = sum(
+        p.sport == "run" and p.start.date() == candidate.start.date() for p in placements
+    )
+    if candidate.sport == "run" and same_day_runs >= cfg.scheduler.max_runs_per_day:
+        return False
 
     for other in placements:
         if candidate.start.date() == other.start.date():
@@ -260,19 +272,31 @@ def _can_place(
                     return False
 
     occupied_days = {placement.start.date() for placement in placements}
-    if candidate.start.date() not in occupied_days and len(occupied_days) >= 6:
+    max_days = 7 - cfg.progression.min_rest_days_per_week
+    if candidate.start.date() not in occupied_days and len(occupied_days) >= max_days:
         return False
     return True
 
 
-def _soft_cost(
+def _day_cost(
     candidate: _Placement,
     placements: list[_Placement],
     cfg: SchedulingConfig,
 ) -> float:
+    """The part of the soft cost that depends only on the candidate's day."""
     cost = 0.0
     if candidate.kind == "long" and candidate.start.weekday() < 5:
         cost += cfg.scheduler.long_run_weekday_cost
+    # Prefer separate days, and spread runs through the week rather than bunching them.
+    day = candidate.start.date()
+    for item in placements:
+        if item.is_fixed:
+            continue
+        gap_days = abs((item.start.date() - day).days)
+        if gap_days == 0:
+            cost += cfg.scheduler.same_day_session_cost
+        elif gap_days == 1 and candidate.sport == "run" and item.sport == "run":
+            cost += cfg.scheduler.adjacent_run_day_cost
 
     long_runs = [item for item in placements if item.kind == "long"]
     if candidate.kind == "climb_power" and any(
@@ -305,6 +329,15 @@ def _soft_cost(
                     days=1 + cfg.scheduler.climbing_spacing_days
                 )
                 cost += abs((candidate.start.date() - preferred_day).days)
+    return cost
+
+
+def _soft_cost(
+    candidate: _Placement,
+    placements: list[_Placement],
+    cfg: SchedulingConfig,
+) -> float:
+    cost = _day_cost(candidate, placements, cfg)
     if candidate.kind in _QUALITY_KINDS:
         target = cfg.scheduler.quality_gap_target_hours
         for other in placements:
@@ -361,26 +394,29 @@ def _candidate_starts(
             gap = buffer if other.is_fixed else same_day_gap
             window_candidates.add(other.end + gap)
             window_candidates.add(other.start - duration - gap)
+        # Spacing offsets only matter to a session that the spacing rule applies to.
+        hard_leg = session.sport == "football" or session.kind in _HARD_LEG_KINDS
+        limit_climb = session.kind == "climb_power"
         for other in placements:
-            if _is_hard_leg(other):
+            if hard_leg and _is_hard_leg(other):
                 window_candidates.add(other.start + timedelta(hours=minimum_hard_hours))
                 window_candidates.add(other.start - timedelta(hours=minimum_hard_hours))
-            if _is_limit_climb(other):
+            if limit_climb and _is_limit_climb(other):
                 separation = timedelta(hours=cfg.scheduler.min_hours_between_limit_climbs)
                 window_candidates.add(other.start + separation)
                 window_candidates.add(other.start - separation)
         for previous in prior_tail:
-            if previous.start_time is None:
+            if previous.start_time is None or not (hard_leg or limit_climb):
                 continue
             previous_start = datetime.combine(
                 previous.date,
                 time.fromisoformat(previous.start_time),
                 tzinfo=tz,
             )
-            if previous.kind in _HARD_LEG_KINDS or previous.sport == "football":
+            if hard_leg and (previous.kind in _HARD_LEG_KINDS or previous.sport == "football"):
                 separation = timedelta(hours=minimum_hard_hours)
                 window_candidates.add(previous_start + separation)
-            if previous.kind == "climb_power":
+            if limit_climb and previous.kind == "climb_power":
                 separation = timedelta(hours=cfg.scheduler.min_hours_between_limit_climbs)
                 window_candidates.add(previous_start + separation)
 
@@ -421,6 +457,11 @@ def _candidate_reason(
     return "; ".join(reasons)
 
 
+def _first_day(not_before: date | datetime) -> date:
+    """`not_before` is a first day, or a moment (now) whose earlier slots are already past."""
+    return not_before.date() if isinstance(not_before, datetime) else not_before
+
+
 def _make_candidates(
     session: PlannedSession,
     week_start: date,
@@ -430,13 +471,15 @@ def _make_candidates(
     cfg: SchedulingConfig,
     minimum_hard_hours: int,
     tz: ZoneInfo,
-    not_before: date | None,
+    not_before: date | datetime | None,
     day_constraints: dict[date, DayConstraint],
+    habits: dict[str, Habit],
 ) -> list[_Candidate]:
+    habit = habits.get(session.sport)
     candidates: list[_Candidate] = []
     for offset in range(7):
         day = week_start + timedelta(days=offset)
-        if not_before is not None and day < not_before:
+        if not_before is not None and day < _first_day(not_before):
             continue
         windows = cfg.availability.weekend if day.weekday() >= 5 else cfg.availability.weekday
         starts = _candidate_starts(
@@ -450,7 +493,12 @@ def _make_candidates(
             minimum_hard_hours,
             tz,
         )
+        if habit is not None:  # when you usually do it, even outside the availability windows
+            usual = datetime.combine(day, time.fromisoformat(habit.start_time), tzinfo=tz)
+            starts = sorted({*starts, usual})
         for start in starts:
+            if isinstance(not_before, datetime) and start < not_before:
+                continue  # already past
             placement = _Placement(
                 session=session,
                 fixed=None,
@@ -498,7 +546,7 @@ def _make_candidates(
                 cfg.availability.buffer_minutes,
             ):
                 continue
-            cost = _soft_cost(placement, placements, cfg)
+            cost = _soft_cost(placement, placements, cfg) + _habit_cost(placement, habit, cfg)
             preference = 0
             if placement.kind == "long" and day.weekday() != 6:
                 preference += 1
@@ -518,6 +566,64 @@ def _make_candidates(
     )
 
 
+def _habit_cost(placement: _Placement, habit: Habit | None, cfg: SchedulingConfig) -> float:
+    """Soft cost of a slot away from when you usually do this sport. Never negative, so the
+    search's lower bound (which ignores habits) stays valid."""
+    if habit is None:
+        return 0.0
+    h = cfg.habits
+    usual = time.fromisoformat(habit.start_time)
+    start = placement.start.time()
+    hours = abs((start.hour * 60 + start.minute) - (usual.hour * 60 + usual.minute)) / 60
+    off_day = bool(habit.weekdays) and placement.start.weekday() not in habit.weekdays
+    return (h.off_day_cost if off_day else 0.0) + min(hours, h.max_hours) * h.per_hour_cost
+
+
+def _cost_bound(
+    remaining: list[PlannedSession],
+    placements: list[_Placement],
+    soft_cost: float,
+    week_days: list[datetime],
+    cfg: SchedulingConfig,
+) -> float:
+    """Lower bound on the soft cost of any schedule that places every remaining session.
+
+    Day costs only grow as placements are added, so each session costs at least its cheapest
+    day now. At most one session per day without a flexible session (fixed-only or, within
+    the training-day cap, empty) escapes the same-day cost; the rest pay it.
+    """
+    occupied = {placement.start.date() for placement in placements}
+    shared = {placement.start.date() for placement in placements if not placement.is_fixed}
+    max_days = 7 - cfg.progression.min_rest_days_per_week
+    days = [day for day in week_days if len(occupied) < max_days or day.date() in occupied]
+    empty = sum(day.date() not in occupied for day in days)
+    alone_slots = sum(day.date() not in shared for day in days) - empty
+    alone_slots += min(empty, max(0, max_days - len(occupied)))
+    inf = float("inf")
+    cheapest: dict[tuple[str, str], tuple[float, float]] = {}
+    savings: list[float] = []
+    for session in remaining:
+        key = (session.kind, session.sport)
+        if key not in cheapest:
+            alone, together = inf, inf
+            for day in days:
+                placement = _Placement(None, None, day, day, session.kind, session.sport, "")
+                cost = _day_cost(placement, placements, cfg)
+                if day.date() in shared:
+                    together = min(together, cost)
+                else:
+                    alone = min(alone, cost)
+            together = min(together, alone + cfg.scheduler.same_day_session_cost)
+            if together == inf:
+                return inf
+            cheapest[key] = (alone, together)
+        alone, together = cheapest[key]
+        soft_cost += together
+        savings.append(together - alone)
+    savings.sort(reverse=True)
+    return soft_cost - sum(saving for saving in savings[:alone_slots] if saving > 0)
+
+
 def _attempt_schedule(
     sessions: list[PlannedSession],
     fixed_placements: list[_Placement],
@@ -527,10 +633,16 @@ def _attempt_schedule(
     minimum_hard_hours: int,
     week_start: date,
     tz: ZoneInfo,
-    not_before: date | None,
+    not_before: date | datetime | None,
     day_constraints: dict[date, DayConstraint],
+    habits: dict[str, Habit],
 ) -> _Attempt:
     best: _Attempt | None = None
+    week_days = [
+        datetime.combine(week_start + timedelta(days=offset), time(), tzinfo=tz)
+        for offset in range(7)
+        if not_before is None or week_start + timedelta(days=offset) >= _first_day(not_before)
+    ]
 
     def search(
         index: int,
@@ -546,12 +658,16 @@ def _attempt_schedule(
                 return
             if int(missing_long) == best.objective[0] and len(dropped) > best.objective[1]:
                 return
-            if (
-                int(missing_long) == best.objective[0]
-                and len(dropped) == best.objective[1]
-                and drop_cost + soft_cost > best.objective[2] + best.objective[3]
-            ):
-                return
+            if int(missing_long) == best.objective[0] and len(dropped) == best.objective[1]:
+                limit = best.objective[2] + best.objective[3]
+                # The tolerance keeps float noise in the bound from pruning an exact tie.
+                if drop_cost + soft_cost > limit or (
+                    index < len(sessions)
+                    and drop_cost
+                    + _cost_bound(sessions[index:], placements, soft_cost, week_days, cfg)
+                    > limit + 1e-9
+                ):
+                    return
 
         if index == len(sessions):
             objective = (int(missing_long), len(dropped), float(drop_cost), soft_cost)
@@ -571,6 +687,7 @@ def _attempt_schedule(
             tz,
             not_before,
             day_constraints,
+            habits,
         )
         for candidate in candidates:
             search(
@@ -612,6 +729,8 @@ def _fixed_conflict_warnings(
         for event in busy:
             event_start = event.start.astimezone(fixed.start.tzinfo)
             event_end = event.end.astimezone(fixed.start.tzinfo)
+            if event_start <= fixed.start and event_end >= fixed.end:
+                continue  # an event spanning the commitment is its own calendar entry
             if fixed.start < event_end + buffer and fixed.end > event_start - buffer:
                 warnings.append(
                     f"Fixed commitment {fixed.title} conflicts with busy event {event.title}; "
@@ -619,7 +738,8 @@ def _fixed_conflict_warnings(
                 )
     for index, fixed in enumerate(fixed_placements):
         constraint = day_constraints.get(fixed.start.date())
-        if constraint is not None and constraint.max_intensity != "normal":
+        # A race sits on a day blocked for everything else, by design.
+        if constraint is not None and constraint.max_intensity != "normal" and fixed.kind != "race":
             warnings.append(
                 f"Fixed commitment {fixed.title} remains on a "
                 f"{constraint.max_intensity}-intensity day: {constraint.reason}."
@@ -669,6 +789,17 @@ def _fixed_conflict_warnings(
     return warnings
 
 
+def first_open_day(now: datetime, cfg: SchedulingConfig) -> date:
+    """The first day a new plan can use: today, unless its last availability window has closed
+    (too late for even a short session), so nothing lands in the past."""
+    windows = cfg.availability.weekend if now.weekday() >= 5 else cfg.availability.weekday
+    last_end = max((time.fromisoformat(end) for _, end in windows), default=time(23, 59))
+    latest = datetime.combine(now.date(), last_end, tzinfo=now.tzinfo) - timedelta(
+        minutes=cfg.templates.min_easy_minutes
+    )
+    return now.date() if now < latest else now.date() + timedelta(days=1)
+
+
 def schedule_week(
     week_start: date,
     unplaced: list[PlannedSession],
@@ -679,10 +810,14 @@ def schedule_week(
     cfg: SchedulingConfig,
     *,
     timezone_name: str = "Europe/London",
-    not_before: date | None = None,
+    not_before: date | datetime | None = None,
     day_constraints: dict[date, DayConstraint] | None = None,
+    habits: dict[str, Habit] | None = None,
 ) -> ScheduleResult:
-    """Place one week's sessions deterministically while enforcing hard scheduling constraints."""
+    """Place one week's sessions deterministically while enforcing hard scheduling constraints.
+
+    `fixed` may hold commitments outside the week: the last few days before it count as recent
+    history, so Monday's long run is spaced from Sunday's football."""
     if week_start.weekday() != 0:
         raise ValueError("week_start must be a Monday")
     if any(instance.duration_min <= 0 for instance in fixed):
@@ -701,6 +836,20 @@ def schedule_week(
         if week_start <= instance.date < week_start + timedelta(days=7)
     ]
     fixed_placements.sort(key=lambda item: item.start)
+    # As far back as the longest spacing rule reaches.
+    spacing = max(
+        cfg.scheduler.min_hours_between_hard_leg, cfg.scheduler.min_hours_between_limit_climbs
+    )
+    lookback_days = -(-spacing // 24)
+    recent_fixed = [
+        PlannedSession(
+            date=i.date, start_time=i.start_time, title=i.title, duration_min=i.duration_min,
+            sport="football" if i.sport == "football" else "other", kind=i.kind,
+        )
+        for i in fixed
+        if week_start - timedelta(days=lookback_days) <= i.date < week_start
+    ]  # fmt: skip
+    prior_tail = [*prior_tail, *recent_fixed]
     week_busy = [
         event
         for event in busy
@@ -717,6 +866,7 @@ def schedule_week(
         tz,
         not_before,
         constraints,
+        habits or {},
     )
     chosen = strict
     relaxed = False
@@ -732,6 +882,7 @@ def schedule_week(
             tz,
             not_before,
             constraints,
+            habits or {},
         )
         if relaxed_attempt.objective < strict.objective:
             chosen = relaxed_attempt
@@ -791,20 +942,7 @@ def schedule_week(
     return ScheduleResult(placed=placed, dropped=dropped, warnings=warnings, relaxed=relaxed)
 
 
-def _scale_step(step: Step, factor: float) -> Step:
-    updates: dict[str, object] = {
-        "duration_s": max(1, round(step.duration_s * factor))
-        if step.duration_s is not None
-        else None,
-        "distance_m": max(1, round(step.distance_m * factor))
-        if step.distance_m is not None
-        else None,
-        "children": [_scale_step(child, factor) for child in step.children],
-    }
-    return step.model_copy(update=updates)
-
-
-def _fixed_leg_load(instance: FixedInstance, cfg: SchedulingConfig) -> float:
+def fixed_leg_load(instance: FixedInstance, cfg: SchedulingConfig) -> float:
     if instance.sport not in {"run", "football", "climb", "rest"} or instance.rpe is None:
         return 0.0
     return session_load(
@@ -825,7 +963,7 @@ def estimate_combined_leg_load(
 ) -> float:
     combined_sessions = _climbing_sessions(week_start, sessions, climb_target, cfg)
     return sum(session.leg_load for session in combined_sessions) + sum(
-        _fixed_leg_load(instance, cfg) for instance in fixed
+        fixed_leg_load(instance, cfg) for instance in fixed
     )
 
 
@@ -862,61 +1000,63 @@ def compose_week(
     allowed_load = previous_week_leg_load * growth * ramp_factor
     non_run_load = (
         sum(session.leg_load for session in combined_sessions if session.sport != "run")
-        + sum(_fixed_leg_load(instance, cfg) for instance in fixed)
+        + sum(fixed_leg_load(instance, cfg) for instance in fixed)
         + credited_leg_load
     )
     run_load = sum(session.leg_load for session in combined_sessions if session.sport == "run")
-    protected_run_load = sum(
-        session.leg_load
-        for session in combined_sessions
-        if session.sport == "run" and session.kind == "time_trial"
-    )
-    scalable_run_load = run_load - protected_run_load
     available_run_load = max(0.0, allowed_load - non_run_load)
     reduction_floor = 1.0 - cfg.scheduler.max_run_volume_reduction
-    factor = 1.0
     warnings: list[str] = []
-    if run_load > available_run_load:
-        remaining_for_scalable = max(0.0, available_run_load - protected_run_load)
-        required_factor = (
-            remaining_for_scalable / scalable_run_load if scalable_run_load > 0 else 1.0
-        )
-        factor = max(reduction_floor, required_factor)
-        if protected_run_load + scalable_run_load * factor > available_run_load:
-            warnings.append(
-                "Combined leg-load cap remains exceeded after the maximum run-volume reduction."
-            )
 
-    scaled_sessions: list[PlannedSession] = []
-    for session in combined_sessions:
-        if session.sport != "run" or session.kind == "time_trial" or factor == 1.0:
-            scaled_sessions.append(session)
-            continue
-        duration = (
-            max(1, int(session.duration_min * factor)) if session.duration_min is not None else None
+    def scalable(session: PlannedSession) -> bool:
+        return session.sport == "run" and session.kind not in _PROTECTED_RUN_KINDS
+
+    def trimmed(volume: float, quality: float) -> list[PlannedSession]:
+        return [
+            scale_session(s, volume if s.kind in _VOLUME_RUN_KINDS else quality)
+            if scalable(s)
+            else s
+            for s in combined_sessions
+        ]
+
+    def run_load_of(sessions: list[PlannedSession]) -> float:
+        return sum(s.leg_load for s in sessions if s.sport == "run")
+
+    # A coach trims easy and long running first and cuts quality reps only if that isn't enough.
+    # Whole minutes and whole reps make each step approximate, hence the few passes.
+    volume_factor = quality_factor = 1.0
+    scaled_sessions = combined_sessions
+    for _ in range(12):
+        over = run_load_of(scaled_sessions) - available_run_load
+        if over <= 1e-6:
+            break
+        tier = _VOLUME_RUN_KINDS if volume_factor > reduction_floor else None
+        if tier is None and quality_factor <= reduction_floor:
+            break
+        pool = sum(
+            s.leg_load
+            for s in scaled_sessions
+            if scalable(s) and ((s.kind in _VOLUME_RUN_KINDS) == (tier is not None))
         )
-        distance = (
-            max(1, round(session.distance_m * factor)) if session.distance_m is not None else None
+        shrink = max(0.0, pool - over) / pool if pool else 0.0
+        if tier is not None:
+            volume_factor = max(reduction_floor, volume_factor * shrink)
+        else:
+            quality_factor = max(reduction_floor, quality_factor * shrink)
+        scaled_sessions = trimmed(volume_factor, quality_factor)
+    if run_load_of(scaled_sessions) > available_run_load + 1e-6 and run_load > available_run_load:
+        warnings.append(
+            "Combined leg-load cap remains exceeded after the maximum run-volume reduction."
         )
-        load_factor = (
-            duration / session.duration_min
-            if duration is not None and session.duration_min is not None
-            else factor
-        )
-        scaled_sessions.append(
-            session.model_copy(
-                update={
-                    "duration_min": duration,
-                    "distance_m": distance,
-                    "steps": [_scale_step(step, factor) for step in session.steps],
-                    "leg_load": session.leg_load * load_factor,
-                    "reason": (
-                        f"{session.reason}; run volume reduced to {factor:.0%} "
-                        "to respect the combined leg-load ceiling."
-                    ).strip("; "),
-                }
-            )
-        )
+    kept = run_load_of(scaled_sessions) / run_load if run_load else 1.0
+    if round(kept * 100) < 100:
+        note = f"run volume reduced to {kept:.0%} to respect the combined leg-load ceiling."
+        scaled_sessions = [
+            s.model_copy(update={"reason": f"{s.reason}; {note}".strip("; ")})
+            if s is not original
+            else s
+            for s, original in zip(scaled_sessions, combined_sessions)
+        ]
 
     actual_load = non_run_load + sum(
         session.leg_load for session in scaled_sessions if session.sport == "run"

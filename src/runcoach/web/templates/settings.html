@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<header class="page-head"><p class="eyebrow">You and your data</p><h1>Settings</h1></header>
+{% include "_messages.html" %}
+
+{% if retest %}
+<div class="banner warning" role="status">
+  <p>{{ retest }}</p>
+  <form method="post" action="/settings/retest/dismiss"><button type="submit" class="secondary">Dismiss</button></form>
+</div>
+{% endif %}
+
+<div class="grid-2">
+<section class="panel" aria-labelledby="garmin-title">
+  <h2 id="garmin-title">Garmin Connect</h2>
+  {% if garmin_pending %}
+  <p>Garmin sent you a one-time code. Enter it to finish connecting.</p>
+  <form method="post" action="/garmin/code" class="stack">
+    <label>Code <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="\s*\d{4,8}\s*" required autofocus></label>
+    <div class="actions"><button type="submit">Connect</button></div>
+  </form>
+  {% elif garmin_connected %}
+  <p><span class="pill good">Connected</span>{% if not typed.garmin.enabled %} <span class="pill warn">Pull is off below</span>{% endif %}</p>
+  <p class="muted">Activities, resting HR and sleep come in by themselves{% if typed.sync.auto_minutes %} every {{ typed.sync.auto_minutes }} minutes and whenever you open the app{% endif %}.{% if typed.export.backend == "garmin" %} Your next {{ typed.export.push_horizon_days }} days of runs go to your watch.{% endif %}</p>
+  {% else %}
+  <p class="muted">Connect once and your runs, football and climbing come in by themselves. Coachal keeps only Garmin's session token, never your password.</p>
+  <form method="post" action="/garmin/login" class="stack">
+    <label>Garmin email <input type="email" name="email" autocomplete="username" required></label>
+    <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+    <div class="actions"><button type="submit">Connect Garmin</button></div>
+  </form>
+  {% endif %}
+</section>
+
+<section class="panel" aria-labelledby="sync-title">
+  <h2 id="sync-title">Sync</h2>
+  {% include "_sync_status.html" %}
+  <form method="post" action="/sync/run" hx-post="/sync/run" hx-target="#sync-status" hx-swap="outerHTML">
+    <button type="submit" class="secondary">Sync now</button>
+  </form>
+</section>
+</div>
+
+<div class="grid-2">
+<section class="panel" aria-labelledby="athlete-title">
+  <h2 id="athlete-title">Athlete</h2>
+  <form method="post" action="/settings/athlete" class="stack">
+    <label>Name <input name="name" value="{{ athlete.name or '' if athlete else '' }}"></label>
+    <label>VDOT <input type="number" name="vdot" step="0.1" min="20" max="90" required value="{{ athlete.vdot if athlete else '' }}"></label>
+    <label>Runs per week <input type="number" name="runs_per_week" min="2" max="6" required value="{{ athlete.runs_per_week if athlete else 4 }}"></label>
+    <label>Climbing sessions per week <input type="number" name="climbing_target_per_week" min="0" max="3" value="{{ athlete.climbing_target_per_week if athlete else 2 }}"></label>
+    <label>Weekly load ceiling (continuous mode, optional)
+      <input type="number" name="max_weekly_load" min="1" step="1" value="{{ athlete.max_weekly_load or '' if athlete else '' }}">
+    </label>
+    <label>Weekly running you handle now, km (continuous mode, optional)
+      <input type="number" name="weekly_km" min="1" max="200" step="0.5" inputmode="decimal" value="{{ athlete.weekly_km or '' if athlete else '' }}">
+    </label>
+    <label>Long run you could comfortably do now, km (continuous mode, optional)
+      <input type="number" name="long_run_km" min="1" max="50" step="0.5" inputmode="decimal" value="{{ athlete.long_run_km or '' if athlete else '' }}">
+      <small class="muted">For when your synced runs undersell you. Plans keep at least this much running and a long run this long; only enter what you could run this week.</small>
+    </label>
+    <label>Maximum heart rate (optional)
+      <input type="number" name="max_hr" min="120" max="230" inputmode="numeric" value="{{ athlete.max_hr or '' if athlete else '' }}">
+      <small class="muted">From a hard race finish or an all-out hill effort, not an age formula. Used to estimate fitness from your easy runs.</small>
+    </label>
+    <div class="actions"><button type="submit">Save profile</button></div>
+  </form>
+  {% if athlete %}<p class="muted">VDOT from {{ athlete.vdot_source }}, updated {{ athlete.vdot_updated_at[:10] }}.</p>{% endif %}
+</section>
+
+<section class="panel" aria-labelledby="tt-title">
+  <h2 id="tt-title">Update paces from a time trial</h2>
+  <p class="muted">Your VDOT only changes when you submit a result here.</p>
+  <form method="post" action="/settings/time-trial" class="stack">
+    <label>Distance
+      <select name="distance">
+        <option value="5k">5K</option><option value="10k">10K</option>
+        <option value="half">Half marathon</option><option value="marathon">Marathon</option>
+      </select>
+    </label>
+    <label>Time <input name="time" placeholder="22:30" required></label>
+    <div class="actions"><button type="submit">Update VDOT</button></div>
+  </form>
+</section>
+
+</div>
+
+<section class="panel" aria-labelledby="integrations-title">
+  <h2 id="integrations-title">Integrations</h2>
+  <table>
+    <tbody>{% for name, state in integrations %}<tr><th scope="row">{{ name }}</th><td>{{ state }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <p>Calendar feed of your plan: <a href="/export/plan.ics" hx-boost="false">/export/plan.ics</a> (subscribe from a calendar app on your tailnet).</p>
+</section>
+
+{% macro windows(pairs) %}{% for a, b in pairs %}{{ a }}-{{ b }}{% if not loop.last %}, {% endif %}{% endfor %}{% endmacro %}
+<section class="panel" aria-labelledby="prefs-title">
+  <h2 id="prefs-title">Schedule and connections</h2>
+  <form method="post" action="/settings/app" class="stack">
+    <fieldset class="stack">
+      <legend>When sessions can go</legend>
+      <label>Weekday windows <input name="weekday" value="{{ windows(typed.availability.weekday) }}" placeholder="06:30-08:00, 17:30-21:00"></label>
+      <label>Weekend windows <input name="weekend" value="{{ windows(typed.availability.weekend) }}" placeholder="07:00-13:00"></label>
+      <label>Minutes kept free around calendar events <input type="number" name="buffer_minutes" min="0" max="120" required value="{{ typed.availability.buffer_minutes }}"></label>
+    </fieldset>
+    <fieldset class="stack">
+      <legend>Google Calendar</legend>
+      <label>Secret iCal address ({{ "saved" if typed.gcal.ics_url else "not set" }}; leave blank to keep)
+        <input type="password" name="ics_url" autocomplete="off" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
+      </label>
+      <label><input type="checkbox" name="clear_ics_url"> Forget the saved address</label>
+      <label>Fixed events (comma-separated words) <input name="keywords_fixed" value="{{ typed.calendar_keywords.fixed | join(', ') }}"></label>
+      <label>Go easy the day after <input name="keywords_penalty" value="{{ typed.calendar_keywords.penalty | join(', ') }}"></label>
+      <label>No training <input name="keywords_block" value="{{ typed.calendar_keywords.block | join(', ') }}"></label>
+    </fieldset>
+    <fieldset class="stack">
+      <legend>Weather (heat adjustment)</legend>
+      <label><input type="checkbox" name="weather_enabled" {{ "checked" if typed.weather.enabled }}> Adjust paces for heat</label>
+      <label>Latitude <input type="number" name="latitude" step="0.01" min="-90" max="90" value="{{ typed.weather.latitude }}"></label>
+      <label>Longitude <input type="number" name="longitude" step="0.01" min="-180" max="180" value="{{ typed.weather.longitude }}"></label>
+    </fieldset>
+    <fieldset class="stack">
+      <legend>Garmin and watch</legend>
+      <label><input type="checkbox" name="garmin_enabled" {{ "checked" if typed.garmin.enabled }}> Pull activities and resting HR from Garmin Connect</label>
+      <label>Watch workouts
+        <select name="export_backend">
+          {% for value, label in [("none", "Off"), ("garmin", "Push to Garmin Connect each sync"), ("fit", "Download a .fit file per session")] %}
+          <option value="{{ value }}" {{ "selected" if typed.export.backend == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </fieldset>
+    <div class="actions"><button type="submit">Save settings</button></div>
+  </form>
+</section>
+{% endblock %}

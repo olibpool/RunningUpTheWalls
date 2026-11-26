@@ -1,0 +1,41 @@
+{% from "_icons.html" import icon %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)">
+  {# 4xx pages carry form errors, so they swap too. No history cache: Back shows fresh data, not a stale snapshot. #}
+  <meta name="htmx-config" content='{"historyCacheSize": 0, "responseHandling": [{"code": "204", "swap": false}, {"code": "[234]..", "swap": true}, {"code": "...", "swap": false, "error": true}]}'>
+  <title>{% block title %}Coachal{% endblock %} · Coachal</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <script src="/static/vendor/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body hx-boost="true" hx-indicator="#progress">
+  <div id="progress" class="progress" aria-hidden="true"></div>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Coachal</a>
+    {# hx-preserve keeps the loaded chip across page changes instead of refetching it, so the header doesn't jump. #}
+    <div id="sync-chip" class="sync-chip" hx-get="/sync/chip" hx-trigger="load" hx-swap="outerHTML" hx-indicator="#sync-chip .icon" hx-preserve></div>
+    <nav aria-label="Main">
+      {% for key, label, href, glyph in nav %}
+      <a href="{{ href }}" class="{{ 'tab' if loop.index <= tabs else 'more' }}"{% if active == key %} aria-current="page"{% endif %}>{{ icon(glyph) }}<span>{{ label }}</span></a>
+      {% endfor %}
+    </nav>
+  </header>
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+  <nav class="tabbar" aria-label="Quick">
+    {% for key, label, href, glyph in nav[:tabs] %}
+    <a href="{{ href }}"{% if active == key %} aria-current="page"{% endif %}>{{ icon(glyph) }}<span>{{ label }}</span></a>
+    {% endfor %}
+  </nav>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+</body>
+</html>

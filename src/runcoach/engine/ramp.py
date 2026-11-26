@@ -17,7 +17,7 @@ def ramp_for_block(
 ) -> RampPlan:
     if days_off <= 0:
         raise ValueError("days_off must be positive")
-    typed_cfg = cfg if isinstance(cfg, SchedulingConfig) else load_scheduling_config(cfg)
+    typed_cfg = load_scheduling_config(cfg)
     ramp = typed_cfg.return_ramp
     if days_off <= ramp.short_days:
         return RampPlan(weekly_multipliers=tuple(ramp.short))

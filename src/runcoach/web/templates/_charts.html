@@ -1,0 +1,126 @@
+{# Inline SVG charts, drawn on the server: no chart library, nothing to download. #}
+
+{# One series of columns (stats.Bar). The current bar is the accent; the rest recede.
+   Values sit in a visually hidden table for screen readers. #}
+{% macro columns(bars, unit, caption) %}
+{% set slot, plot, bar_w = 28, 110, 16 %}
+{% set top = bars | map(attribute="value") | max %}
+{% set width = bars | length * slot %}
+<figure class="chart">
+  <svg viewBox="0 0 {{ width }} {{ plot + 20 }}" role="img" aria-label="{{ caption }}">
+    <line class="axis" x1="0" x2="{{ width }}" y1="{{ plot }}" y2="{{ plot }}"/>
+    {% for b in bars %}
+    {% set x = loop.index0 * slot %}
+    {% set h = (b.value / top * (plot - 18)) if top else 0 %}
+    {% set bx = x + (slot - bar_w) / 2 %}
+    <g class="col{% if b.current %} current{% endif %}">
+      {% if b.href %}<a href="{{ b.href }}">{% endif %}
+      <title>{{ b.title }}</title>
+      <rect class="hit" x="{{ x }}" y="0" width="{{ slot }}" height="{{ plot + 20 }}"/>
+      {% if h > 0 %}
+      <rect class="bar" x="{{ bx }}" y="{{ plot - h }}" width="{{ bar_w }}" height="{{ h }}" rx="4"/>
+      <rect class="bar" x="{{ bx }}" y="{{ plot - [h, 4] | min }}" width="{{ bar_w }}" height="{{ [h, 4] | min }}"/>
+      {% endif %}
+      {% if b.current or (b.value == top and top) %}
+      <text class="val" x="{{ x + slot / 2 }}" y="{{ plot - h - 5 }}">{{ "%.0f" | format(b.value) }}</text>
+      {% endif %}
+      {% if loop.first or loop.last or (b.current and 2 < loop.index < loop.length - 2) %}
+      <text class="tick" x="{{ x + slot / 2 }}" y="{{ plot + 15 }}">{{ b.label }}</text>
+      {% endif %}
+      {% if b.href %}</a>{% endif %}
+    </g>
+    {% endfor %}
+  </svg>
+  <table class="sr-only"><caption>{{ caption }}</caption>
+    <tbody>{% for b in bars %}<tr><th scope="row">{{ b.label }}</th><td>{{ "%.1f" | format(b.value) }} {{ unit }}</td></tr>{% endfor %}</tbody>
+  </table>
+</figure>
+{% endmacro %}
+
+{# A progress ring; the caller supplies the label in the middle. #}
+{% macro ring(share, size=132, stroke=11, cls="") %}
+{% set r = (size - stroke) / 2 %}
+{% set c = 2 * 3.14159 * r %}
+<div class="ring {{ cls }}" style="--size: {{ size }}px; --c: {{ c }}; --off: {{ c * (1 - ([share, 1] | min)) }}">
+  <svg viewBox="0 0 {{ size }} {{ size }}" aria-hidden="true">
+    <circle class="ring-track" cx="{{ size / 2 }}" cy="{{ size / 2 }}" r="{{ r }}" stroke-width="{{ stroke }}"/>
+    <circle class="ring-fill" cx="{{ size / 2 }}" cy="{{ size / 2 }}" r="{{ r }}" stroke-width="{{ stroke }}"
+            stroke-dasharray="{{ c }}" transform="rotate(-90 {{ size / 2 }} {{ size / 2 }})"/>
+  </svg>
+  <div class="ring-label">{{ caller() }}</div>
+</div>
+{% endmacro %}
+
+{# A small trend line of (label, value) points, with the last value marked. #}
+{% macro spark(points, unit, caption) %}
+{% set values = points | map(attribute=1) | list %}
+{% set lo, hi = values | min, values | max %}
+{% set span = (hi - lo) or 1 %}
+{% set w, h = 160, 44 %}
+{% set step = w / ((values | length - 1) or 1) %}
+<figure class="spark">
+  <svg viewBox="-5 -6 {{ w + 10 }} {{ h + 12 }}" role="img" aria-label="{{ caption }}">
+    <polyline points="{% for v in values %}{{ loop.index0 * step }},{{ h - (v - lo) / span * h }} {% endfor %}"/>
+    <circle cx="{{ (values | length - 1) * step }}" cy="{{ h - (values[-1] - lo) / span * h }}" r="4"><title>{{ points[-1][0] }}: {{ values[-1] }} {{ unit }}</title></circle>
+  </svg>
+</figure>
+{% endmacro %}
+
+{# The shape of a workout: one block per executed step, wide by time, tall by effort. #}
+{% macro profile(steps, cls="") %}
+{% set flat = executed_steps(steps) %}
+{% if flat %}
+<div class="profile {{ cls }}" aria-hidden="true">
+  {% for st in flat %}<span class="seg seg-{{ st.kind }}" style="flex-grow: {{ st.duration_s or ((st.distance_m or 1000) * 0.33) }}"></span>{% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{# Stacked columns (stats.StackBar): one segment per sport, sport colours, notes above. #}
+{% macro stacked(bars, unit, caption) %}
+{% set slot, plot, bar_w = 28, 120, 16 %}
+{% set top = bars | map(attribute="value") | max %}
+{% set width = bars | length * slot %}
+<figure class="chart stacked">
+  <svg viewBox="0 -14 {{ width }} {{ plot + 34 }}" role="img" aria-label="{{ caption }}">
+    <line class="axis" x1="0" x2="{{ width }}" y1="{{ plot }}" y2="{{ plot }}"/>
+    {% for b in bars %}
+    {% set x = loop.index0 * slot %}
+    {% set bx = x + (slot - bar_w) / 2 %}
+    <g class="col{% if b.current %} current{% endif %}">
+      {% if b.href %}<a href="{{ b.href }}">{% endif %}
+      <title>{{ b.title }}</title>
+      <rect class="hit" x="{{ x }}" y="-14" width="{{ slot }}" height="{{ plot + 34 }}"/>
+      {% set ns = namespace(y=plot) %}
+      {% for sport, v in b.parts %}
+      {% set h = (v / top * (plot - 16)) if top else 0 %}
+      {% set ns.y = ns.y - h %}
+      <rect class="seg-{{ sport }}" x="{{ bx }}" y="{{ ns.y }}" width="{{ bar_w }}" height="{{ [h - 1, 0] | max }}" rx="2"/>
+      {% endfor %}
+      {% if b.note %}<text class="note" x="{{ x + 3 }}" y="-4" text-anchor="start">{{ b.note }}</text><line class="phase" x1="{{ x + 1 }}" x2="{{ x + 1 }}" y1="-2" y2="{{ plot }}"/>{% endif %}
+      {% if b.current %}<text class="val" x="{{ x + slot / 2 }}" y="{{ ns.y - 5 }}">now</text>{% endif %}
+      {% if loop.first or loop.last %}<text class="tick" x="{{ x + slot / 2 }}" y="{{ plot + 15 }}">{{ b.label }}</text>{% endif %}
+      {% if b.href %}</a>{% endif %}
+    </g>
+    {% endfor %}
+  </svg>
+  <table class="sr-only"><caption>{{ caption }}</caption>
+    <tbody>{% for b in bars %}<tr><th scope="row">{{ b.label }}</th><td>{{ b.title }} ({{ unit }})</td></tr>{% endfor %}</tbody>
+  </table>
+</figure>
+{% endmacro %}
+
+{# Consistency heatmap: one column per week, one cell per day, coloured by the day's main sport. #}
+{% macro heatmap(rows, caption) %}
+<figure class="heatmap" aria-label="{{ caption }}">
+  <div class="heat-days" aria-hidden="true"><span>M</span><span></span><span>W</span><span></span><span>F</span><span></span><span>S</span></div>
+  <div class="heat-grid" style="--weeks: {{ rows | length }}">
+    {% for row in rows %}{% for c in row %}<span class="cell lvl-{{ c.level }}{% if c.sport %} sport-{{ c.sport }}{% endif %}" title="{{ c.title }}"></span>{% endfor %}{% endfor %}
+  </div>
+</figure>
+{% endmacro %}
+
+{# Legend of sport colours. #}
+{% macro sport_legend(sports) %}
+<ul class="legend">{% for s in sports %}<li><span class="swatch seg-{{ s }}"></span>{{ sport_names[s] }}</li>{% endfor %}</ul>
+{% endmacro %}

@@ -5,9 +5,9 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from runcoach.config import ConfigNode, SchedulingConfig, load_scheduling_config
-from runcoach.domain.models import PlannedSession
+from runcoach.domain.models import PlannedSession, Step
 from runcoach.engine.events import DayConstraint
-from runcoach.engine.scheduler import Busy, FixedInstance
+from runcoach.engine.scheduler import Busy, FixedInstance, fixed_leg_load
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,7 @@ class _Slot:
             "tempo",
             "intervals",
             "time_trial",
+            "race",
         }
 
     @property
@@ -46,14 +47,111 @@ def _week_start(day: date) -> date:
     return day - timedelta(days=day.weekday())
 
 
-def _typed_config(cfg: ConfigNode | SchedulingConfig | None) -> SchedulingConfig | None:
-    if isinstance(cfg, SchedulingConfig):
-        return cfg
-    if isinstance(cfg, ConfigNode):
-        return load_scheduling_config(cfg)
-    if cfg is None:
-        return None
-    raise TypeError("cfg must be a ConfigNode, SchedulingConfig, or None")
+def _work_paces(steps: list[Step], kind: str) -> list[float]:
+    paces: list[float] = []
+    for step in steps:
+        if step.kind == "repeat":
+            paces.extend(_work_paces(step.children, kind))
+        elif step.kind == kind:
+            paces.extend(p for p in (step.pace_min_s_per_km, step.pace_max_s_per_km) if p)
+    return paces
+
+
+def _pace_order_violations(sessions: list[PlannedSession]) -> list[Violation]:
+    easy = [
+        pace
+        for s in sessions
+        if s.kind in {"easy", "recovery", "long"}
+        for pace in _work_paces(s.steps, "steady")
+    ]
+    tempo = [pace for s in sessions if s.kind == "tempo" for pace in _work_paces(s.steps, "work")]
+    intervals = [
+        pace for s in sessions if s.kind == "intervals" for pace in _work_paces(s.steps, "work")
+    ]
+    ordered = [group for group in (easy, tempo, intervals) if group]
+    if any(min(slower) <= max(faster) for slower, faster in zip(ordered, ordered[1:])):
+        return [Violation("pace-order", "Easy, threshold and interval paces are out of order.")]
+    return []
+
+
+def _load_violations(
+    sessions: list[PlannedSession],
+    fixed: list[FixedInstance],
+    cfg: SchedulingConfig,
+    plan_start: date | None,
+    taper_start: date | None,
+    exempt_weeks: set[date],
+) -> list[Violation]:
+    """Weekly leg-load rise, long-run share and taper checks over full plan weeks."""
+    loads: dict[date, float] = {}
+    run_minutes: dict[date, list[PlannedSession]] = {}
+    for session in sessions:
+        week = _week_start(session.date)
+        loads[week] = loads.get(week, 0.0) + session.leg_load
+        if session.sport == "run":
+            run_minutes.setdefault(week, []).append(session)
+    for instance in fixed:
+        week = _week_start(instance.date)
+        loads[week] = loads.get(week, 0.0) + fixed_leg_load(instance, cfg)
+    if not loads:
+        return []
+    first = min(loads)
+    if plan_start is not None:
+        first = max(first, plan_start + timedelta(days=(7 - plan_start.weekday()) % 7))
+    weeks: list[date] = []
+    week = first
+    while week <= max(loads):
+        weeks.append(week)
+        week += timedelta(days=7)
+
+    violations: list[Violation] = []
+    cap = 1.0 + cfg.progression.max_weekly_increase
+    reference: float | None = None
+    for week in weeks:
+        load = loads.get(week, 0.0)
+        # Compare against the last non-dip week, so cut-backs and tapers don't reset the base.
+        if reference is not None and week not in exempt_weeks and load > reference * cap + 1e-6:
+            violations.append(
+                Violation(
+                    "weekly-rise",
+                    f"Week of {week.isoformat()} leg load {load:.0f} rises more than "
+                    f"{cfg.progression.max_weekly_increase:.0%} over {reference:.0f}.",
+                )
+            )
+        # A week below the base is a dip (cut-back, trip, the week back from one), even when it
+        # rises on the dip before it; growth stays measured from the base.
+        if reference is None or load >= reference:
+            reference = load
+
+        runs = run_minutes.get(week, [])
+        total = sum(s.duration_min or 0 for s in runs)
+        longest = max((s.duration_min or 0 for s in runs if s.kind == "long"), default=0)
+        share = cfg.progression.max_long_run_share
+        # One minute of slack: durations are whole minutes and are rounded after scaling.
+        # Weeks with few runs are exempt: the long run can't be a small share there.
+        few_runs = len(runs) < cfg.progression.long_share_min_runs
+        if week not in exempt_weeks and not few_runs and total and longest > share * total + 1:
+            violations.append(
+                Violation(
+                    "long-run-share",
+                    f"Long run in week of {week.isoformat()} is {longest / total:.0%} "
+                    f"of run time, above {share:.0%}.",
+                )
+            )
+
+    if taper_start is not None:
+        peak = max((loads.get(w, 0.0) for w in weeks if w < taper_start), default=0.0)
+        for week in weeks:
+            # Exempt weeks include race week, whose load is mostly the race itself.
+            if (
+                week >= taper_start
+                and week not in exempt_weeks
+                and loads.get(week, 0.0) > peak + 1e-6
+            ):
+                violations.append(
+                    Violation("taper-above-peak", f"Taper week of {week.isoformat()} exceeds peak.")
+                )
+    return violations
 
 
 def _slots(
@@ -110,15 +208,24 @@ def _slots(
 
 def check_plan(
     sessions: list[PlannedSession],
-    cfg: ConfigNode | SchedulingConfig | None,
+    cfg: ConfigNode | SchedulingConfig,
     *,
     fixed: list[FixedInstance] | None = None,
     busy: list[Busy] | None = None,
     timezone_name: str = "Europe/London",
     relaxed_weeks: set[date] | None = None,
     day_constraints: dict[date, DayConstraint] | None = None,
+    plan_start: date | None = None,
+    taper_start: date | None = None,
+    exempt_load_weeks: set[date] | None = None,
 ) -> list[Violation]:
-    typed_cfg = _typed_config(cfg)
+    """Return every safety violation; an empty list means the plan may be saved.
+
+    plan_start: a mid-week start makes its partial week exempt from the weekly-load checks.
+    exempt_load_weeks: Mondays of weeks exempt from the rise and long-run-share checks
+    (return ramps, or weeks where the scheduler had to drop sessions).
+    """
+    typed_cfg = load_scheduling_config(cfg)
     fixed_instances = fixed or []
     busy_events = busy or []
     constraints = day_constraints or {}
@@ -132,8 +239,15 @@ def check_plan(
             occupied_by_week.setdefault(_week_start(session.date), set()).add(session.date)
     for instance in fixed_instances:
         occupied_by_week.setdefault(_week_start(instance.date), set()).add(instance.date)
+    runs_by_day: dict[date, int] = {}
+    for session in sessions:
+        if session.sport == "run" and session.kind != "rest":
+            runs_by_day[session.date] = runs_by_day.get(session.date, 0) + 1
+    for day, count in sorted(runs_by_day.items()):
+        if count > typed_cfg.scheduler.max_runs_per_day:
+            violations.append(Violation("runs-per-day", f"{count} runs on {day:%a %d %b}."))
     for days in occupied_by_week.values():
-        if len(days) >= 7:
+        if len(days) > 7 - typed_cfg.progression.min_rest_days_per_week:
             violations.append(Violation("no-rest-day", "No rest day in the week"))
 
     for index, slot in enumerate(slots):
@@ -142,10 +256,8 @@ def check_plan(
                 break
             required_gap = (
                 timedelta(minutes=typed_cfg.availability.buffer_minutes)
-                if typed_cfg is not None and (slot.fixed or other.fixed)
-                else timedelta(
-                    hours=typed_cfg.scheduler.min_hours_same_day_gap if typed_cfg is not None else 6
-                )
+                if slot.fixed or other.fixed
+                else timedelta(hours=typed_cfg.scheduler.min_hours_same_day_gap)
             )
             if other.start - slot.end < required_gap:
                 violations.append(
@@ -155,23 +267,21 @@ def check_plan(
                     )
                 )
 
-    if typed_cfg is None:
-        minimum_hard_hours = 48
-        minimum_climb_hours = 48
-        buffer_minutes = 0
-    else:
-        minimum_hard_hours = typed_cfg.scheduler.min_hours_between_hard_leg
-        minimum_climb_hours = typed_cfg.scheduler.min_hours_between_limit_climbs
-        buffer_minutes = typed_cfg.availability.buffer_minutes
+    minimum_hard_hours = typed_cfg.scheduler.min_hours_between_hard_leg
+    minimum_climb_hours = typed_cfg.scheduler.min_hours_between_limit_climbs
+    buffer_minutes = typed_cfg.availability.buffer_minutes
 
     hard_slots = [slot for slot in slots if slot.hard_leg]
     for left, right in zip(hard_slots, hard_slots[1:]):
         week = _week_start(right.start.date())
         minimum = (
             typed_cfg.scheduler.relaxed_hours_between_hard_leg
-            if typed_cfg is not None and week in (relaxed_weeks or set())
+            if week in (relaxed_weeks or set())
             else minimum_hard_hours
         )
+        chosen = {left.fixed or left.kind == "race", right.fixed or right.kind == "race"}
+        if chosen == {True}:
+            continue  # both are your own dates (a commitment, the race): a warning, not a refusal
         if right.start - left.start < timedelta(hours=minimum):
             violations.append(
                 Violation(
@@ -222,7 +332,8 @@ def check_plan(
                         f"{slot.title} violates {constraint.max_intensity}: {constraint.reason}",
                     )
                 )
-        for event in busy_events:
+        # A fixed commitment's time is yours to keep; your calendar often holds it too.
+        for event in [] if slot.fixed else busy_events:
             if event.start.tzinfo is None or event.end.tzinfo is None:
                 violations.append(
                     Violation("invalid-busy-slot", f"{event.title} must be timezone-aware.")
@@ -235,15 +346,20 @@ def check_plan(
                     Violation("busy-overlap", f"{slot.title} conflicts with {event.title}.")
                 )
 
-    if typed_cfg is not None:
-        max_long_run = typed_cfg.progression.max_long_run_minutes
-        for session in sessions:
-            if session.kind == "long" and session.duration_min is not None:
-                if session.duration_min > max_long_run:
-                    violations.append(Violation("long-run", "Long run exceeds the configured cap"))
-    else:
-        for session in sessions:
-            if session.kind == "long" and session.distance_m and session.distance_m > 20000:
-                violations.append(Violation("long-run", "Long run exceeds the configured cap"))
+    max_long_run = typed_cfg.progression.max_long_run_minutes
+    for session in sessions:
+        if session.kind == "long" and (session.duration_min or 0) > max_long_run:
+            violations.append(Violation("long-run", "Long run exceeds the configured cap"))
 
+    violations.extend(_pace_order_violations(sessions))
+    violations.extend(
+        _load_violations(
+            sessions,
+            fixed_instances,
+            typed_cfg,
+            plan_start,
+            taper_start,
+            exempt_load_weeks or set(),
+        )
+    )
     return violations

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% set weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+{% set labels = {"penalty": "Night out", "block": "Away", "credit": "Active holiday"} %}
+{% block title %}Life{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Life</p>
+  <h1>Tell the plan what's going on</h1>
+  <p class="muted">Football, nights out, holidays: log them and the plan works around them, so you stay on track without giving anything up.</p>
+</header>
+{% include "_messages.html" %}
+
+<div class="life-cards">
+  <a class="life-card kind-penalty" href="#drinks">{{ icon("drinks") }}<strong>Night out</strong><span>Easy the day after, nothing hard on a hangover.</span></a>
+  <a class="life-card kind-block" href="#holiday">{{ icon("away") }}<strong>Going away</strong><span>A break, travel with short runs, or an active trip.</span></a>
+  <a class="life-card sport-football" href="#fixed">{{ icon("football") }}<strong>Every week</strong><span>Football or a regular class, with runs planned around it.</span></a>
+  <a class="life-card kind-ill" href="/checkin">{{ icon("ill") }}<strong>Ill or injured</strong><span>The plan backs off, then ramps you back.</span></a>
+</div>
+
+{% if proposals %}
+<section class="panel" aria-labelledby="proposals-title">
+  <h2 id="proposals-title">Spotted in your calendar</h2>
+  <p class="muted small">These look like plans. Nothing changes until you confirm.</p>
+  {% for p in proposals %}
+  <article class="card event kind-{{ p.kind }}">
+    <header>
+      <span class="sport-icon">{{ icon(p.kind if p.kind != "fixed" else "football") }}</span>
+      <div class="card-title"><span class="title">{{ p.title }}</span>
+        <span class="time">{{ p.start_date }}{% if p.end_date and p.end_date != p.start_date %} to {{ p.end_date }}{% endif %}{% if p.start_time %} at {{ p.start_time }}{% endif %}</span></div>
+      <span class="badge">{{ labels.get(p.kind, "every week") }}</span>
+    </header>
+    <form method="post" action="/events/proposals/confirm" class="actions">
+      <input type="hidden" name="external_id" value="{{ p.external_id }}">
+      <button type="submit" class="small">Confirm</button>
+    </form>
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+
+<div class="grid-2">
+<section class="panel" aria-labelledby="upcoming-title">
+  <h2 id="upcoming-title">Coming up</h2>
+  {% for c in upcoming %}
+  <article class="card event kind-{{ c.kind }}">
+    <header>
+      <span class="sport-icon">{{ icon(c.kind) }}</span>
+      <div class="card-title">
+        <span class="title">{{ c.title }}</span>
+        <span class="time">{{ c.start_date }}{% if c.end_date and c.end_date != c.start_date %} to {{ c.end_date }}{% endif %}</span>
+      </div>
+      <span class="badge">{{ "Travel, short runs" if c.minimal_plan else labels[c.kind] }}</span>
+    </header>
+    <p class="meta">
+      {% if c.kind == "penalty" %}Easy that day{% set n = days_after[c.severity | string] %}{% if n %} and {{ n }} day{{ "" if n == 1 else "s" }} after{% endif %}; no hard sessions.
+      {% elif c.kind == "credit" %}The activity counts as training, so runs are lighter around it.
+      {% elif c.minimal_plan %}A few short easy runs while you're away, then a gentle ramp back.
+      {% else %}No training while you're away, then a gentle ramp back to where you were.{% endif %}
+    </p>
+    <form method="post" action="/events/{{ c.id }}/delete" class="actions"><button type="submit" class="small ghost">Remove</button></form>
+  </article>
+  {% else %}
+  <p class="empty">{{ icon("calendar") }}Nothing logged. Nights out and trips go here.</p>
+  {% endfor %}
+</section>
+
+<section class="panel" aria-labelledby="fixed-title" id="fixed">
+  <h2 id="fixed-title">Every week</h2>
+  {% for c in fixed %}
+  <article class="card fixed sport-{{ c.sport or 'other' }}">
+    <header>
+      <span class="sport-icon">{{ icon(c.sport or "other") }}</span>
+      <div class="card-title">
+        <span class="title">{{ c.title }}</span>
+        <span class="time">{% if c.weekday is not none %}Every {{ weekdays[c.weekday] }}{% else %}{{ c.start_date }}{% endif %}{% if c.start_time %} at {{ c.start_time }}{% endif %}{% if c.duration_min %} · {{ c.duration_min }} min{% endif %}{% if c.rpe %} · effort {{ c.rpe }}/10{% endif %}</span>
+      </div>
+    </header>
+    {% set seen = typical.get(c.sport) %}
+    {% if seen and c.duration_min and (seen - c.duration_min) | abs > c.duration_min * tolerance %}
+    <form method="post" action="/events/{{ c.id }}/duration" class="hint">
+      <input type="hidden" name="minutes" value="{{ seen }}">
+      <span>{{ icon("watch") }} Your watch says these last about <strong>{{ seen }} min</strong>, not {{ c.duration_min }}. The plan sizes your runs around it.</span>
+      <button type="submit" class="small">Use {{ seen }} min</button>
+    </form>
+    {% endif %}
+    <p class="meta">Hard runs are kept apart from it{% if c.sport == "football" %}, and it counts as one of your hard days{% endif %}.</p>
+    <form method="post" action="/events/{{ c.id }}/delete" class="actions"><button type="submit" class="small ghost">Remove</button></form>
+  </article>
+  {% else %}
+  <p class="empty">{{ icon("football") }}Nothing yet. Add football here so runs are planned around it.</p>
+  {% endfor %}
+  {% if athlete and athlete.climbing_target_per_week %}
+  <p class="muted small">{{ icon("climb") }} The plan also fits in {{ athlete.climbing_target_per_week }} climbing session{{ "" if athlete.climbing_target_per_week == 1 else "s" }} a week (<a href="/settings">change</a>).</p>
+  {% endif %}
+</section>
+</div>
+
+<section class="panel forms" aria-label="Add">
+  <details id="drinks">
+    <summary>{{ icon("drinks") }}Log a night out {{ icon("right", "chev") }}</summary>
+    <form method="post" action="/events" class="stack">
+      <input type="hidden" name="form" value="drinks">
+      <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+      <fieldset>
+        <legend>How big a night?</legend>
+        <div class="segmented">
+          {% for sev, label in [(1, "A couple"), (2, "A proper night"), (3, "A big one")] %}
+          <label><input type="radio" name="severity" value="{{ sev }}"{% if sev == 2 %} checked{% endif %}><span>{{ label }}</span></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div class="actions"><button type="submit">Log it</button></div>
+    </form>
+  </details>
+
+  <details id="holiday">
+    <summary>{{ icon("away") }}Add a trip or holiday {{ icon("right", "chev") }}</summary>
+    <form method="post" action="/events" class="stack">
+      <input type="hidden" name="form" value="holiday">
+      <label>Name <input name="title" placeholder="Holiday"></label>
+      <label>First day <input type="date" name="start_date" required></label>
+      <label>Last day <input type="date" name="end_date" required></label>
+      <fieldset>
+        <legend>What kind?</legend>
+        <label class="inline"><input type="radio" name="holiday_type" value="break" checked> A full break</label>
+        <label class="inline"><input type="radio" name="holiday_type" value="travel"> Travel, with a few short runs</label>
+        <label class="inline"><input type="radio" name="holiday_type" value="active"> Active (hiking, skiing)</label>
+      </fieldset>
+      <p class="muted small">For an active trip, roughly how much a day:</p>
+      <label>Minutes a day <input type="number" name="duration_min" min="1"></label>
+      <label>Effort (1-10) <input type="number" name="rpe" min="1" max="10" step="0.5"></label>
+      <div class="actions"><button type="submit">Add it</button></div>
+    </form>
+  </details>
+
+  <details id="add-fixed"{% if not fixed %} open{% endif %}>
+    <summary>{{ icon("plus") }}Add something you do every week {{ icon("right", "chev") }}</summary>
+    <form method="post" action="/events" class="stack">
+      <input type="hidden" name="form" value="fixed">
+      <label>Name <input name="title" placeholder="5 a side"></label>
+      <label>Sport
+        <select name="sport">
+          <option value="football">Football</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label>Day
+        <select name="weekday">
+          {% for name in weekdays %}<option value="{{ loop.index0 }}"{% if loop.index0 == 1 %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Start time <input type="time" name="start_time" required></label>
+      <label>How long you actually play (minutes) <input type="number" name="duration_min" min="1" required></label>
+      <label>How hard it feels (1-10) <input type="number" name="rpe" min="1" max="10" step="0.5" required></label>
+      <div class="actions"><button type="submit">Add it</button></div>
+    </form>
+  </details>
+</section>
+
+{% if past %}
+<details class="panel past">
+  <summary>Past nights out and trips ({{ past | length }}) {{ icon("right", "chev") }}</summary>
+  <ul class="feed">
+    {% for c in past %}<li class="kind-{{ c.kind }}">{{ icon(c.kind) }}<span>{{ c.title }}</span><span class="feed-stats">{{ c.start_date }}</span></li>{% endfor %}
+  </ul>
+</details>
+{% endif %}
+{% endblock %}

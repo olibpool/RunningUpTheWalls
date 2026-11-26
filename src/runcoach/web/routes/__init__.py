@@ -2,11 +2,32 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from runcoach.web.routes.activity.route import router as activity_router
-from runcoach.web.routes.health.route import router as health_router
-from runcoach.web.routes.plan.route import router as plan_router
+from runcoach.web.routes import (
+    activities,
+    checkin,
+    events,
+    export,
+    health,
+    home,
+    plans,
+    progress,
+    sessions,
+    settings,
+    week,
+)
 
 router = APIRouter()
-router.include_router(health_router)
-router.include_router(plan_router)
-router.include_router(activity_router)
+for module in (
+    health,
+    home,
+    week,
+    sessions,
+    plans,
+    progress,
+    events,
+    activities,
+    checkin,
+    settings,
+    export,
+):
+    router.include_router(module.router)

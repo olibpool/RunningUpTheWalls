@@ -1,0 +1,32 @@
+{% from "_icons.html" import icon %}
+{% from "_charts.html" import profile %}
+<article id="session-{{ s.id }}" class="card session sport-{{ s.sport }} status-{{ s.status }}">
+  <header>
+    <span class="sport-icon">{{ icon("check" if s.status == "done" else s.sport) }}</span>
+    <div class="card-title">
+      <a href="/session/{{ s.id }}" class="title stretch">{{ s.title }} {{ s.steps | structure }}</a>
+      <span class="time">{{ s.start_time or "Any time" }}</span>
+    </div>
+    {% if s.status != "planned" %}<span class="badge status">{{ s.status }}</span>{% endif %}
+  </header>
+  <ul class="chips">
+    {% if s.duration_min %}<li>{{ icon("clock") }}{{ s.duration_min }} min</li>{% endif %}
+    {% if s.distance_m %}<li>{{ s.distance_m | km }}</li>{% endif %}
+    {% set p = s.steps | main_pace %}{% if p %}<li>{{ icon("target") }}{{ p }}</li>{% endif %}
+  </ul>
+  {{ profile(s.steps, "mini") }}
+  {% set lines = s.reason | why %}{% if lines %}<p class="reason">{{ lines[0] }}</p>{% endif %}
+  {% if s.status == "planned" %}
+  <div class="actions">
+    <form method="post" action="/session/{{ s.id }}/done"
+          hx-post="/session/{{ s.id }}/done" hx-target="#session-{{ s.id }}" hx-swap="outerHTML">
+      <button type="submit" class="small">{{ icon("check") }}Done</button>
+    </form>
+    <form method="post" action="/session/{{ s.id }}/skip"
+          hx-post="/session/{{ s.id }}/skip" hx-target="#session-{{ s.id }}" hx-swap="outerHTML">
+      <button type="submit" class="small ghost">Skip</button>
+    </form>
+  </div>
+  {% endif %}
+</article>
+{% if oob_progress %}{% with progress=oob_progress, oob=True %}{% include "_week_stats.html" %}{% endwith %}{% endif %}

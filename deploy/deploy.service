@@ -1,0 +1,10 @@
+[Unit]
+Description=Coachal auto-deploy of the newest v* release tag
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Root, because it restarts runcoach.service; git, uv and the backup run as the runcoach user.
+EnvironmentFile=/etc/runcoach.env
+ExecStart=/bin/bash /opt/runcoach/deploy/deploy.sh

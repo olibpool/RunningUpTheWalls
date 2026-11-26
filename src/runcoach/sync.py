@@ -1,18 +1,53 @@
+"""`runcoach sync`: the 30-minute job. Each step runs in isolation so one failure (a network
+error, a bad file) never stops the rest, and records its last success in kv."""
+
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 import sqlite3
+from collections.abc import Callable
 from dataclasses import replace
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
+from statistics import median
+from zoneinfo import ZoneInfo
+
+import httpx
 
 from runcoach import db
-from runcoach.config import ConfigNode
-from runcoach.domain.models import Athlete, Commitment
+from runcoach.adapt.heat import adjust_for_heat
+from runcoach.adapt.reschedule import reschedule_for_calendar
+from runcoach.adapt.rules import Change, PlanState, evaluate
+from runcoach.config import (
+    ConfigNode,
+    GarminConfig,
+    LoadFactorsConfig,
+    SchedulingConfig,
+    load_scheduling_config,
+)
+from runcoach.display import monday
+from runcoach.domain.models import LOCAL_TIMEZONE, Activity, Athlete, Commitment
 from runcoach.engine.continuous import (
     ContinuousPlanResult,
     History,
+    WeekLoad,
+    block_intervals,
     generate_continuous_plan_result,
 )
+from runcoach.engine.events import day_constraints, expand_commitments
+from runcoach.engine.habits import Habit, learn_habits
+from runcoach.engine.load import leg_factor
+from runcoach.engine.plan import fixed_instances
 from runcoach.engine.replan import should_replan
+from runcoach.ingest.calendar import fetch_ical_events, to_busy
+from runcoach.ingest.inbox import ingest_inbox
+from runcoach.ingest.matcher import local_day, match
+from runcoach.integrations import garmin
+from runcoach.integrations.weather import fetch_forecast
+
+log = logging.getLogger(__name__)
+TZ = ZoneInfo(LOCAL_TIMEZONE)
 
 
 def replan_continuous_if_due(
@@ -25,6 +60,7 @@ def replan_continuous_if_due(
     events: list[Commitment],
     cfg: ConfigNode,
 ) -> ContinuousPlanResult | None:
+    """Regenerate the continuous plan's coming weeks when due; refuses unsafe plans (D4)."""
     last_replanned_at = db.get_kv(conn, "last_replanned_at")
     if not should_replan(today, now_utc, last_replanned_at, cfg):
         return None
@@ -41,7 +77,13 @@ def replan_continuous_if_due(
             current_history,
             plan_start_date=date.fromisoformat(plan["start_date"]),
         )
-    result = generate_continuous_plan_result(athlete, current_history, today, events, cfg)
+    result = generate_continuous_plan_result(
+        athlete, current_history, today, events, cfg,
+        not_before=now_utc.astimezone(TZ),
+    )  # fmt: skip
+    if result.violations:
+        details = "; ".join(f"{v.kind}: {v.message}" for v in result.violations)
+        raise ValueError(f"Re-plan not saved; it fails the safety checks: {details}")
     db.replace_continuous_sessions(
         conn,
         plan_id,
@@ -50,3 +92,293 @@ def replan_continuous_if_due(
         replanned_at=now_utc.isoformat(),
     )
     return result
+
+
+def _calendar(
+    conn: sqlite3.Connection, cfg: SchedulingConfig, today: date, client: httpx.Client | None
+) -> str:
+    if not cfg.gcal.ics_url:
+        return "skipped: no iCal URL configured"
+    start = today - timedelta(days=cfg.gcal.days_back)
+    end = today + timedelta(days=cfg.gcal.days_ahead)
+    try:
+        events = fetch_ical_events(
+            cfg.gcal.ics_url, window_start=start, window_end=end, client=client
+        )
+    except httpx.HTTPError as exc:
+        # The URL is a secret and httpx puts it in its messages; report only the error type.
+        raise RuntimeError(f"calendar fetch failed ({type(exc).__name__})") from None
+    db.cache_calendar_events(conn, events, window_start=start, window_end=end)
+    digest = hashlib.sha256(
+        json.dumps([(e.external_id, e.starts_at, e.ends_at) for e in events]).encode()
+    ).hexdigest()
+    if digest == db.get_kv(conn, "calendar.hash"):
+        return f"ok: {len(events)} events, unchanged"
+    moved = 0
+    plan = db.active_plan(conn)
+    if plan is not None and plan.id is not None:
+        horizon = today + timedelta(days=cfg.gcal.reschedule_days + 7)
+        commitments = db.list_commitments(conn)
+        fixed, _ = fixed_instances(commitments, today - timedelta(days=7), horizon)
+        occurrences = expand_commitments(commitments, today - timedelta(days=7), horizon)
+        changes = reschedule_for_calendar(
+            db.plan_sessions(conn, plan.id),
+            fixed,
+            to_busy(db.calendar_events(conn)),
+            today,
+            cfg,
+            horizon_days=cfg.gcal.reschedule_days,
+            day_constraints=day_constraints([o for o in occurrences if o.kind != "fixed"], [], cfg),
+        )
+        db.apply_changes(conn, changes)
+        moved = len(changes)
+    db.set_kv(conn, "calendar.hash", digest)
+    return f"ok: {len(events)} events, {moved} sessions changed"
+
+
+def _forecast(conn: sqlite3.Connection, cfg: SchedulingConfig, client: httpx.Client | None) -> str:
+    if not cfg.weather.enabled:
+        return "skipped: weather disabled (set [weather] in config/local.toml)"
+    forecast = fetch_forecast(cfg.weather, client)
+    db.set_kv(conn, "forecast", json.dumps(forecast))
+    return f"ok: {len(forecast)} hours"
+
+
+def match_activities(conn: sqlite3.Connection, cfg: SchedulingConfig) -> str:
+    """Link unmatched activities to planned sessions; also used right after an upload."""
+    plan = db.active_plan(conn)
+    if plan is None or plan.id is None:
+        return "skipped: no active plan"
+    stored = db.activities(conn)
+    by_hand = {
+        (local_day(a.started_at), a.sport): a
+        for a in stored
+        if a.source == "manual" and a.session_id is not None
+    }
+    unmatched = []
+    for a in (a for a in stored if a.session_id is None):
+        twin = by_hand.pop((local_day(a.started_at), a.sport), None) if a.id else None
+        if twin is not None and a.id is not None:  # you pressed Done, then the watch synced
+            db.replace_manual_activity(conn, twin, a.id)
+        else:
+            unmatched.append(a)
+    matches = match(unmatched, db.plan_sessions(conn, plan.id), cfg.matching)
+    for m in matches:
+        db.link_activity(
+            conn, m.activity_id, m.session_id, rule="matched",
+            reason=f"Matched to an uploaded activity (score {m.score:.2f}).",
+        )  # fmt: skip
+    return f"ok: {len(matches)} matched, {len(unmatched) - len(matches)} unmatched"
+
+
+def adapt_plan(conn: sqlite3.Connection, cfg: SchedulingConfig, today: date) -> list[Change]:
+    """Run the adaptation rules and heat check on the active plan; also used by the web app."""
+    plan = db.active_plan(conn)
+    if plan is None or plan.id is None:
+        return []
+    sessions = db.plan_sessions(conn, plan.id)
+    applied = frozenset(db.applied_rules(conn))
+    # Only events the plan wasn't generated with; it already accounts for the rest.
+    known = set(json.loads(plan.config_snapshot or "{}").get("event_ids", []))
+    new_events = [c for c in db.list_commitments(conn) if c.kind != "fixed" and c.id not in known]
+    horizon = max((s.date for s in sessions), default=today)
+    occurrences = expand_commitments(new_events, today - timedelta(days=7), horizon)
+    state = PlanState(
+        sessions=sessions,
+        activities=db.activities(conn),
+        checkins=db.checkins(conn, today - timedelta(days=28)),
+        applied=applied,
+        flags=frozenset(db.kv_keys(conn)),
+        constraints=day_constraints(occurrences, [], cfg),
+        # Continuous plans rebuild their own return ramp at each weekly re-plan.
+        blocks=block_intervals(new_events) if plan.mode == "race" else [],
+    )
+    changes: list[Change] = evaluate(state, today, cfg)
+    forecast_json = db.get_kv(conn, "forecast")
+    if forecast_json:
+        forecast: dict[str, float] = json.loads(forecast_json)
+        heat = (
+            adjust_for_heat(s, forecast, today, cfg)
+            for s in sessions
+            if (s.id, "heat") not in applied
+        )
+        changes += [change for change in heat if change is not None]
+    db.apply_changes(conn, changes)
+    return changes
+
+
+def weekly_leg_loads(
+    activities: list[Activity], weeks: list[date], factors: LoadFactorsConfig
+) -> dict[date, dict[str, float]]:
+    """Leg load by sport for each Monday in `weeks`, counted as the planner counts it (climbing
+    barely loads the legs)."""
+    loads: dict[date, dict[str, float]] = {week: {} for week in weeks}
+    for a in activities:
+        week = loads.get(monday(local_day(a.started_at)))
+        if week is not None:
+            week[a.sport] = week.get(a.sport, 0.0) + (a.load or 0.0) * leg_factor(a.sport, factors)
+    return loads
+
+
+def activity_habits(
+    activities: list[Activity], today: date, cfg: SchedulingConfig
+) -> dict[str, Habit]:
+    """When you usually do each sport, from your stored activities."""
+    starts = [(a.sport, datetime.fromisoformat(a.started_at).astimezone(TZ)) for a in activities]
+    return learn_habits(starts, today, cfg.habits)
+
+
+def first_record_week(activities: list[Activity], default: date) -> date:
+    """Monday of the first stored activity: weeks before it are unknown, not rest, and counting
+    them as zero load would plan far below what you actually do."""
+    return monday(local_day(activities[0].started_at)) if activities else default
+
+
+def history_from_activities(
+    conn: sqlite3.Connection, cfg: SchedulingConfig, today: date
+) -> History:
+    """Recent weekly leg load from stored activities, for the continuous re-plan."""
+    this_week = monday(today)
+    weeks = [
+        this_week - timedelta(weeks=n) for n in range(cfg.continuous.chronic_load_weeks + 1, 0, -1)
+    ]
+    stored = db.activities(conn)
+    loads = weekly_leg_loads(stored, weeks, cfg.load_factors)
+    first_week = first_record_week(stored, this_week)
+    week_run_minutes = dict.fromkeys(weeks, 0.0)
+    run_minutes: list[float] = []
+    for activity in (a for a in stored if a.sport == "run"):
+        day = local_day(activity.started_at)
+        if monday(day) in week_run_minutes:
+            week_run_minutes[monday(day)] += activity.duration_s / 60
+        if day >= today - timedelta(days=28):
+            run_minutes.append(activity.duration_s / 60)
+    blocks = [c for c in db.list_commitments(conn) if c.kind == "block" and c.active]
+    blocked = {
+        week
+        for week in weeks
+        for c in blocks
+        if c.start_date and c.end_date
+        and date.fromisoformat(c.start_date) <= week
+        and date.fromisoformat(c.end_date) >= week + timedelta(days=6)
+    }  # fmt: skip
+    if not run_minutes:
+        raise RuntimeError("continuous re-plan needs at least one run in the last 28 days")
+    weekly_loads = [
+        WeekLoad(w, sum(loads[w].values()), blocked=w in blocked or w < first_week) for w in weeks
+    ]
+    known = [w.week_start for w in weekly_loads if not w.blocked][
+        -cfg.continuous.chronic_load_weeks :
+    ]
+    spike_since = datetime.combine(
+        today - timedelta(days=cfg.progression.spike_window_days), time(), tzinfo=TZ
+    )
+    return History(
+        habits=activity_habits(stored, today, cfg),
+        recent_long_run_km=db.longest_run_km_since(conn, spike_since, long_only=True),
+        weekly_loads=weekly_loads,
+        weekly_run_minutes=sum(week_run_minutes[w] for w in known) / len(known) if known else 0.0,
+        weekly_run_load=sum(loads[w].get("run", 0.0) for w in known) / len(known) if known else 0.0,
+        week_so_far=weekly_leg_loads(stored, [this_week], cfg.load_factors)[this_week],
+        typical_easy_duration_min=round(median(run_minutes)),
+        checkins=db.checkins(conn, today - timedelta(days=28)),
+        busy=to_busy(db.calendar_events(conn)),
+        longest_recent_run_km=db.longest_run_km_since(conn, spike_since),
+    )
+
+
+def _replan(
+    conn: sqlite3.Connection, cfg: ConfigNode, typed: SchedulingConfig, today: date, now: datetime
+) -> str:
+    plan = db.active_plan(conn)
+    if plan is None or plan.id is None or plan.mode != "continuous":
+        return "skipped: no active continuous plan"
+    athlete = db.get_athlete(conn)
+    if athlete is None:
+        raise RuntimeError("continuous re-plan needs an athlete profile")
+    result = replan_continuous_if_due(
+        conn, plan.id, athlete, history_from_activities(conn, typed, today), today, now,
+        db.list_commitments(conn), cfg,
+    )  # fmt: skip
+    return "ok: not due" if result is None else f"ok: {len(result.sessions)} sessions planned"
+
+
+def _garmin_pull(
+    conn: sqlite3.Connection, cfg: SchedulingConfig, today: date,
+    client: Callable[[], garmin.GarminClient],
+) -> str:  # fmt: skip
+    if not cfg.garmin.enabled:
+        return "skipped: Garmin off ([garmin] enabled)"
+    api = client()
+    activities = garmin.pull_activities(conn, api, cfg, today)
+    rhr = garmin.pull_resting_hr(conn, api, cfg.garmin, today)
+    return f"ok: {activities}, {rhr}, {garmin.pull_sleep(conn, api, cfg.garmin, today)}"
+
+
+def _watch_push(
+    conn: sqlite3.Connection, cfg: SchedulingConfig, today: date, now: datetime,
+    client: Callable[[], garmin.GarminClient],
+) -> str:  # fmt: skip
+    if cfg.export.backend != "garmin":
+        return f"skipped: export backend is {cfg.export.backend!r}"
+    plan = db.active_plan(conn)
+    sessions = db.active_sessions(conn)
+    start = date.fromisoformat(plan.start_date) if plan else today
+    exporter = garmin.GarminExporter(conn, client(), cfg, start, now)
+    report = exporter.sync_window(
+        sessions, today, today + timedelta(days=cfg.export.push_horizon_days)
+    )
+    return f"ok: {report.pushed} pushed, {report.removed} removed, {report.unchanged} unchanged"
+
+
+def run_sync(
+    conn: sqlite3.Connection,
+    cfg: ConfigNode,
+    now_utc: datetime,
+    *,
+    client: httpx.Client | None = None,
+    garmin_connect: Callable[[GarminConfig], garmin.GarminClient] = garmin.connect,
+) -> dict[str, str]:
+    """Run every sync step in order and return each step's one-line outcome."""
+    typed = load_scheduling_config(cfg)
+    today = now_utc.astimezone(TZ).date()
+    connected: list[garmin.GarminClient | Exception] = []
+
+    def garmin_client() -> garmin.GarminClient:
+        # One login per sync, shared by pull and push; a failed login is not retried.
+        if not connected:
+            try:
+                connected.append(garmin_connect(typed.garmin))
+            except Exception as exc:
+                connected.append(exc)
+        if isinstance(connected[0], Exception):
+            raise connected[0]
+        return connected[0]
+
+    steps: dict[str, Callable[[], str]] = {
+        "inbox": lambda: "ok: {} added, {} duplicates, {} failed".format(
+            *vars(ingest_inbox(conn, typed)).values()
+        ),
+        "garmin": lambda: _garmin_pull(conn, typed, today, garmin_client),
+        "calendar": lambda: _calendar(conn, typed, today, client),
+        "forecast": lambda: _forecast(conn, typed, client),
+        "matching": lambda: match_activities(conn, typed),
+        "adaptation": lambda: f"ok: {len(adapt_plan(conn, typed, today))} changes",
+        "replan": lambda: _replan(conn, cfg, typed, today, now_utc),
+        "watch": lambda: _watch_push(conn, typed, today, now_utc, garmin_client),
+    }
+    report: dict[str, str] = {}
+    for name, step in steps.items():
+        try:
+            report[name] = step()
+        except Exception as exc:  # isolation: one failing step never stops the others
+            if conn.in_transaction:
+                conn.rollback()
+            log.exception("sync step %s failed", name)
+            report[name] = f"error: {exc}"
+        else:
+            db.set_kv(conn, f"sync.{name}.last_ok", now_utc.isoformat())
+    db.set_kv(conn, "sync.last_run", now_utc.isoformat())
+    db.set_kv(conn, "sync.last_report", json.dumps(report))
+    log.info("sync: %s", "; ".join(f"{k} {v}" for k, v in report.items()))
+    return report

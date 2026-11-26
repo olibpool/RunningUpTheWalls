@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% set names = {"run": "Run", "football": "Football", "climb": "Climbing", "other": "Activity"} %}
+{% block title %}Log{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">What you did</p>
+  <h1>Log</h1>
+  <p class="muted">Everything from Garmin lands here by itself and is matched to your plan.</p>
+</header>
+{% include "_messages.html" %}
+
+{% for start, entries in weeks %}
+{% set km = entries | selectattr("activity.sport", "equalto", "run") | map(attribute="activity.distance_m") | select | sum / 1000 %}
+<section class="log-week" aria-labelledby="w-{{ start }}">
+  <div class="log-week-head">
+    <h2 id="w-{{ start }}">Week of {{ start.strftime("%d %b") }}</h2>
+    <span class="muted small">{{ entries | length }} session{{ "" if entries | length == 1 else "s" }}{% if km %} · {{ "%.1f" | format(km) }} km run{% endif %}</span>
+  </div>
+  <ul class="log-list">
+    {% for e in entries %}
+    {% set a = e.activity %}
+    <li class="log-item sport-{{ a.sport }}">
+      <span class="sport-icon">{{ icon(a.sport) }}</span>
+      <div class="log-main">
+        <p class="log-title">{% if e.session %}<a href="/session/{{ e.session.id }}">{{ e.session.title }}</a>{% else %}{{ names.get(a.sport, "Activity") }}{% endif %}
+          {% if a.source == "manual" %}<span class="badge">logged by hand</span>{% endif %}</p>
+        <p class="log-meta">{{ a.started_at | local_time }} · {{ a.duration_s // 60 }} min{% if a.distance_m %} · {{ a.distance_m | km }}{% endif %}{% if a.sport == "run" and a.distance_m and a.duration_s %} · {{ (a.duration_s / a.distance_m * 1000) | pace }}/km{% endif %}{% if a.avg_hr %} · {{ a.avg_hr }} bpm{% endif %}{% if a.rpe %} · effort {{ a.rpe | round | int }}/10{% endif %}</p>
+        {% if e.candidates %}
+        <form method="post" action="/activities/{{ a.id }}/assign" class="inline-form">
+          <label class="small">Which session was it?
+            <select name="session_id">
+              {% for s in e.candidates %}<option value="{{ s.id }}">{{ s.date.strftime("%a %d %b") }} · {{ s.title }} ({{ s.duration_min }} min)</option>{% endfor %}
+            </select>
+          </label>
+          <button type="submit" class="small">Assign</button>
+        </form>
+        {% elif e.session and e.session.date != (a.started_at | local_date) %}
+        <form method="post" action="/activities/{{ a.id }}/unassign" class="inline-form">
+          <span class="log-meta">Matched to {{ e.session.date.strftime("%A") }}'s session.</span>
+          <button type="submit" class="small ghost">Not this session</button>
+        </form>
+        {% elif not e.session and plan_start and start >= plan_start %}
+        <p class="log-meta">Not in the plan; still counted in your training load.</p>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% else %}
+<section class="panel empty-state">
+  <p>Nothing logged yet. <a href="/settings#garmin-title">Connect Garmin</a> and your activities arrive by themselves.</p>
+</section>
+{% endfor %}
+
+{% if unrated %}
+<section class="panel" aria-labelledby="rate-title">
+  <div class="panel-head">
+    <h2 id="rate-title">How hard did it feel?</h2>
+    <span class="muted small">1 easy · 10 all-out</span>
+  </div>
+  <ul class="rate-list">{% for a in unrated %}{% include "_rate.html" %}{% endfor %}</ul>
+</section>
+{% endif %}
+
+<details class="panel" id="upload"{% if errors %} open{% endif %}>
+  <summary>{{ icon("upload") }}No Garmin? Upload a file {{ icon("right", "chev") }}</summary>
+  <form method="post" action="/activities/upload" enctype="multipart/form-data" class="stack">
+    <label class="dropzone">
+      {{ icon("upload", "big") }}
+      <span><strong>Choose a file</strong> or drop it here</span>
+      <span class="dropzone-name muted">{{ accept }}</span>
+      <input type="file" name="file" accept="{{ accept }}" required aria-label="Activity file ({{ accept }})">
+    </label>
+    <progress max="100" value="0" hidden></progress>
+    <div class="actions"><button type="submit">{{ icon("upload") }}Upload</button></div>
+  </form>
+  <p class="muted small">Matched to your plan automatically. The same file twice is ignored.</p>
+</details>
+{% endblock %}

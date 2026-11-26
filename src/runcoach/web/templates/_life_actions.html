@@ -1,0 +1,27 @@
+{% from "_icons.html" import icon %}
+{# Life happens: the quick logs the plan adapts to, one or two taps each. #}
+<section class="life-actions" aria-labelledby="life-title">
+  <h2 id="life-title" class="eyebrow">Life happens</h2>
+  <div class="life-grid">
+    <details class="life-drinks">
+      <summary class="life-button kind-penalty">{{ icon("drinks") }}<span>Drinks tonight</span></summary>
+      <div class="life-pop">
+        <p class="small muted">How big a night? The plan keeps tomorrow easy either way.</p>
+        <div class="actions">
+          {% for sev, label in [(1, "A couple"), (2, "A proper night"), (3, "A big one")] %}
+          <form method="post" action="/events" hx-post="/events" hx-target="#life-reply" hx-swap="innerHTML">
+            <input type="hidden" name="form" value="drinks"><input type="hidden" name="reply" value="1">
+            <input type="hidden" name="date" value="{{ today }}"><input type="hidden" name="severity" value="{{ sev }}">
+            <button type="submit" class="small ghost">{{ label }}</button>
+          </form>
+          {% endfor %}
+        </div>
+        <p class="small"><a href="/events#drinks">Another night?</a></p>
+      </div>
+    </details>
+    <a class="life-button kind-ill" href="/checkin#ill">{{ icon("ill") }}<span>Feeling ill</span></a>
+    <a class="life-button kind-niggle" href="/checkin#niggle">{{ icon("niggle") }}<span>A niggle</span></a>
+    <a class="life-button kind-block" href="/events#holiday">{{ icon("away") }}<span>Going away</span></a>
+  </div>
+  <div id="life-reply"></div>
+</section>

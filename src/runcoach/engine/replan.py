@@ -17,7 +17,8 @@ def should_replan(
     last_replanned_at: str | None,
     cfg: ConfigNode | SchedulingConfig,
 ) -> bool:
-    typed_cfg = cfg if isinstance(cfg, SchedulingConfig) else load_scheduling_config(cfg)
+    """True on the first sync of a new week (from Monday) or once the interval has passed."""
+    typed_cfg = load_scheduling_config(cfg)
     if typed_cfg.continuous.replan_interval_days <= 0:
         raise ValueError("continuous.replan_interval_days must be positive")
     current_time = _utc_datetime(now_utc, "now_utc")
@@ -28,7 +29,10 @@ def should_replan(
         except ValueError as exc:
             raise ValueError("last_replanned_at must be an ISO 8601 UTC timestamp") from exc
         last_replanned = _utc_datetime(parsed, "last_replanned_at")
-    if today.weekday() == 0 or last_replanned is None:
+    if last_replanned is None:
+        return True
+    # Once per week from Monday: a 30-minute sync timer must not re-plan all day.
+    if last_replanned.date() < today - timedelta(days=today.weekday()):
         return True
     return current_time - last_replanned >= timedelta(
         days=typed_cfg.continuous.replan_interval_days

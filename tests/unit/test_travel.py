@@ -3,13 +3,14 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from configs import typed
 
-from runcoach.config import load_config, load_scheduling_config
+from runcoach.engine.templates import scale_session
 from runcoach.engine.travel import minimal_travel_plan
 
 
 def test_minimal_travel_plan_has_configured_runs_and_strides() -> None:
-    config = load_scheduling_config(load_config(env={}))
+    config = typed()
 
     sessions = minimal_travel_plan(date(2026, 11, 9), 45, config)
 
@@ -17,14 +18,17 @@ def test_minimal_travel_plan_has_configured_runs_and_strides() -> None:
     assert all(session.date == date(2026, 11, 9) for session in sessions)
     assert all(session.kind == "easy" for session in sessions)
     assert all(session.duration_min == 15 for session in sessions)
-    assert sessions[0].steps[0].kind == "repeat"
-    assert sessions[0].steps[0].repeats == config.minimal_plan.strides_repeats
+    steady, strides = sessions[0].steps
+    assert steady.kind == "steady" and strides.kind == "repeat"
+    assert strides.repeats == config.minimal_plan.strides_repeats
+    # The easy running is a step, so trimming the run shortens it rather than leaving strides.
+    assert 10 <= (scale_session(sessions[0], 0.8).duration_min or 0) < 15
     assert "strides" in sessions[0].reason
     assert all(session.start_time is None for session in sessions)
 
 
 def test_minimal_travel_plan_rejects_bad_inputs() -> None:
-    config = load_scheduling_config(load_config(env={}))
+    config = typed()
 
     with pytest.raises(ValueError, match="Monday"):
         minimal_travel_plan(date(2026, 11, 10), 45, config)

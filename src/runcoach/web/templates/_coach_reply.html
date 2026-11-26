@@ -1,0 +1,13 @@
+{% from "_icons.html" import icon %}
+{# What the plan did after a quick log: `changes` is a list of (session or None, reason). #}
+<div class="coach-reply" role="status">
+  <p><strong>{{ icon("check") }} Got it.</strong>
+  {% if changes %}Here's how the plan moved around it:{% else %}Nothing needed to change; the plan already leaves room.{% endif %}</p>
+  {% if changes %}
+  <ul>
+    {% for s, reason in changes %}
+    <li>{% if s %}<a href="/session/{{ s.id }}">{{ s.date.strftime("%a") }} · {{ s.title }}</a>: {% endif %}{{ reason | plain }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>

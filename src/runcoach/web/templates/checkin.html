@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Check-in{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">{{ today.strftime("%A %d %B") }}</p>
+  <h1>How are you?</h1>
+  <p class="muted">Tell the plan about illness or a niggle and it backs off, then ramps you back. Resting heart rate and sleep come from Garmin.</p>
+</header>
+{% include "_messages.html" %}
+
+{% if saved %}
+<div class="banner warning" role="status">
+  <p><strong>Saved.</strong>
+  {% if changes %}The plan changed:{% else %}No changes to the plan.{% endif %}</p>
+  {% if changes %}<ul>{% for c in changes %}<li>{{ c.reason | plain }}{% if c.session_id %} (<a href="/session/{{ c.session_id }}">session</a>){% endif %}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% endif %}
+
+{% include "_readiness.html" %}
+
+<form method="post" action="/checkin" class="stack panel">
+  <fieldset class="feel">
+    <legend>How do you feel? (1 = awful, 5 = great)</legend>
+    <div class="segmented big">
+      {% for n, face in [(1, "😫"), (2, "🙁"), (3, "😐"), (4, "🙂"), (5, "😄")] %}
+      <label><input type="radio" name="feel" value="{{ n }}"{% if current and current.feel == n %} checked{% endif %}><span><span aria-hidden="true">{{ face }}</span><small>{{ n }}</small></span></label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <label id="niggle">Any niggle? (where)
+    <input name="niggle" value="{{ current.niggle if current and current.niggle else '' }}" placeholder="e.g. left calf">
+  </label>
+  <label class="switch" id="ill"><input type="checkbox" role="switch" name="ill" value="true"{% if current and current.ill %} checked{% endif %}><span class="track" aria-hidden="true"></span> I'm ill</label>
+  <label class="switch"><input type="checkbox" role="switch" name="fever" value="true"{% if current and current.fever %} checked{% endif %}><span class="track" aria-hidden="true"></span> Fever or chest symptoms</label>
+  <label>Resting heart rate (bpm)
+    <input type="number" name="resting_hr" min="21" max="149" inputmode="numeric" value="{{ current.resting_hr if current and current.resting_hr else '' }}">
+  </label>
+  <label>Sleep last night (hours)
+    <input type="number" name="sleep_hours" min="0" max="16" step="0.25" inputmode="decimal" value="{{ current.sleep_hours if current and current.sleep_hours is not none else '' }}">
+  </label>
+  <label>Notes <input name="notes" value="{{ current.notes if current and current.notes else '' }}"></label>
+  <div class="actions"><button type="submit">Save check-in</button></div>
+</form>
+<p class="muted small">A niggle removes pace targets and quality for {{ illness.niggle_days }} days; illness for {{ illness.ill_days }}, then the plan ramps back. With a fever or symptoms below the neck (chest, aching muscles) there is no running for {{ illness.fever_rest_days }} days: rest until the fever has gone.</p>
+{% endblock %}

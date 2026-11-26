@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+from configs import defaults
 
 from runcoach import db
-from runcoach.config import load_config
 from runcoach.domain.models import Athlete, PlannedSession
 from runcoach.engine.continuous import History, WeekLoad
 from runcoach.engine.replan import should_replan
@@ -13,7 +13,7 @@ from runcoach.sync import replan_continuous_if_due
 
 
 def test_replan_gate_runs_on_mondays_or_after_interval() -> None:
-    config = load_config(env={})
+    config = defaults()
     last_replanned = "2026-11-04T10:00:00+00:00"
 
     assert should_replan(
@@ -34,10 +34,17 @@ def test_replan_gate_runs_on_mondays_or_after_interval() -> None:
         last_replanned,
         config,
     )
+    # Already re-planned this Monday: later syncs the same day must not re-plan again.
+    assert not should_replan(
+        date(2026, 11, 9),
+        datetime(2026, 11, 9, 10, 30, tzinfo=timezone.utc),
+        "2026-11-09T10:00:00+00:00",
+        config,
+    )
 
 
 def test_replan_gate_requires_valid_utc_timestamp() -> None:
-    config = load_config(env={})
+    config = defaults()
     now = datetime(2026, 11, 11, 10, tzinfo=timezone.utc)
 
     with pytest.raises(ValueError, match="UTC"):
@@ -52,20 +59,27 @@ def test_replan_gate_requires_valid_utc_timestamp() -> None:
 
 
 def test_replan_gate_honors_configured_interval() -> None:
-    config = load_config(env={})
-    config.continuous.replan_interval_days = 10
-    last = datetime(2026, 11, 1, 10, tzinfo=timezone.utc)
+    config = defaults()
+    config.continuous.replan_interval_days = 3
+    last = datetime(2026, 11, 9, 10, tzinfo=timezone.utc)  # a Monday re-plan
 
     assert not should_replan(
-        date(2026, 11, 10),
-        last + timedelta(days=9, hours=23),
+        date(2026, 11, 12),
+        last + timedelta(days=2, hours=23),
         last.isoformat(),
         config,
     )
     assert should_replan(
-        date(2026, 11, 11),
-        last + timedelta(days=10),
+        date(2026, 11, 12),
+        last + timedelta(days=3),
         last.isoformat(),
+        config,
+    )
+    # A missed Monday is caught by the first sync later that week.
+    assert should_replan(
+        date(2026, 11, 18),
+        datetime(2026, 11, 18, 9, tzinfo=timezone.utc),
+        "2026-11-12T10:00:00+00:00",
         config,
     )
 
@@ -73,7 +87,7 @@ def test_replan_gate_honors_configured_interval() -> None:
 def test_sync_replans_when_due_and_skips_recent_non_monday_runs(tmp_path) -> None:
     conn = db.connect(tmp_path / "sync-replan.db")
     today = date(2026, 11, 9)
-    config = load_config(env={})
+    config = defaults()
     config.continuous.weeks_ahead = 1
     plan_id = db.save_plan(
         conn,

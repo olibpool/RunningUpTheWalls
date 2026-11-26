@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tomllib
 from pathlib import Path
@@ -7,6 +8,8 @@ from types import SimpleNamespace
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from runcoach.domain.models import Distance, Sport
 
 
 class ConfigNode(SimpleNamespace):
@@ -61,6 +64,8 @@ class SchedulerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     min_hours_between_hard_leg: int
+    max_runs_per_day: int = Field(ge=1)
+    max_hard_leg_days_per_week: int = Field(ge=1)
     relaxed_hours_between_hard_leg: int
     min_hours_between_limit_climbs: int
     min_hours_same_day_gap: int
@@ -70,6 +75,8 @@ class SchedulerConfig(BaseModel):
     limit_climb_before_long_cost: int
     hard_run_climb_same_day_cost: int
     same_day_climb_cost: int
+    same_day_session_cost: int
+    adjacent_run_day_cost: int
     climbing_spacing_days: int
     drop_cost_easy: int
     drop_cost_climb: int
@@ -92,7 +99,12 @@ class ProgressionConfig(BaseModel):
     cutback_every_n_weeks: int
     cutback_factor: float
     max_long_run_share: float
+    long_share_min_runs: int = Field(ge=2)
     max_long_run_minutes: int
+    max_weekly_km_per_run: float = Field(gt=0)
+    marathon_max_long_run_share: float = Field(gt=0, lt=1)
+    max_single_run_increase: float = Field(ge=0)
+    spike_window_days: int = Field(gt=0)
     min_rest_days_per_week: int
 
 
@@ -100,6 +112,8 @@ class ContinuousConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     weekly_increase: float = Field(ge=0)
+    min_runs_per_week: int = Field(ge=0)
+    ceiling_run_rpe: float = Field(gt=0, le=10)
     weeks_ahead: int = Field(gt=0)
     replan_interval_days: int = Field(gt=0)
     chronic_load_weeks: int = Field(gt=0)
@@ -110,7 +124,6 @@ class ContinuousConfig(BaseModel):
     acr_low: float = Field(gt=0)
     acr_high: float = Field(gt=0)
     acr_hold: float = Field(gt=0)
-    quality_load_share: float = Field(ge=0, le=1)
 
     @model_validator(mode="after")
     def validate_acr_thresholds(self) -> ContinuousConfig:
@@ -171,6 +184,37 @@ class MinimalPlanConfig(BaseModel):
     stride_recovery_s: int = Field(gt=0)
 
 
+class RaceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_time: str
+    warmup_min: int = Field(ge=0)
+    easy_days_before: int = Field(ge=0)
+    week_easy_max_min: int = Field(gt=0)
+    week_max_runs: int = Field(ge=0)
+
+
+class FuelConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    long_run_min: int = Field(gt=0)
+    carbs_g_per_h: tuple[int, int]
+    carb_load_days: dict[Distance, int]
+    carb_load_g_per_kg: tuple[int, int]
+    first_km_slower_s: tuple[int, int]
+
+
+class FitnessConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    window_days: int = Field(gt=0)
+    min_runs: int = Field(gt=0)
+    min_minutes: int = Field(gt=0)
+    hrr_range: tuple[float, float]
+    retest_gap_vdot: float = Field(gt=0)
+    trend_weeks: int = Field(gt=0)
+
+
 class TimeTrialConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -187,6 +231,9 @@ class ReadinessConfig(BaseModel):
 
     rhr_window_days: int = Field(gt=0)
     rhr_min_samples: int = Field(gt=0)
+    short_sleep_h: float = Field(gt=0)
+    low_sleep_avg_h: float = Field(gt=0)
+    sleep_avg_nights: int = Field(gt=0)
 
     @model_validator(mode="after")
     def validate_sample_count(self) -> ReadinessConfig:
@@ -195,9 +242,214 @@ class ReadinessConfig(BaseModel):
         return self
 
 
-class SchedulingConfig(BaseModel):
+class ZonesConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    easy: tuple[float, float]
+    marathon: float
+    threshold: float
+    interval: float
+    repetition: float
+
+    @model_validator(mode="after")
+    def validate_order(self) -> ZonesConfig:
+        fractions = [*self.easy, self.marathon, self.threshold, self.interval, self.repetition]
+        if any(left >= right for left, right in zip(fractions, fractions[1:])):
+            raise ValueError("zones fractions must strictly increase from easy to repetition")
+        return self
+
+
+class RpeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recovery: float = Field(gt=0, le=10)
+    easy: float = Field(gt=0, le=10)
+    strides: float = Field(gt=0, le=10)
+    long: float = Field(gt=0, le=10)
+    tempo: float = Field(gt=0, le=10)
+    intervals: float = Field(gt=0, le=10)
+    long_mp: float = Field(gt=0, le=10)
+    race: float = Field(gt=0, le=10)
+
+
+class BlocksConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    base: float = Field(ge=0)
+    build: float = Field(ge=0)
+    peak: float = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_total(self) -> BlocksConfig:
+        if abs(self.base + self.build + self.peak - 1.0) > 1e-9:
+            raise ValueError("blocks shares must sum to 1")
+        return self
+
+
+class TemplatesConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    warmup_min: int = Field(gt=0)
+    cooldown_min: int = Field(gt=0)
+    tempo_work_min: tuple[int, int]
+    tempo_continuous_max_min: int = Field(gt=0)
+    cruise_rep_max_min: int = Field(gt=0)
+    cruise_recovery_s_per_5min: int = Field(ge=0)
+    tempo_max_share_of_week_km: float = Field(gt=0, le=1)
+    interval_max_share_of_week_km: float = Field(gt=0, le=1)
+    long_mp_finish_share: float = Field(gt=0, lt=1)
+    long_mp_finish_max_min: int = Field(gt=0)
+    interval_repeats: tuple[int, int]
+    interval_rep_min: tuple[int, int]
+    strides_repeats: int = Field(gt=0)
+    stride_s: int = Field(gt=0)
+    stride_recovery_s: int = Field(gt=0)
+    recovery_share_of_easy: float = Field(gt=0, le=1)
+    long_share: tuple[float, float]
+    easy_max_share_of_long: float = Field(gt=0, le=1)
+    marathon_long_share: tuple[float, float]
+    min_easy_minutes: int = Field(gt=0)
+    max_quality_share: float = Field(gt=0, le=1)
+
+
+class MatchingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    max_score: float = Field(gt=0)
+
+
+class IllnessConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    niggle_days: int = Field(gt=0)
+    ill_days: int = Field(gt=0)
+    fever_rest_days: int = Field(ge=0)
+    return_ramp: list[float]
+
+
+class RetestConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    quality_runs: int = Field(gt=0)
+    faster_by: float = Field(gt=0, lt=1)
+
+
+class HeatConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    points: list[tuple[float, float]]
+    quality_to_easy_above_c: float
+    suggest_rest_or_indoor_above_c: float
+    days_ahead: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_points(self) -> HeatConfig:
+        temps = [t for t, _ in self.points]
+        if len(temps) < 2 or temps != sorted(temps):
+            raise ValueError("heat_pace_penalty_pct.points need 2+ entries in temperature order")
+        return self
+
+
+class WeatherConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    timeout_s: float = Field(gt=0)
+
+
+class InboxConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+
+
+class GcalConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ics_url: str = Field(repr=False)  # a secret; keep it out of reprs and logs
+    days_back: int = Field(ge=0)
+    days_ahead: int = Field(gt=0)
+    reschedule_days: int = Field(gt=0)
+
+
+class StorageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    db_path: str
+    backup_dir: str
+    backup_keep: int = Field(gt=0)
+
+
+class ExportConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    backend: Literal["none", "garmin", "fit"]
+    push_horizon_days: int = Field(gt=0)
+
+
+class HabitsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    window_weeks: int = Field(gt=0)
+    min_sessions: int = Field(gt=0)
+    weekday_share: float = Field(gt=0, le=1)
+    round_minutes: int = Field(gt=0)
+    off_day_cost: float = Field(ge=0)
+    per_hour_cost: float = Field(ge=0)
+    max_hours: float = Field(ge=0)
+
+
+class ProgressConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    streak_per_week: int = Field(gt=0)
+    fastest_min_km: float = Field(gt=0)
+    grid_weeks: int = Field(gt=0)
+    upcoming_days: int = Field(gt=0)
+    typical_window_days: int = Field(gt=0)
+    typical_min_samples: int = Field(gt=0)
+    typical_tolerance: float = Field(gt=0)
+
+
+class SyncConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    auto_minutes: int = Field(ge=0)
+
+
+class GarminConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    token_dir: str
+    pull_days_back: int = Field(gt=0)
+    health_days_back: int = Field(ge=0)
+    workout_name_max: int = Field(gt=0)
+    sport_keywords: dict[Sport, list[str]] = {}
+
+
+class ComplianceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pace_tolerance_s_per_km: float = Field(ge=0)
+    on_target_share: float = Field(gt=0, le=1)
+
+
+class SchedulingConfig(BaseModel):
+    """Typed view of the whole config; unknown sections or keys raise."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    zones: ZonesConfig
+    rpe: RpeConfig
+    blocks: BlocksConfig
+    templates: TemplatesConfig
+    race_min_weeks: dict[Distance, int]
+    min_peak_weekly_km: dict[Distance, float]
+    taper_factors: dict[Distance, list[float]]
+    peak_weekly_km: dict[Distance, float]
     load_factors: LoadFactorsConfig
     climbing_defaults: ClimbingDefaultsConfig
     availability: AvailabilityConfig
@@ -209,7 +461,25 @@ class SchedulingConfig(BaseModel):
     return_ramp: ReturnRampConfig
     minimal_plan: MinimalPlanConfig
     time_trial: TimeTrialConfig
+    race: RaceConfig
+    fuel: FuelConfig
+    fitness: FitnessConfig
     readiness: ReadinessConfig
+    default_rpe: dict[Sport, float]
+    matching: MatchingConfig
+    illness: IllnessConfig
+    retest: RetestConfig
+    heat_pace_penalty_pct: HeatConfig
+    weather: WeatherConfig
+    inbox: InboxConfig
+    gcal: GcalConfig
+    storage: StorageConfig
+    export: ExportConfig
+    sync: SyncConfig
+    progress: ProgressConfig
+    habits: HabitsConfig
+    garmin: GarminConfig
+    compliance: ComplianceConfig
 
 
 def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -220,18 +490,6 @@ def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
         else:
             merged[key] = value
     return merged
-
-
-def _set_nested(target: dict[str, Any], path: list[str], value: Any) -> None:
-    current = target
-    for part in path[:-1]:
-        if part not in current or not isinstance(current[part], dict):
-            raise ValueError(f"Unknown config key: {'__'.join(path)}")
-        current = current[part]
-    last = path[-1]
-    if last not in current and path[-1] not in current:
-        raise ValueError(f"Unknown config key: {'__'.join(path)}")
-    current[last] = value
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -290,34 +548,58 @@ def _to_mapping(value: object) -> object:
     return value
 
 
-def load_scheduling_config(config: ConfigNode) -> SchedulingConfig:
-    """Validate the typed multi-sport scheduling configuration."""
+SETTINGS_PATH = Path("~/.config/runcoach/settings.json")  # written by the in-app settings page
+
+
+def read_settings(path: Path | None = None) -> dict[str, Any]:
+    """Overrides saved from the settings page; empty when none were saved."""
+    file = (path or SETTINGS_PATH).expanduser()
+    if not file.exists():
+        return {}
+    data = json.loads(file.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{file} must hold a JSON object")
+    return data
+
+
+def save_settings(update: dict[str, Any], path: Path | None = None) -> dict[str, Any]:
+    """Merge update into the saved overrides and write them atomically; returns the result."""
+    file = (path or SETTINGS_PATH).expanduser()
+    merged = _merge(read_settings(file), update)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    tmp = file.with_suffix(".tmp")
+    tmp.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+    tmp.chmod(0o600)  # holds the calendar's secret address
+    tmp.replace(file)
+    return merged
+
+
+def with_overrides(config: ConfigNode, overrides: dict[str, Any]) -> ConfigNode:
+    """A copy of config with overrides merged on top."""
+    data = _to_mapping(config)
+    assert isinstance(data, dict)
+    result = ConfigNode.from_mapping(_merge(data, overrides))
+    assert isinstance(result, ConfigNode)
+    return result
+
+
+def load_scheduling_config(config: ConfigNode | SchedulingConfig) -> SchedulingConfig:
+    """Validate the typed multi-sport scheduling configuration (a typed one passes through)."""
+    if isinstance(config, SchedulingConfig):
+        return config
     data = _to_mapping(config)
     if not isinstance(data, dict):
         raise TypeError("config must be a ConfigNode mapping")
-    return SchedulingConfig.model_validate(
-        {
-            "load_factors": data.get("load_factors"),
-            "climbing_defaults": data.get("climbing_defaults"),
-            "availability": data.get("availability"),
-            "scheduler": data.get("scheduler"),
-            "calendar_keywords": data.get("calendar_keywords"),
-            "progression": data.get("progression"),
-            "continuous": data.get("continuous"),
-            "penalty": data.get("penalty"),
-            "return_ramp": data.get("return_ramp"),
-            "minimal_plan": data.get("minimal_plan"),
-            "time_trial": data.get("time_trial"),
-            "readiness": data.get("readiness"),
-        }
-    )
+    return SchedulingConfig.model_validate(data)
 
 
 def load_config(
     defaults_path: Path | str | None = None,
     local_path: Path | str | None = None,
     env: dict[str, str] | None = None,
+    settings_path: Path | None = None,
 ) -> ConfigNode:
+    """defaults.toml, then local.toml, then RUNCOACH_* env, then the settings page's saves."""
     base_dir = Path(__file__).resolve().parents[2]
     defaults_file = Path(defaults_path) if defaults_path else base_dir / "config" / "defaults.toml"
     local_file = Path(local_path) if local_path else base_dir / "config" / "local.toml"
@@ -327,6 +609,7 @@ def load_config(
     local_cfg = _load_toml(local_file)
     config = _merge(config, local_cfg)
     config = _apply_env_overrides(config, env_map)
+    config = _merge(config, read_settings(settings_path))
     result = ConfigNode.from_mapping(config)
     assert isinstance(result, ConfigNode)
     return result

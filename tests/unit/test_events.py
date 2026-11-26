@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
+from configs import typed
 
-from runcoach.config import load_config, load_scheduling_config
 from runcoach.domain.models import Checkin, Commitment
 from runcoach.engine.events import CommitmentOccurrence, day_constraints, expand_commitments
 
@@ -27,7 +27,7 @@ def test_penalty_applies_easy_constraint_for_severity_window(
         severity=severity,
     )
 
-    constraints = day_constraints([event], [], load_scheduling_config(load_config(env={})))
+    constraints = day_constraints([event], [], typed())
 
     for offset in range(following_days + 1):
         constraint = constraints[event_day + timedelta(days=offset)]
@@ -45,14 +45,14 @@ def test_block_expansion_blocks_every_inclusive_date() -> None:
     )
     events = expand_commitments([block], date(2026, 12, 20), date(2026, 12, 22))
 
-    constraints = day_constraints(events, [], load_scheduling_config(load_config(env={})))
+    constraints = day_constraints(events, [], typed())
 
     assert len(constraints) == 3
     assert {item.max_intensity for item in constraints.values()} == {"blocked"}
 
 
 def test_credit_load_and_checkin_easy_constraint() -> None:
-    config = load_scheduling_config(load_config(env={}))
+    config = typed()
     events = [
         CommitmentOccurrence(
             commitment_id=1,
@@ -114,7 +114,7 @@ def test_constraints_merge_with_block_taking_precedence() -> None:
         ),
     ]
 
-    constraint = day_constraints(events, [], load_scheduling_config(load_config(env={})))[day]
+    constraint = day_constraints(events, [], typed())[day]
 
     assert constraint.max_intensity == "blocked"
     assert constraint.sources == frozenset({"penalty", "block"})

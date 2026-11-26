@@ -47,7 +47,8 @@ def session_load(
     raise ValueError(f"Unsupported sport for load calculation: {sport}")
 
 
-def duration_from_distance_and_pace(distance_m: float, pace_s_per_km: float) -> float:
-    if pace_s_per_km <= 0:
-        raise ValueError("pace_s_per_km must be positive")
-    return (distance_m / 1000.0) * pace_s_per_km / 60.0
+def leg_factor(sport: str, cfg: LoadFactorsConfig) -> float:
+    """Share of an activity's session-RPE load that falls on the legs."""
+    return {"football": cfg.football_leg, "climb": cfg.climb_leg, "rest": 0.0}.get(
+        sport, cfg.run_leg
+    )

@@ -1,0 +1,127 @@
+"""Shared request dependencies and rendering helpers for the web routes."""
+
+from __future__ import annotations
+
+import sqlite3
+from collections.abc import Iterator
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from fastapi import Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, ValidationError
+from starlette.datastructures import FormData
+
+from runcoach import db, display
+from runcoach.adapt.compliance import executed_steps
+from runcoach.config import ConfigNode
+from runcoach.domain.models import LOCAL_TIMEZONE
+from runcoach.web import stats
+
+TIMEZONE = ZoneInfo(LOCAL_TIMEZONE)
+
+# Top-level pages (key, label, href, icon); the first five are the phone's tab bar.
+NAV = [
+    ("home", "Today", "/", "home"),
+    ("week", "Plan", "/week", "calendar"),
+    ("progress", "Progress", "/progress", "chart"),
+    ("events", "Life", "/events", "flag"),
+    ("activities", "Log", "/activities", "pulse"),
+    ("settings", "Settings", "/settings", "cog"),
+    ("guide", "Guide", "/guide", "book"),
+]
+TABS = 5
+
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+templates.env.filters.update(
+    pace=display.pace,
+    step_pace=display.step_pace,
+    main_pace=display.main_pace,
+    structure=display.structure,
+    clock=display.clock,
+    km=display.km,
+    why=display.why,
+    plain=display.plain,
+    phase=display.phase,
+)
+templates.env.globals.update(
+    nav=NAV,
+    tabs=TABS,
+    executed_steps=executed_steps,
+    timedelta=timedelta,
+    sport_names={"run": "Running", "football": "Football", "climb": "Climbing", "other": "Other"},
+)
+
+
+def _km_bars(weeks: list[stats.HasWeekKm], link: bool = False) -> list[stats.Bar]:
+    return stats.km_bars(weeks, display.monday(today()), link)
+
+
+templates.env.globals["km_bars"] = _km_bars
+
+
+def _local(utc_iso: str) -> datetime:
+    return datetime.fromisoformat(utc_iso).astimezone(TIMEZONE)
+
+
+def _local_time(utc_iso: str) -> str:
+    return datetime.fromisoformat(utc_iso).astimezone(TIMEZONE).strftime("%a %d %b %H:%M")
+
+
+templates.env.filters["local_time"] = _local_time
+templates.env.filters["local_date"] = lambda utc_iso: _local(utc_iso).date()
+
+
+def get_conn(request: Request) -> Iterator[sqlite3.Connection]:
+    """Open one database connection per request."""
+    conn = db.connect(request.app.state.db_path)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def get_cfg(request: Request) -> ConfigNode:
+    """Return the config loaded when the app started."""
+    cfg: ConfigNode = request.app.state.cfg
+    return cfg
+
+
+def today() -> date:
+    """Today's local date in the athlete's timezone."""
+    return datetime.now(TIMEZONE).date()
+
+
+def is_htmx(request: Request) -> bool:
+    """True when htmx asked for a fragment; boosted links and forms want whole pages."""
+    headers = request.headers
+    return headers.get("HX-Request") == "true" and headers.get("HX-Boosted") != "true"
+
+
+def render(
+    request: Request, name: str, context: dict[str, Any], status_code: int = 200
+) -> HTMLResponse:
+    """Render a template with the request in its context."""
+    return templates.TemplateResponse(request, name, context, status_code=status_code)
+
+
+def redirect(request: Request, url: str) -> Response:
+    """Redirect after a POST, in a way both htmx and plain forms follow."""
+    if is_htmx(request):
+        return Response(status_code=204, headers={"HX-Redirect": url})
+    return RedirectResponse(url, status_code=303)
+
+
+def parse_form[M: BaseModel](model: type[M], form: FormData) -> tuple[M | None, list[str]]:
+    """Validate form fields into a model; blank fields count as missing."""
+    data = {key: value for key, value in form.items() if value != ""}
+    try:
+        return model.model_validate(data), []
+    except ValidationError as exc:
+        return None, [
+            f"{'.'.join(str(part) for part in error['loc']) or 'form'}: {error['msg']}"
+            for error in exc.errors()
+        ]

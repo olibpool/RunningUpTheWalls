@@ -1,0 +1,11 @@
+{% from "_icons.html" import icon %}
+<div id="sync-status" class="sync-status{% if running %} running{% endif %}"{% if running %} hx-get="/sync/status" hx-trigger="every 2s" hx-swap="outerHTML" hx-indicator="#sync-status .icon"{% endif %} aria-live="polite">
+  {% if running %}
+  <p>{{ icon("sync", "spin") }}<strong>Sync running…</strong></p>
+  {% elif last_run %}
+  <p class="muted">Last sync {{ last_run | local_time }}</p>
+  <ul class="steps-report">{% for step, outcome in report.items() %}<li class="{{ 'bad' if outcome.startswith('error') else 'ok' }}"><strong>{{ step }}</strong><span>{{ outcome }}</span></li>{% endfor %}</ul>
+  {% else %}
+  <p class="muted">No sync has run yet.</p>
+  {% endif %}
+</div>

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% macro field(name, label, type="text", hint="", attrs="") %}
+<label>{{ label }}
+  <input type="{{ type }}" name="{{ name }}" value="{{ form.get(name, '') }}" {{ attrs | safe }}>
+  {% if hint %}<small class="muted">{{ hint }}</small>{% endif %}
+</label>
+{% endmacro %}
+{% macro distance_select(name, label, blank=False) %}
+<label>{{ label }}
+  <select name="{{ name }}">
+    {% if blank %}<option value="">None</option>{% endif %}
+    {% for d, text in [("5k", "5K"), ("10k", "10K"), ("half", "Half marathon"), ("marathon", "Marathon")] %}
+    <option value="{{ d }}"{% if form.get(name) == d %} selected{% endif %}>{{ text }}</option>
+    {% endfor %}
+  </select>
+</label>
+{% endmacro %}
+{% block title %}New plan{% endblock %}
+{% block content %}
+<h1>New race plan</h1>
+<p class="muted">Fixed commitments such as football, added under <a href="/events">Events</a>, are scheduled around automatically.</p>
+<p>No race in mind? <a href="/plan/continuous">Try continuous improvement mode</a>.</p>
+<form id="plan-form" method="post" action="/plan/new" class="stack panel">
+  <fieldset>
+    <legend>Goal</legend>
+    {{ distance_select("distance", "Race distance") }}
+    {{ field("goal_date", "Race date", "date", attrs="required") }}
+  </fieldset>
+  <fieldset>
+    <legend>Current fitness</legend>
+    {{ distance_select("race_distance", "Recent race or time trial", blank=True) }}
+    {{ field("race_time", "Its finishing time", hint="mm:ss or h:mm:ss", attrs='placeholder="25:00"') }}
+    {{ field("vdot", "Or your VDOT", "number", hint="Used only when no race time is given", attrs='step="0.1" min="20" max="90"') }}
+    {{ field("current_weekly_km", "Current weekly running (km)", "number", hint="Filled in from your last 4 weeks of recorded runs, when there are any.", attrs='step="0.1" min="0" required') }}
+  </fieldset>
+  <fieldset>
+    <legend>Week shape</legend>
+    {{ field("runs_per_week", "Runs per week", "number", attrs='min="2" max="6" required') }}
+    {{ field("climbing_target_per_week", "Climbing sessions per week", "number", attrs='min="0" max="3"') }}
+  </fieldset>
+  <div class="actions"><button type="submit">Preview plan</button></div>
+</form>
+
+{% include "_messages.html" %}
+
+{% if result %}
+<section id="preview" class="preview" aria-labelledby="preview-title">
+  <h2 id="preview-title">Preview</h2>
+  <p>VDOT {{ inp.vdot }} · {{ result.sessions | length }} sessions over {{ weeks | length }} weeks.</p>
+  {% if result.violations %}
+  <div class="banner error" role="alert">
+    <p><strong>This plan fails the safety checks and can't be saved:</strong></p>
+    <ul>{% for v in result.violations %}<li>{{ v.kind }}: {{ v.message }}</li>{% endfor %}</ul>
+  </div>
+  {% else %}
+  <div class="actions"><button type="submit" form="plan-form" formaction="/plan/save">Save this plan</button></div>
+  {% endif %}
+  {% with errors=[], warnings=result.warnings + (result.dropped | map(attribute="reason") | list) %}
+  {% include "_messages.html" %}
+  {% endwith %}
+  {% include "_week_table.html" %}
+</section>
+{% endif %}
+{% endblock %}

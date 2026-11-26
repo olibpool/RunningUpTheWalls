@@ -1,0 +1,40 @@
+{% from "_charts.html" import columns %}
+{% from "_icons.html" import icon %}
+{# A list of WeekSummary; sessions may be planned or stored. #}
+{% if weeks %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>Weekly running</h2>
+    <span class="muted">planned km · {{ weeks | length }} weeks · peak {{ "%.0f" | format(weeks | map(attribute="run_km") | max) }} km</span>
+  </div>
+  {{ columns(km_bars(weeks, link=link_weeks | default(False)), "km", "Planned run kilometres per week") }}
+</section>
+{% endif %}
+{% for w in weeks %}
+<details class="week-summary"{% if loop.first %} open{% endif %}>
+  <summary>
+    <strong>Week of {{ w.start.strftime("%d %b") }}</strong>
+    <span class="muted">{{ "%.1f" | format(w.run_km) }} km run · leg load {{ "%.0f" | format(w.leg_load) }}</span>
+    {{ icon("right", "chev") }}
+  </summary>
+  {% if link_weeks | default(False) %}<p><a href="/week?start={{ w.start }}">Open this week</a></p>{% endif %}
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th scope="col">Day</th><th scope="col">Session</th><th scope="col">Time</th><th scope="col">Distance</th><th scope="col">Pace</th></tr>
+      </thead>
+      <tbody>
+        {% for s in w.sessions %}
+        <tr class="sport-{{ s.sport }}">
+          <td>{{ s.date.strftime("%a %d") }} {{ s.start_time or "" }}</td>
+          <td><span class="dot"></span>{{ s.title }} {{ s.steps | structure }}</td>
+          <td>{{ s.duration_min }} min</td>
+          <td>{{ s.distance_m | km }}</td>
+          <td>{{ s.steps | main_pace }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endfor %}
